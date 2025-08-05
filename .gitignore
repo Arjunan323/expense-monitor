@@ -1,0 +1,5 @@
+/extraction_lambda/venv
+.idea
+.vscode
+/extraction_lambda/.vscode
+/frontend/node_modules

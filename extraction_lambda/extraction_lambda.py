@@ -1,0 +1,141 @@
+import pdfplumber
+import pytesseract
+from pdf2image import convert_from_path
+import json
+from openai import OpenAI
+import os
+import cv2
+import numpy as np
+from PIL import Image
+
+# Set your OpenAI API key (for local development)
+client = OpenAI(api_key="")
+
+# -------------- Image Preprocessing --------------
+def preprocess_image(pil_image):
+    gray = np.array(pil_image.convert("L"))  # Grayscale
+    _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)  # Binarize
+    return Image.fromarray(thresh)
+
+# -------------- Chunking Text --------------
+def chunk_text(text, chunk_size=3000):
+    return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
+
+# -------------- GPT-4 Text Extraction Logic --------------
+def call_gpt_text_vision(chunk):
+    prompt = f"""
+You are a financial assistant helping parse and categorize bank transactions.
+
+Given the following bank statement text, extract all transactions and return them as a valid JSON array.
+
+Each transaction must include:
+- date (in YYYY-MM-DD format)
+- description (short merchant or transfer info)
+- amount (positive for credit, negative for debit)
+- balance (account balance after transaction)
+- category (short label like 'Food', 'Travel', 'Utilities', 'Salary', 'Shopping', 'Rent', 'Bank Fee', etc.)
+
+Bank statement text:
+\"\"\"
+{chunk}
+\"\"\"
+
+Output only a valid JSON array, for example:
+[
+  {{
+    "date": "2023-07-01",
+    "description": "POS AMAZON 1234",
+    "amount": "-120.50",
+    "balance": "5420.45",
+    "category": "Shopping"
+  }},
+  {{
+    "date": "2023-07-01",
+    "description": "NEFT ICICI BANK",
+    "amount": "2000.00",
+    "balance": "7420.45",
+    "category": "Salary"
+  }}
+]
+
+If no transactions are found, return [].
+"""
+
+    response = client.chat.completions.create(
+        model="gpt-4-turbo",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant that extracts and categorizes financial transactions from text."},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0
+    )
+
+    raw_content = response.choices[0].message.content.strip()
+
+    # Clean markdown wrappers if present
+    if raw_content.startswith('```'):
+        raw_content = raw_content.lstrip('`').strip()
+        if raw_content.lower().startswith('json'):
+            raw_content = raw_content[4:].strip()
+        if raw_content.endswith('```'):
+            raw_content = raw_content[:-3].strip()
+
+    try:
+        return json.loads(raw_content)
+    except json.JSONDecodeError:
+        return []
+
+
+# -------------- Transaction Post-Processor --------------
+def postprocess_transactions(transactions):
+    cleaned = []
+    for txn in transactions:
+        try:
+            txn['amount'] = float(txn['amount'])
+            txn['balance'] = float(txn['balance'])
+            cleaned.append(txn)
+        except Exception:
+            continue
+    return cleaned
+
+# -------------- Main Extraction Pipeline --------------
+def extract_transactions_from_pdf(pdf_path):
+    import logging
+    transactions = []
+    empty_pdf = True
+    with pdfplumber.open(pdf_path) as pdf:
+        for page in pdf.pages:
+            text = page.extract_text()
+            if not text or not text.strip():
+                # Try OCR if no text
+                image = convert_from_path(pdf_path, first_page=page.page_number, last_page=page.page_number)[0]
+                processed_image = preprocess_image(image)
+                text = pytesseract.image_to_string(processed_image)
+            if text and text.strip():
+                empty_pdf = False
+                for chunk in chunk_text(text):
+                    result = call_gpt_text_vision(chunk)
+                    if not isinstance(result, list):
+                        logging.warning(f"Non-standard GPT response: {result}")
+                        continue
+                    transactions.extend(result)
+            else:
+                logging.warning(f"Page {page.page_number} is empty or unreadable.")
+    if empty_pdf:
+        logging.error(f"PDF {pdf_path} appears to be empty or non-standard. No transactions extracted.")
+        return []
+    processed = postprocess_transactions(transactions)
+    if not processed:
+        logging.warning(f"No valid transactions extracted from {pdf_path}. Check statement format.")
+    return processed
+
+# -------------- Entry Point --------------
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) < 2:
+        print("Usage: python extract_transactions.py <path_to_pdf>")
+        sys.exit(1)
+
+    pdf_path = sys.argv[1]
+    txns = extract_transactions_from_pdf(pdf_path)
+    print(json.dumps(txns, indent=2))
