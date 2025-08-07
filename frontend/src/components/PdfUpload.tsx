@@ -1,7 +1,8 @@
 import React, { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, FileText, X, CheckCircle, AlertCircle } from 'lucide-react';
+import { Upload, FileText, X, CheckCircle, AlertCircle, Clock, Building2, AlertTriangle } from 'lucide-react';
 import { LoadingSpinner } from './ui/LoadingSpinner';
+import { ParseResult } from '../types';
 import { apiCall } from '../utils/api';
 import toast from 'react-hot-toast';
 
@@ -10,12 +11,21 @@ interface UploadedFile {
   status: 'pending' | 'uploading' | 'success' | 'error';
   progress: number;
   error?: string;
+  parseResult?: ParseResult;
 }
 
 export const PdfUpload: React.FC = () => {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [recentUploads, setRecentUploads] = useState<any[]>([]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
+    // Check file size (10MB limit)
+    const oversizedFiles = acceptedFiles.filter(file => file.size > 10 * 1024 * 1024);
+    if (oversizedFiles.length > 0) {
+      toast.error(`Files too large: ${oversizedFiles.map(f => f.name).join(', ')}. Max size is 10MB.`);
+      acceptedFiles = acceptedFiles.filter(file => file.size <= 10 * 1024 * 1024);
+    }
+
     const newFiles = acceptedFiles.map(file => ({
       file,
       status: 'pending' as const,
@@ -61,7 +71,7 @@ export const PdfUpload: React.FC = () => {
         );
       }, 200);
 
-      await apiCall('POST', '/statements/upload', formData, {
+      const result = await apiCall<ParseResult>('POST', '/statements/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -72,12 +82,16 @@ export const PdfUpload: React.FC = () => {
       setUploadedFiles(prev => 
         prev.map((f, i) => 
           i === index 
-            ? { ...f, status: 'success', progress: 100 } 
+            ? { ...f, status: 'success', progress: 100, parseResult: result } 
             : f
         )
       );
 
-      toast.success(`${file.name} uploaded successfully!`);
+      if (result.warnings && result.warnings.length > 0) {
+        toast.success(`${file.name} uploaded with warnings`);
+      } else {
+        toast.success(`${file.name} uploaded successfully!`);
+      }
     } catch (error: any) {
       setUploadedFiles(prev => 
         prev.map((f, i) => 
@@ -112,7 +126,7 @@ export const PdfUpload: React.FC = () => {
       <div>
         <h1 className="text-2xl font-bold text-gray-900 mb-2">Upload Bank Statement</h1>
         <p className="text-gray-600">
-          Upload your PDF bank statements to automatically extract and categorize transactions using AI.
+          We support most Indian banks. Upload PDF statements to automatically extract and categorize transactions using AI.
         </p>
       </div>
 
@@ -137,7 +151,7 @@ export const PdfUpload: React.FC = () => {
             Drag and drop your PDF files here, or click to browse
           </p>
           <div className="text-sm text-gray-400">
-            <p>Supports: PDF files up to 10MB</p>
+            <p>We support most Indian banks • PDF files only • Max 10MB per file</p>
             <p>Multiple files can be uploaded at once</p>
           </div>
         </div>
@@ -180,6 +194,35 @@ export const PdfUpload: React.FC = () => {
                     <p className="text-xs text-danger-600 mt-1">{fileObj.error}</p>
                   )}
                 </div>
+                    {fileObj.parseResult && fileObj.status === 'success' && (
+                      <div className="mt-2 space-y-1">
+                        <div className="flex items-center space-x-4 text-xs text-gray-600">
+                          <span className="flex items-center space-x-1">
+                            <CheckCircle className="w-3 h-3 text-success-600" />
+                            <span>{fileObj.parseResult.transactionCount} transactions extracted</span>
+                          </span>
+                          {fileObj.parseResult.bankName && (
+                            <span className="flex items-center space-x-1">
+                              <Building2 className="w-3 h-3" />
+                              <span>{fileObj.parseResult.bankName}</span>
+                            </span>
+                          )}
+                        </div>
+                        {fileObj.parseResult.warnings && fileObj.parseResult.warnings.length > 0 && (
+                          <div className="flex items-start space-x-1 text-xs text-yellow-600">
+                            <AlertTriangle className="w-3 h-3 mt-0.5" />
+                            <div>
+                              <p className="font-medium">Parse warnings:</p>
+                              <ul className="list-disc list-inside">
+                                {fileObj.parseResult.warnings.map((warning, i) => (
+                                  <li key={i}>{warning}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                 <div className="flex items-center space-x-2">
                   {fileObj.status === 'uploading' && (
@@ -235,6 +278,13 @@ export const PdfUpload: React.FC = () => {
             <span className="flex-shrink-0 w-5 h-5 bg-blue-200 rounded-full flex items-center justify-center text-xs font-bold text-blue-900 mt-0.5">4</span>
             <p>View insights and analytics on your spending patterns</p>
           </div>
+        </div>
+        
+        <div className="mt-4 pt-4 border-t border-blue-200">
+          <p className="text-sm text-blue-700">
+            <strong>Supported banks:</strong> Most major Indian banks including SBI, HDFC, ICICI, Axis, Kotak, and more.
+            If your bank format isn't recognized, we'll show parsing warnings.
+          </p>
         </div>
       </div>
     </div>

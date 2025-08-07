@@ -5,7 +5,11 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Layout } from './components/layout/Layout';
 import { Auth } from './components/Auth';
 import { Dashboard } from './components/Dashboard';
+import { Transactions } from './components/Transactions';
 import { PdfUpload } from './components/PdfUpload';
+import { Analytics } from './components/Analytics';
+import { Statements } from './components/Statements';
+import { Billing } from './components/Billing';
 import { Settings } from './components/Settings';
 import { LoadingSpinner } from './components/ui/LoadingSpinner';
 
@@ -74,10 +78,7 @@ const AppRoutes: React.FC = () => {
           element={
             <ProtectedRoute>
               <Layout>
-                <div className="text-center py-12">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-4">Transactions</h2>
-                  <p className="text-gray-600">Transaction management coming soon...</p>
-                </div>
+                <Transactions />
               </Layout>
             </ProtectedRoute>
           }
@@ -87,10 +88,7 @@ const AppRoutes: React.FC = () => {
           element={
             <ProtectedRoute>
               <Layout>
-                <div className="text-center py-12">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-4">Analytics</h2>
-                  <p className="text-gray-600">Advanced analytics coming soon...</p>
-                </div>
+                <Analytics />
               </Layout>
             </ProtectedRoute>
           }
@@ -100,10 +98,7 @@ const AppRoutes: React.FC = () => {
           element={
             <ProtectedRoute>
               <Layout>
-                <div className="text-center py-12">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-4">Statements</h2>
-                  <p className="text-gray-600">Statement management coming soon...</p>
-                </div>
+                <Statements />
               </Layout>
             </ProtectedRoute>
           }
@@ -113,10 +108,7 @@ const AppRoutes: React.FC = () => {
           element={
             <ProtectedRoute>
               <Layout>
-                <div className="text-center py-12">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-4">Billing</h2>
-                  <p className="text-gray-600">Billing management coming soon...</p>
-                </div>
+                <Billing />
               </Layout>
             </ProtectedRoute>
           }

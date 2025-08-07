@@ -13,6 +13,7 @@ interface StatCardProps {
   };
   format?: 'currency' | 'number';
   className?: string;
+  subtitle?: string;
 }
 
 export const StatCard: React.FC<StatCardProps> = ({
@@ -22,6 +23,7 @@ export const StatCard: React.FC<StatCardProps> = ({
   trend,
   format = 'currency',
   className = '',
+  subtitle,
 }) => {
   const { preferences } = usePreferences();
   const formattedValue = format === 'currency'
@@ -34,6 +36,9 @@ export const StatCard: React.FC<StatCardProps> = ({
         <div className="flex-1">
           <p className="text-sm font-medium text-gray-600 mb-1">{title}</p>
           <p className="text-2xl font-bold text-gray-900">{formattedValue}</p>
+          {subtitle && (
+            <p className="text-xs text-gray-500 mt-1">{subtitle}</p>
+          )}
           {trend && (
             <div className="flex items-center mt-2">
               <span

@@ -5,6 +5,7 @@ export interface User {
   lastName?: string;
   createdAt: string;
   isPremium?: boolean;
+  isSubscribed?: boolean;
 }
 
 export interface Transaction {
@@ -16,6 +17,7 @@ export interface Transaction {
   category: string;
   userId: number;
   createdAt: string;
+  bankName?: string;
 }
 
 export interface RawStatement {
@@ -25,6 +27,8 @@ export interface RawStatement {
   status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
   userId: number;
   transactionCount?: number;
+  bankName?: string;
+  parseWarnings?: string[];
 }
 
 export interface DashboardStats {
@@ -34,6 +38,10 @@ export interface DashboardStats {
   transactionCount: number;
   topCategories: CategorySummary[];
   recentTransactions: Transaction[];
+  lastUpdateTime: string;
+  bankSources: string[];
+  isMultiBank: boolean;
+  hasBalanceDiscrepancy?: boolean;
 }
 
 export interface CategorySummary {
@@ -41,6 +49,19 @@ export interface CategorySummary {
   amount: number;
   count: number;
   percentage: number;
+}
+
+export interface UsageStats {
+  statementsThisMonth: number;
+  statementLimit: number;
+  isFreePlan: boolean;
+}
+
+export interface ParseResult {
+  transactionCount: number;
+  bankName?: string;
+  warnings?: string[];
+  success: boolean;
 }
 
 export interface AuthContextType {
