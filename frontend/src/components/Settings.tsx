@@ -11,16 +11,41 @@ import {
 } from 'lucide-react';
 import { LoadingSpinner } from './ui/LoadingSpinner';
 import { useAuth } from '../contexts/AuthContext';
+
 import { apiCall } from '../utils/api';
 import toast from 'react-hot-toast';
+import { usePreferences } from '../contexts/PreferencesContext';
 
 export const Settings: React.FC = () => {
   const { user, logout } = useAuth();
+  const { preferences, setPreferences } = usePreferences();
   const [profile, setProfile] = useState({
-    firstName: user?.firstName || '',
-    lastName: user?.lastName || '',
-    email: user?.email || ''
+    firstName: '',
+    lastName: '',
+    email: ''
   });
+  // Fetch user profile on mount
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        setLoading(true);
+        const data = await apiCall('GET', '/user/profile') as { firstName: string; lastName: string; email: string };
+        setProfile({
+          firstName: data.firstName || '',
+          lastName: data.lastName || '',
+          email: data.email || ''
+        });
+      } catch (error) {
+        toast.error('Failed to load profile');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProfile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const [locale, setLocale] = useState(preferences.locale || 'en-US');
+  const [currency, setCurrency] = useState(preferences.currency || 'USD');
   const [feedback, setFeedback] = useState('');
   const [loading, setLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -29,10 +54,18 @@ export const Settings: React.FC = () => {
     e.preventDefault();
     try {
       setLoading(true);
-      await apiCall('PUT', '/user/profile', profile);
-      toast.success('Profile updated successfully');
+      const updated = await apiCall('PUT', '/user/profile', profile) as { firstName: string; lastName: string; email: string };
+      setProfile({
+        firstName: updated.firstName || '',
+        lastName: updated.lastName || '',
+        email: updated.email || ''
+      });
+      // Update preferences (locale, currency) in backend and context
+      await apiCall('POST', '/user/preferences', { ...preferences, locale, currency });
+      setPreferences({ ...preferences, locale, currency });
+      toast.success('Profile and preferences updated successfully');
     } catch (error: any) {
-      toast.error('Failed to update profile');
+      toast.error('Failed to update profile or preferences');
     } finally {
       setLoading(false);
     }
@@ -44,10 +77,9 @@ export const Settings: React.FC = () => {
       toast.error('Please enter your feedback');
       return;
     }
-    
     try {
       setLoading(true);
-      await apiCall('POST', '/user/feedback', { message: feedback });
+      await apiCall('POST', '/feedback', { email: profile.email, message: feedback });
       toast.success('Thank you for your feedback!');
       setFeedback('');
     } catch (error: any) {
@@ -57,6 +89,7 @@ export const Settings: React.FC = () => {
     }
   };
 
+  // Delete account functionality (confirmation handled by UI, not window.confirm)
   const handleDeleteAccount = async () => {
     try {
       setLoading(true);
@@ -115,7 +148,6 @@ export const Settings: React.FC = () => {
               />
             </div>
           </div>
-          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Email Address
@@ -131,14 +163,55 @@ export const Settings: React.FC = () => {
               />
             </div>
           </div>
-
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Language / Locale
+            </label>
+            <div className="relative">
+              <Globe className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <select
+                className="input-field pl-10"
+                value={locale}
+                onChange={e => setLocale(e.target.value)}
+              >
+                <option value="en-US">English (United States)</option>
+                <option value="en-GB">English (United Kingdom)</option>
+                <option value="en-IN">English (India)</option>
+                <option value="fr-FR">French (France)</option>
+                <option value="de-DE">German (Germany)</option>
+                <option value="ja-JP">Japanese</option>
+                <option value="zh-CN">Chinese (Simplified)</option>
+                {/* Add more as needed */}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Currency
+            </label>
+            <div className="relative">
+              <select
+                className="input-field"
+                value={currency}
+                onChange={e => setCurrency(e.target.value)}
+              >
+                <option value="USD">USD - US Dollar</option>
+                <option value="EUR">EUR - Euro</option>
+                <option value="INR">INR - Indian Rupee</option>
+                <option value="GBP">GBP - British Pound</option>
+                <option value="JPY">JPY - Japanese Yen</option>
+                <option value="CNY">CNY - Chinese Yuan</option>
+                {/* Add more as needed */}
+              </select>
+            </div>
+          </div>
           <button
             type="submit"
             disabled={loading}
             className="btn-primary flex items-center space-x-2"
           >
             {loading ? <LoadingSpinner size="sm" className="text-white" /> : <User className="w-4 h-4" />}
-            <span>{loading ? 'Updating...' : 'Update Profile'}</span>
+            <span>{loading ? 'Updating...' : 'Update Profile & Preferences'}</span>
           </button>
         </form>
       </div>
@@ -176,7 +249,6 @@ export const Settings: React.FC = () => {
               </button>
             </form>
           </div>
-
           <div className="border-t border-gray-200 pt-6">
             <h3 className="text-sm font-medium text-gray-900 mb-2">Contact Support</h3>
             <p className="text-sm text-gray-600 mb-3">
@@ -202,14 +274,12 @@ export const Settings: React.FC = () => {
           </div>
           <h2 className="text-lg font-semibold text-danger-900">Danger Zone</h2>
         </div>
-
         <div className="space-y-4">
           <div>
             <h3 className="text-sm font-medium text-danger-900 mb-2">Delete Account</h3>
             <p className="text-sm text-danger-700 mb-4">
               Permanently delete your account and all associated data. This action cannot be undone.
             </p>
-            
             {!showDeleteConfirm ? (
               <button
                 onClick={() => setShowDeleteConfirm(true)}

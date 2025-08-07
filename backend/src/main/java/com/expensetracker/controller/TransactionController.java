@@ -3,7 +3,6 @@ package com.expensetracker.controller;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import com.expensetracker.repository.TransactionRepository;
-import com.expensetracker.model.Transaction;
 import java.util.List;
 import java.util.stream.Collectors;
 import com.expensetracker.dto.TransactionDto;
@@ -34,7 +33,8 @@ public class TransactionController {
                 t.getDescription(),
                 t.getAmount(),
                 t.getBalance(),
-                t.getCategory()
+                t.getCategory(),
+                t.getBankName()
             ))
             .collect(Collectors.toList());
     }

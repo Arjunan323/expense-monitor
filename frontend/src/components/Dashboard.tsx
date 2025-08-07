@@ -113,7 +113,7 @@ export const Dashboard: React.FC = () => {
             <div className="flex items-center space-x-2 text-sm text-gray-600">
               <Building2 className="w-4 h-4" />
               <span>
-                {stats.isMultiBank ? 'Multiple Banks' : (stats.bankSources[0] || 'Unknown Bank')}
+                {stats.isMultiBank ? 'Multiple Banks' : (stats.bankSources?.[0] || 'Unknown Bank')}
               </span>
             </div>
           </div>

@@ -71,7 +71,7 @@ export const PdfUpload: React.FC = () => {
         );
       }, 200);
 
-      const result = await apiCall<ParseResult>('POST', '/statements/upload', formData, {
+      const result = await apiCall<ParseResult>('POST', '/statements', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },

@@ -14,6 +14,7 @@ public class Transaction {
     private Double amount;
     private Double balance;
     private String category;
+    private String bankName;
 
     @ManyToOne
     @JoinColumn(name = "user_id")
@@ -34,4 +35,6 @@ public class Transaction {
     public void setCategory(String category) { this.category = category; }
     public User getUser() { return user; }
     public void setUser(User user) { this.user = user; }
+    public String getBankName() { return bankName; }
+    public void setBankName(String bankName) { this.bankName = bankName; }
 }

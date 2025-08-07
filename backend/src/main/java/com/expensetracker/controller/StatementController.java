@@ -20,7 +20,6 @@ import java.util.Scanner;
 import java.util.List;
 import java.util.ArrayList;
 import com.expensetracker.dto.StatementUploadResponseDto;
-import com.expensetracker.dto.ErrorDto;
 
 @RestController
 @RequestMapping("/statements")
@@ -61,7 +60,7 @@ public class StatementController {
                 return new StatementUploadResponseDto(false, "Error: PDF file not saved correctly");
             }
             // Call extraction Lambda (Python script)
-          ProcessBuilder pb = new ProcessBuilder("python", "d:/product/expense/extraction_lambda/extraction_lambda.py", tempFile.getAbsolutePath());
+            ProcessBuilder pb = new ProcessBuilder("python", "d:/product/expense-monitor/extraction_lambda/extraction_lambda.py", tempFile.getAbsolutePath());
             pb.redirectErrorStream(true);
             Process process = pb.start();
             StringBuilder output = new StringBuilder();
@@ -82,6 +81,18 @@ public class StatementController {
             rawStatement.setFilename(file.getOriginalFilename());
             rawStatement.setRawJson(output.toString());
             rawStatement.setUser(user);
+            // Extract bankName from first transaction if available
+            String bankName = null;
+            try {
+                org.json.JSONArray arr = new org.json.JSONArray(output.toString());
+                if (arr.length() > 0) {
+                    org.json.JSONObject first = arr.getJSONObject(0);
+                    bankName = first.optString("bankName", null);
+                }
+            } catch (Exception e) {
+                bankName = null;
+            }
+            rawStatement.setBankName(bankName);
             rawStatementRepository.save(rawStatement);
             // Parse transactions from output JSON
             List<Transaction> transactions = new ArrayList<>();
@@ -96,6 +107,7 @@ public class StatementController {
                     txn.setBalance(obj.optDouble("balance", 0.0));
                     txn.setCategory(obj.optString("category", "Unknown"));
                     txn.setUser(user);
+                    txn.setBankName(obj.optString("bankName", bankName != null ? bankName : "Unknown"));
                     transactions.add(txn);
                 }
                 transactionRepository.saveAll(transactions);
@@ -112,8 +124,51 @@ public class StatementController {
     }
 
     @GetMapping
-    public ErrorDto getStatements() {
-        // TODO: Replace with actual list of statements DTO
-        return new ErrorDto("Not implemented");
+    public List<com.expensetracker.dto.RawStatementDto> getStatements(@RequestHeader("Authorization") String authHeader) {
+        // Extract username from JWT token
+        String token = authHeader.replace("Bearer ", "");
+        String username = new com.expensetracker.config.JwtUtil().extractUsername(token);
+        User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException(username));
+        List<RawStatement> statements = rawStatementRepository.findAll();
+        List<com.expensetracker.dto.RawStatementDto> dtos = new ArrayList<>();
+        for (RawStatement s : statements) {
+            if (s.getUser() == null || !s.getUser().getId().equals(user.getId())) continue;
+            String status = "COMPLETED";
+            String bankName = null;
+            Integer transactionCount = null;
+            List<String> parseWarnings = null;
+            try {
+                org.json.JSONArray arr = new org.json.JSONArray(s.getRawJson());
+                transactionCount = arr.length();
+                if (arr.length() > 0) {
+                    org.json.JSONObject first = arr.getJSONObject(0);
+                    bankName = first.optString("bankName", null);
+                }
+                // Collect warnings if present
+                parseWarnings = new ArrayList<>();
+                for (int i = 0; i < arr.length(); i++) {
+                    org.json.JSONObject obj = arr.getJSONObject(i);
+                    if (obj.has("warnings")) {
+                        org.json.JSONArray warns = obj.getJSONArray("warnings");
+                        for (int j = 0; j < warns.length(); j++) {
+                            parseWarnings.add(warns.getString(j));
+                        }
+                    }
+                }
+                if (parseWarnings.isEmpty()) parseWarnings = null;
+            } catch (Exception e) {
+                status = "FAILED";
+            }
+            dtos.add(new com.expensetracker.dto.RawStatementDto(
+                s.getId(),
+                s.getFilename(),
+                s.getUploadDate(),
+                status,
+                bankName,
+                transactionCount,
+                parseWarnings
+            ));
+        }
+        return dtos;
     }
 }

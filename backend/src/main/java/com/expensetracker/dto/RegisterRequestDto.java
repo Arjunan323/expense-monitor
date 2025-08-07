@@ -1,27 +1,14 @@
-package com.expensetracker.model;
+package com.expensetracker.dto;
 
-import jakarta.persistence.*;
-
-@Entity
-@Table(name = "users")
-public class User {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-    private String username;
+public class RegisterRequestDto {
     private String password;
     private String email;
     private String firstName;
     private String lastName;
-    private boolean subscribed = false;
-    private String currency = "USD";
-    private String locale = "en-US";
+    private String currency;
+    private String locale;
 
-    // Getters and setters
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
-    public String getUsername() { return username; }
-    public void setUsername(String username) { this.username = username; }
+
     public String getPassword() { return password; }
     public void setPassword(String password) { this.password = password; }
     public String getEmail() { return email; }
@@ -30,8 +17,6 @@ public class User {
     public void setFirstName(String firstName) { this.firstName = firstName; }
     public String getLastName() { return lastName; }
     public void setLastName(String lastName) { this.lastName = lastName; }
-    public boolean isSubscribed() { return subscribed; }
-    public void setSubscribed(boolean subscribed) { this.subscribed = subscribed; }
     public String getCurrency() { return currency; }
     public void setCurrency(String currency) { this.currency = currency; }
     public String getLocale() { return locale; }

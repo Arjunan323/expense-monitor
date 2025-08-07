@@ -9,14 +9,22 @@ public class DashboardStatsDto {
     private int transactionCount;
     private List<CategorySummaryDto> topCategories;
     private List<TransactionDto> recentTransactions;
+    private List<String> bankSources;
+    private boolean isMultiBank;
+    private boolean hasBalanceDiscrepancy;
+    private String lastUpdateTime;
 
-    public DashboardStatsDto(double totalBalance, double monthlyIncome, double monthlyExpenses, int transactionCount, List<CategorySummaryDto> topCategories, List<TransactionDto> recentTransactions) {
+    public DashboardStatsDto(double totalBalance, double monthlyIncome, double monthlyExpenses, int transactionCount, List<CategorySummaryDto> topCategories, List<TransactionDto> recentTransactions, List<String> bankSources, boolean isMultiBank, boolean hasBalanceDiscrepancy, String lastUpdateTime) {
         this.totalBalance = totalBalance;
         this.monthlyIncome = monthlyIncome;
         this.monthlyExpenses = monthlyExpenses;
         this.transactionCount = transactionCount;
         this.topCategories = topCategories;
         this.recentTransactions = recentTransactions;
+        this.bankSources = bankSources;
+        this.isMultiBank = isMultiBank;
+        this.hasBalanceDiscrepancy = hasBalanceDiscrepancy;
+        this.lastUpdateTime = lastUpdateTime;
     }
 
     public double getTotalBalance() { return totalBalance; }
@@ -31,4 +39,12 @@ public class DashboardStatsDto {
     public void setTopCategories(List<CategorySummaryDto> topCategories) { this.topCategories = topCategories; }
     public List<TransactionDto> getRecentTransactions() { return recentTransactions; }
     public void setRecentTransactions(List<TransactionDto> recentTransactions) { this.recentTransactions = recentTransactions; }
+    public List<String> getBankSources() { return bankSources; }
+    public void setBankSources(List<String> bankSources) { this.bankSources = bankSources; }
+    public boolean isMultiBank() { return isMultiBank; }
+    public void setMultiBank(boolean multiBank) { isMultiBank = multiBank; }
+    public boolean isHasBalanceDiscrepancy() { return hasBalanceDiscrepancy; }
+    public void setHasBalanceDiscrepancy(boolean hasBalanceDiscrepancy) { this.hasBalanceDiscrepancy = hasBalanceDiscrepancy; }
+    public String getLastUpdateTime() { return lastUpdateTime; }
+    public void setLastUpdateTime(String lastUpdateTime) { this.lastUpdateTime = lastUpdateTime; }
 }

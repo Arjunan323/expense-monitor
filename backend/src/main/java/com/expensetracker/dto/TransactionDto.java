@@ -9,14 +9,16 @@ public class TransactionDto {
     private double amount;
     private double balance;
     private String category;
+    private String bankName;
 
-    public TransactionDto(Long id, LocalDate date, String description, double amount, double balance, String category) {
+    public TransactionDto(Long id, LocalDate date, String description, double amount, double balance, String category, String bankName) {
         this.id = id;
         this.date = date;
         this.description = description;
         this.amount = amount;
         this.balance = balance;
         this.category = category;
+        this.bankName = bankName;
     }
 
     public Long getId() { return id; }
@@ -31,4 +33,6 @@ public class TransactionDto {
     public void setBalance(double balance) { this.balance = balance; }
     public String getCategory() { return category; }
     public void setCategory(String category) { this.category = category; }
+    public String getBankName() { return bankName; }
+    public void setBankName(String bankName) { this.bankName = bankName; }
 }

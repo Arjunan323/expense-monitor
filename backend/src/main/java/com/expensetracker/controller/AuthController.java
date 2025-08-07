@@ -1,6 +1,9 @@
 package com.expensetracker.controller;
 
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import com.expensetracker.repository.UserRepository;
 import com.expensetracker.model.User;
@@ -8,7 +11,9 @@ import com.expensetracker.config.JwtUtil;
 
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import java.util.Map;
+import org.springframework.http.ResponseEntity;
+import com.expensetracker.dto.RegisterRequestDto;
+import com.expensetracker.dto.RegisterResponseDto;
 import com.expensetracker.dto.UserDto;
 import com.expensetracker.dto.AuthResponseDto;
 
@@ -23,19 +28,22 @@ public class AuthController {
     private BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     @PostMapping("/register")
-    public String register(@RequestBody Map<String, String> body) {
-        String username = body.get("username");
-        if (userRepository.findByUsername(username) != null) {
-            return "User already exists";
+    public ResponseEntity<RegisterResponseDto> register(@RequestBody RegisterRequestDto body) {
+        String username = body.getEmail();
+        if (userRepository.findByUsername(username).isPresent()) {
+            return ResponseEntity.badRequest().body(new RegisterResponseDto(false, "User already exists"));
         }
-        String password = passwordEncoder.encode(body.get("password"));
-        String email = body.get("email");
+        String password = passwordEncoder.encode(body.getPassword());
         User user = new User();
         user.setUsername(username);
         user.setPassword(password);
-        user.setEmail(email);
+        user.setEmail(body.getEmail());
+        user.setFirstName(body.getFirstName() != null ? body.getFirstName() : "");
+        user.setLastName(body.getLastName() != null ? body.getLastName() : "");
+        user.setCurrency(body.getCurrency() != null ? body.getCurrency() : "INR");
+        user.setLocale(body.getLocale() != null ? body.getLocale() : "en-US");
         userRepository.save(user);
-        return "User registered";
+        return ResponseEntity.ok(new RegisterResponseDto(true, "User registered"));
     }
 
     @PostMapping("/login")

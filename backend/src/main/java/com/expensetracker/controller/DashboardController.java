@@ -34,10 +34,34 @@ public class DashboardController {
             .filter(t -> t.getUser() != null && t.getUser().getId().equals(user.getId()))
             .toList();
 
-        double totalBalance = txns.stream().mapToDouble(Transaction::getBalance).reduce((first, second) -> second).orElse(0.0);
-        double monthlyIncome = txns.stream().filter(t -> t.getAmount() > 0 && t.getDate().getMonthValue() == java.time.LocalDate.now().getMonthValue()).mapToDouble(Transaction::getAmount).sum();
-        double monthlyExpenses = txns.stream().filter(t -> t.getAmount() < 0 && t.getDate().getMonthValue() == java.time.LocalDate.now().getMonthValue()).mapToDouble(Transaction::getAmount).sum();
+        // Bank sources and multi-bank logic
+        Map<String, List<Transaction>> bankGroups = txns.stream().collect(Collectors.groupingBy(t -> t.getBankName() != null ? t.getBankName() : "Unknown"));
+        List<String> bankSources = new ArrayList<>(bankGroups.keySet());
+        boolean isMultiBank = bankSources.size() > 1;
+        boolean hasBalanceDiscrepancy = isMultiBank; // You can add more logic if needed
+        String lastUpdateTime = txns.stream().map(t -> t.getDate()).max(java.util.Comparator.naturalOrder()).map(java.time.LocalDate::toString).orElse("");
+
+        // Multi-bank: use latest balance from the most recent transaction
+        double totalBalance = txns.stream()
+            .sorted((a, b) -> {
+                int cmp = b.getDate().compareTo(a.getDate());
+                if (cmp == 0) return Long.compare(b.getId(), a.getId());
+                return cmp;
+            })
+            .map(Transaction::getBalance)
+            .findFirst()
+            .orElse(0.0);
+        double monthlyIncome = txns.stream()
+            .filter(t -> t.getAmount() > 0)
+            .mapToDouble(Transaction::getAmount).sum();
+        double monthlyExpenses = txns.stream()
+            .filter(t -> t.getAmount() < 0)
+            .mapToDouble(Transaction::getAmount).sum();
         int transactionCount = txns.size();
+
+        // Optionally: add per-bank breakdown for future UI
+        // Map<String, Double> perBankBalance = bankGroups.entrySet().stream()
+        //     .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().stream().mapToDouble(Transaction::getAmount).sum()));
 
         // Top categories with count and percentage
         Map<String, List<Transaction>> categoryGroups = txns.stream().collect(Collectors.groupingBy(Transaction::getCategory));
@@ -63,9 +87,12 @@ public class DashboardController {
                 t.getDescription(),
                 t.getAmount(),
                 t.getBalance(),
-                t.getCategory()
+                t.getCategory(),
+                t.getBankName()
             ))
             .collect(Collectors.toList());
+
+        // Optionally: expose bankBalances in DashboardStatsDto (requires DTO update)
 
         return new DashboardStatsDto(
             totalBalance,
@@ -73,7 +100,11 @@ public class DashboardController {
             monthlyExpenses,
             transactionCount,
             topCategories,
-            recentTransactions
+            recentTransactions,
+            bankSources,
+            isMultiBank,
+            hasBalanceDiscrepancy,
+            lastUpdateTime
         );
     }
 

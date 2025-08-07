@@ -14,7 +14,7 @@ public class RawStatement {
     private String filename;
     @Column(columnDefinition = "TEXT")
     private String rawJson;
-
+    private String bankName;
     @ManyToOne
     @JoinColumn(name = "user_id")
     private User user;
@@ -31,5 +31,7 @@ public class RawStatement {
     public String getRawJson() { return rawJson; }
     public void setRawJson(String rawJson) { this.rawJson = rawJson; }
     public User getUser() { return user; }
-    public void setUser(User user) { this.user = user; }
+    public void setUser(User user) { this.user = user; } 
+    public String getBankName() { return bankName; }
+    public void setBankName(String bankName) { this.bankName = bankName; }
 }

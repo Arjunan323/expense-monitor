@@ -26,7 +26,7 @@ def call_gpt_text_vision(chunk):
     prompt = f"""
 You are a financial assistant helping parse and categorize bank transactions.
 
-Given the following bank statement text, extract all transactions and return them as a valid JSON array.
+Given the following bank statement text, infer the bankName (the name of the bank or card issuer, e.g., 'HDFC', 'ICICI', 'SBI', 'Axis', 'Citi', 'HSBC', etc.) ONCE from the entire statement (not per transaction). Then, for each transaction, add this bankName as a field.
 
 Each transaction must include:
 - date (in YYYY-MM-DD format)
@@ -34,38 +34,47 @@ Each transaction must include:
 - amount (positive for credit, negative for debit)
 - balance (account balance after transaction)
 - category (short label like 'Food', 'Travel', 'Utilities', 'Salary', 'Shopping', 'Rent', 'Bank Fee', etc.)
+- bankName (use the value you inferred from the whole statement for all transactions)
 
 Bank statement text:
 \"\"\"
 {chunk}
 \"\"\"
 
-Output only a valid JSON array, for example:
+Output only a valid JSON array of transactions, for example:
 [
   {{
     "date": "2023-07-01",
     "description": "POS AMAZON 1234",
     "amount": "-120.50",
     "balance": "5420.45",
-    "category": "Shopping"
+    "category": "Shopping",
+    "bankName": "HDFC"
   }},
   {{
     "date": "2023-07-01",
     "description": "NEFT ICICI BANK",
     "amount": "2000.00",
     "balance": "7420.45",
-    "category": "Salary"
+    "category": "Salary",
+    "bankName": "HDFC"
   }}
 ]
 
-If no transactions are found, return [].
+If no transactions are found, return an empty array [].
 """
 
     response = client.chat.completions.create(
         model="gpt-4-turbo",
         messages=[
-            {"role": "system", "content": "You are a helpful assistant that extracts and categorizes financial transactions from text."},
-            {"role": "user", "content": prompt}
+            {
+                "role": "system",
+                "content": "You are a helpful assistant that extracts and categorizes financial transactions from text."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
         ],
         temperature=0
     )
@@ -85,14 +94,15 @@ If no transactions are found, return [].
     except json.JSONDecodeError:
         return []
 
-
 # -------------- Transaction Post-Processor --------------
-def postprocess_transactions(transactions):
+def postprocess_transactions(transactions, bank_name=None):
     cleaned = []
     for txn in transactions:
         try:
             txn['amount'] = float(txn['amount'])
             txn['balance'] = float(txn['balance'])
+            if bank_name:
+                txn['bankName'] = bank_name
             cleaned.append(txn)
         except Exception:
             continue
@@ -103,14 +113,17 @@ def extract_transactions_from_pdf(pdf_path):
     import logging
     transactions = []
     empty_pdf = True
+    bank_name = None
+
     with pdfplumber.open(pdf_path) as pdf:
-        for page in pdf.pages:
+        for i, page in enumerate(pdf.pages):
             text = page.extract_text()
             if not text or not text.strip():
                 # Try OCR if no text
                 image = convert_from_path(pdf_path, first_page=page.page_number, last_page=page.page_number)[0]
                 processed_image = preprocess_image(image)
                 text = pytesseract.image_to_string(processed_image)
+
             if text and text.strip():
                 empty_pdf = False
                 for chunk in chunk_text(text):
@@ -118,15 +131,21 @@ def extract_transactions_from_pdf(pdf_path):
                     if not isinstance(result, list):
                         logging.warning(f"Non-standard GPT response: {result}")
                         continue
+                    # On first page, try to extract bankName from first transaction
+                    if i == 0 and result and isinstance(result, list) and 'bankName' in result[0]:
+                        bank_name = result[0]['bankName']
                     transactions.extend(result)
             else:
                 logging.warning(f"Page {page.page_number} is empty or unreadable.")
+
     if empty_pdf:
         logging.error(f"PDF {pdf_path} appears to be empty or non-standard. No transactions extracted.")
         return []
-    processed = postprocess_transactions(transactions)
+
+    processed = postprocess_transactions(transactions, bank_name)
     if not processed:
         logging.warning(f"No valid transactions extracted from {pdf_path}. Check statement format.")
+
     return processed
 
 # -------------- Entry Point --------------
