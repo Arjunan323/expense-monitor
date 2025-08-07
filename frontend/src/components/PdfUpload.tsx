@@ -283,7 +283,7 @@ export const PdfUpload: React.FC = () => {
         <div className="mt-4 pt-4 border-t border-blue-200">
           <p className="text-sm text-blue-700">
             <strong>Supported banks:</strong> Most major Indian banks including SBI, HDFC, ICICI, Axis, Kotak, and more.
-            If your bank format isn't recognized, we'll show parsing warnings.
+            If your bank format isn't recognized, we\'ll show parsing warnings.
           </p>
         </div>
       </div>
