@@ -54,7 +54,10 @@ export interface CategorySummary {
 export interface UsageStats {
   statementsThisMonth: number;
   statementLimit: number;
-  isFreePlan: boolean;
+  planType: 'FREE' | 'PRO' | 'PREMIUM';
+  pagesThisMonth: number;
+  pageLimit: number;
+  canUpload: boolean;
 }
 
 export interface ParseResult {

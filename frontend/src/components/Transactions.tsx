@@ -120,17 +120,27 @@ export const Transactions: React.FC = () => {
       </div>
 
       {/* Coming Soon Banner */}
-      <div className="card bg-blue-50 border-blue-200">
-        <div className="flex items-start space-x-3">
-          <Settings className="w-5 h-5 text-blue-600 mt-0.5" />
-          <div>
-            <h3 className="text-sm font-semibold text-blue-800">Enhanced Features Coming Soon</h3>
-            <p className="text-sm text-blue-700 mt-1">
-              Manual transaction editing, custom categorization, and advanced filtering will be available in future updates.
-            </p>
+      {usage && usage.planType === 'FREE' && (
+        <div className="card bg-gradient-to-r from-yellow-50 to-orange-50 border-yellow-200">
+          <div className="flex items-start justify-between">
+            <div className="flex items-start space-x-3">
+              <Settings className="w-5 h-5 text-yellow-600 mt-0.5" />
+              <div>
+                <h3 className="text-sm font-semibold text-yellow-800">Unlock Advanced Features</h3>
+                <p className="text-sm text-yellow-700 mt-1">
+                  Upgrade to Pro or Premium for manual transaction editing, custom categorization, and advanced filtering.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => window.location.href = '/billing'}
+              className="btn-primary text-sm whitespace-nowrap"
+            >
+              Upgrade Plan
+            </button>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Transactions Table */}
       <div className="card overflow-hidden">

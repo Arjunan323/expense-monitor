@@ -1,9 +1,10 @@
 import React, { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, FileText, X, CheckCircle, AlertCircle, Clock, Building2, AlertTriangle } from 'lucide-react';
+import { Upload, FileText, X, CheckCircle, AlertCircle, Clock, Building2, AlertTriangle, Crown } from 'lucide-react';
 import { LoadingSpinner } from './ui/LoadingSpinner';
-import { ParseResult } from '../types';
+import { ParseResult, UsageStats } from '../types';
 import { apiCall } from '../utils/api';
+import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 interface UploadedFile {
@@ -16,9 +17,32 @@ interface UploadedFile {
 
 export const PdfUpload: React.FC = () => {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
-  const [recentUploads, setRecentUploads] = useState<any[]>([]);
+  const [usage, setUsage] = useState<UsageStats | null>(null);
+  const [loadingUsage, setLoadingUsage] = useState(true);
+  const { user } = useAuth();
+
+  React.useEffect(() => {
+    fetchUsage();
+  }, []);
+
+  const fetchUsage = async () => {
+    try {
+      const data = await apiCall<UsageStats>('GET', '/user/usage');
+      setUsage(data);
+    } catch (error) {
+      console.error('Failed to fetch usage:', error);
+    } finally {
+      setLoadingUsage(false);
+    }
+  };
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
+    // Check if user can upload
+    if (usage && !usage.canUpload) {
+      toast.error('You have reached your monthly upload limit. Please upgrade your plan to continue.');
+      return;
+    }
+
     // Check file size (10MB limit)
     const oversizedFiles = acceptedFiles.filter(file => file.size > 10 * 1024 * 1024);
     if (oversizedFiles.length > 0) {
@@ -38,7 +62,7 @@ export const PdfUpload: React.FC = () => {
     newFiles.forEach((fileObj, index) => {
       uploadFile(fileObj.file, uploadedFiles.length + index);
     });
-  }, [uploadedFiles.length]);
+  }, [uploadedFiles.length, usage]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -93,6 +117,7 @@ export const PdfUpload: React.FC = () => {
         toast.success(`${file.name} uploaded successfully!`);
       }
     } catch (error: any) {
+      clearInterval(progressInterval);
       setUploadedFiles(prev => 
         prev.map((f, i) => 
           i === index 
@@ -108,6 +133,9 @@ export const PdfUpload: React.FC = () => {
       
       toast.error(`Failed to upload ${file.name}`);
     }
+    
+    // Refresh usage after upload
+    fetchUsage();
   };
 
   const removeFile = (index: number) => {
@@ -121,6 +149,21 @@ export const PdfUpload: React.FC = () => {
     }
   };
 
+  const getPlanName = (planType: string) => {
+    switch (planType) {
+      case 'PRO': return 'Pro';
+      case 'PREMIUM': return 'Premium';
+      default: return 'Free';
+    }
+  };
+
+  const getUsageColor = (used: number, limit: number) => {
+    const percentage = (used / limit) * 100;
+    if (percentage >= 100) return 'text-danger-600';
+    if (percentage >= 80) return 'text-warning-600';
+    return 'text-primary-600';
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
@@ -130,29 +173,138 @@ export const PdfUpload: React.FC = () => {
         </p>
       </div>
 
+      {/* Usage Stats */}
+      {!loadingUsage && usage && (
+        <div className="card bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                {usage.planType === 'PREMIUM' ? (
+                  <Crown className="w-4 h-4 text-blue-600" />
+                ) : (
+                  <Upload className="w-4 h-4 text-blue-600" />
+                )}
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">{getPlanName(usage.planType)} Plan Usage</h3>
+                <p className="text-sm text-gray-600">Your current month's activity</p>
+              </div>
+            </div>
+            {usage.planType === 'FREE' && (
+              <button
+                onClick={() => window.location.href = '/billing'}
+                className="btn-primary text-sm"
+              >
+                Upgrade Plan
+              </button>
+            )}
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-700">Statements</span>
+                <span className={`text-sm font-bold ${getUsageColor(usage.statementsThisMonth, usage.statementLimit)}`}>
+                  {usage.statementsThisMonth} / {usage.statementLimit === -1 ? '∞' : usage.statementLimit}
+                </span>
+              </div>
+              {usage.statementLimit !== -1 && (
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className={`h-2 rounded-full transition-all duration-300 ${
+                      usage.statementsThisMonth >= usage.statementLimit ? 'bg-danger-600' :
+                      usage.statementsThisMonth / usage.statementLimit >= 0.8 ? 'bg-warning-500' : 'bg-primary-600'
+                    }`}
+                    style={{ width: `${Math.min((usage.statementsThisMonth / usage.statementLimit) * 100, 100)}%` }}
+                  />
+                </div>
+              )}
+            </div>
+            
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-700">Pages</span>
+                <span className={`text-sm font-bold ${getUsageColor(usage.pagesThisMonth, usage.pageLimit)}`}>
+                  {usage.pagesThisMonth} / {usage.pageLimit === -1 ? '∞' : usage.pageLimit}
+                </span>
+              </div>
+              {usage.pageLimit !== -1 && (
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className={`h-2 rounded-full transition-all duration-300 ${
+                      usage.pagesThisMonth >= usage.pageLimit ? 'bg-danger-600' :
+                      usage.pagesThisMonth / usage.pageLimit >= 0.8 ? 'bg-warning-500' : 'bg-primary-600'
+                    }`}
+                    style={{ width: `${Math.min((usage.pagesThisMonth / usage.pageLimit) * 100, 100)}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {!usage.canUpload && (
+            <div className="mt-4 p-3 bg-yellow-100 border border-yellow-300 rounded-lg">
+              <div className="flex items-start space-x-2">
+                <AlertTriangle className="w-4 h-4 text-yellow-600 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-yellow-800">Upload limit reached</p>
+                  <p className="text-xs text-yellow-700">
+                    You've reached your monthly limit. Upgrade to continue uploading statements.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Upload Area */}
       <div className="card">
         <div
           {...getRootProps()}
-          className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors duration-200 ${
-            isDragActive
+          className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors duration-200 ${
+            usage && !usage.canUpload
+              ? 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-50'
+              : isDragActive
               ? 'border-primary-400 bg-primary-50'
-              : 'border-gray-300 hover:border-primary-400 hover:bg-gray-50'
+              : 'border-gray-300 hover:border-primary-400 hover:bg-gray-50 cursor-pointer'
           }`}
         >
-          <input {...getInputProps()} />
+          <input {...getInputProps()} disabled={usage && !usage.canUpload} />
           <div className="mx-auto w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center mb-4">
             <Upload className="w-8 h-8 text-primary-600" />
           </div>
           <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            {isDragActive ? 'Drop your files here' : 'Upload your bank statements'}
+            {usage && !usage.canUpload 
+              ? 'Upload limit reached' 
+              : isDragActive 
+              ? 'Drop your files here' 
+              : 'Upload your bank statements'
+            }
           </h3>
           <p className="text-gray-500 mb-4">
-            Drag and drop your PDF files here, or click to browse
+            {usage && !usage.canUpload
+              ? 'Upgrade your plan to continue uploading statements'
+              : 'Drag and drop your PDF files here, or click to browse'
+            }
           </p>
           <div className="text-sm text-gray-400">
-            <p>We support most Indian banks • PDF files only • Max 10MB per file</p>
-            <p>Multiple files can be uploaded at once</p>
+            {usage && !usage.canUpload ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.location.href = '/billing';
+                }}
+                className="btn-primary"
+              >
+                Upgrade Plan
+              </button>
+            ) : (
+              <>
+                <p>We support most Indian banks • PDF files only • Max 10MB per file</p>
+                <p>Multiple files can be uploaded at once</p>
+              </>
+            )}
           </div>
         </div>
       </div>

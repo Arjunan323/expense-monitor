@@ -105,17 +105,21 @@ export const Dashboard: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Financial Overview</h1>
-          <div className="flex items-center space-x-4 mt-1">
-            <div className="flex items-center space-x-2 text-sm text-gray-500">
-              <Clock className="w-4 h-4" />
-              <span>Last updated: {formatDateTime(stats.lastUpdateTime)}</span>
-            </div>
-            <div className="flex items-center space-x-2 text-sm text-gray-600">
-              <Building2 className="w-4 h-4" />
-              <span>
-                {stats.isMultiBank ? 'Multiple Banks' : (stats.bankSources?.[0] || 'Unknown Bank')}
-              </span>
-            </div>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 mt-1 space-y-1 sm:space-y-0">
+            {stats.lastUpdateTime && (
+              <div className="flex items-center space-x-2 text-sm text-gray-500">
+                <Clock className="w-4 h-4" />
+                <span>Last updated: {formatDateTime(stats.lastUpdateTime)}</span>
+              </div>
+            )}
+            {stats.bankSources && stats.bankSources.length > 0 && (
+              <div className="flex items-center space-x-2 text-sm text-gray-600">
+                <Building2 className="w-4 h-4" />
+                <span>
+                  {stats.isMultiBank ? 'Multiple Banks' : (stats.bankSources[0] || 'Unknown Bank')}
+                </span>
+              </div>
+            )}
           </div>
         </div>
         <button

@@ -16,10 +16,10 @@ export const Header: React.FC = () => {
           </div>
 
           <div className="flex items-center space-x-4">
-            {user?.isPremium && (
+            {(user?.isPremium || user?.isSubscribed) && (
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-yellow-400 to-orange-500 text-white">
                 <CreditCard className="w-3 h-3 mr-1" />
-                Premium
+                {user?.isPremium ? 'Premium' : 'Pro'}
               </span>
             )}
             
