@@ -37,6 +37,11 @@ export const PdfUpload: React.FC = () => {
   };
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
+    // Block upload if subscription is expired
+    if (usage && usage.status === 'EXPIRED') {
+      toast.error('Your subscription has expired. Please upgrade your plan to continue uploading.');
+      return;
+    }
     // Check if user can upload
     if (usage && !usage.canUpload) {
       toast.error('You have reached your monthly upload limit. Please upgrade your plan to continue.');
@@ -80,12 +85,13 @@ export const PdfUpload: React.FC = () => {
       )
     );
 
+    let progressInterval: any;
     try {
       const formData = new FormData();
       formData.append('file', file);
 
       // Simulate progress for better UX
-      const progressInterval = setInterval(() => {
+      progressInterval = setInterval(() => {
         setUploadedFiles(prev => 
           prev.map((f, i) => 
             i === index && f.progress < 90 
@@ -101,7 +107,7 @@ export const PdfUpload: React.FC = () => {
         },
       });
 
-      clearInterval(progressInterval);
+      if (progressInterval) clearInterval(progressInterval);
       
       setUploadedFiles(prev => 
         prev.map((f, i) => 
@@ -117,7 +123,7 @@ export const PdfUpload: React.FC = () => {
         toast.success(`${file.name} uploaded successfully!`);
       }
     } catch (error: any) {
-      clearInterval(progressInterval);
+      if (progressInterval) clearInterval(progressInterval);
       setUploadedFiles(prev => 
         prev.map((f, i) => 
           i === index 
@@ -166,6 +172,15 @@ export const PdfUpload: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {usage && usage.status === 'EXPIRED' && (
+        <div className="p-4 bg-yellow-100 border border-yellow-300 rounded-lg flex items-center space-x-3">
+          <AlertTriangle className="w-5 h-5 text-yellow-600" />
+          <div>
+            <div className="font-semibold text-yellow-900">Your subscription has expired</div>
+            <div className="text-yellow-800 text-sm">Upgrade to Pro or Premium to restore upload access.</div>
+          </div>
+        </div>
+      )}
       <div>
         <h1 className="text-2xl font-bold text-gray-900 mb-2">Upload Bank Statement</h1>
         <p className="text-gray-600">
@@ -270,7 +285,7 @@ export const PdfUpload: React.FC = () => {
               : 'border-gray-300 hover:border-primary-400 hover:bg-gray-50 cursor-pointer'
           }`}
         >
-          <input {...getInputProps()} disabled={usage && !usage.canUpload} />
+          <input {...getInputProps()} disabled={!!(usage && !usage.canUpload)} />
           <div className="mx-auto w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center mb-4">
             <Upload className="w-8 h-8 text-primary-600" />
           </div>

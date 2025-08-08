@@ -15,6 +15,9 @@ public class RawStatement {
     @Column(columnDefinition = "TEXT")
     private String rawJson;
     private String bankName;
+
+    private Integer pageCount; // Number of pages in the statement
+
     @ManyToOne
     @JoinColumn(name = "user_id")
     private User user;
@@ -34,4 +37,7 @@ public class RawStatement {
     public void setUser(User user) { this.user = user; } 
     public String getBankName() { return bankName; }
     public void setBankName(String bankName) { this.bankName = bankName; }
+
+    public Integer getPageCount() { return pageCount; }
+    public void setPageCount(Integer pageCount) { this.pageCount = pageCount; }
 }

@@ -8,16 +8,28 @@ public class RazorpayWebhookDto {
         public Payment payment;
         public Order order;
     }
+
     public static class Payment {
         public String id;
         public String status;
         public String order_id;
         public String email;
+        public Entity entity; // for nested payment.entity
     }
+
+    public static class Entity {
+        public String id;
+        public String status;
+        public String order_id;
+        public String email;
+        // Add more fields as needed for card, netbanking, wallet, upi, etc.
+    }
+
     public static class Order {
         public String id;
         public int amount;
         public String status;
+        public Entity entity; // for nested order.entity
     }
 
     public String getEvent() { return event; }

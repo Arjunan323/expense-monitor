@@ -4,20 +4,21 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import com.expensetracker.repository.UserRepository;
-import com.expensetracker.repository.SubscriptionRepository;
+import com.expensetracker.repository.RawStatementRepository;
 import com.expensetracker.model.User;
 import com.expensetracker.model.Subscription;
 import com.expensetracker.dto.SubscriptionStatusDto;
 import java.time.LocalDateTime;
-import java.util.Optional;
+
 
 @RestController
 @RequestMapping("/subscription")
+
 public class SubscriptionController {
     @Autowired
     private UserRepository userRepository;
     @Autowired
-    private SubscriptionRepository subscriptionRepository;
+    private RawStatementRepository rawStatementRepository;
 
     @GetMapping("/status")
     public SubscriptionStatusDto getStatus(@RequestHeader("Authorization") String authHeader) {
@@ -29,7 +30,7 @@ public class SubscriptionController {
         String status = "ACTIVE";
         LocalDateTime startDate = null;
         LocalDateTime endDate = null;
-        int statementLimit = 3, pageLimit = 10;
+        int statementLimit = 3, pageLimit = 30;
         if (sub != null) {
             planType = sub.getPlanType().name();
             status = sub.getStatus();
@@ -41,9 +42,16 @@ public class SubscriptionController {
                 statementLimit = Integer.MAX_VALUE; pageLimit = 100; // or Integer.MAX_VALUE for unlimited
             }
         }
-        // TODO: Calculate statementsUsed/pagesUsed for current month
-        int statementsUsed = 0; // implement logic
-        int pagesUsed = 0; // implement logic
+        // Calculate statementsUsed/pagesUsed for current month
+        java.time.LocalDateTime monthStart = java.time.LocalDate.now().withDayOfMonth(1).atStartOfDay();
+        java.time.LocalDateTime monthEnd = java.time.LocalDate.now().plusMonths(1).withDayOfMonth(1).atStartOfDay().minusSeconds(1);
+        int statementsUsed = (int) rawStatementRepository.countByUserAndUploadDateBetween(user, monthStart, monthEnd);
+        int pagesUsed = 0;
+        try {
+            pagesUsed = rawStatementRepository.sumPagesByUserAndUploadDateBetween(user, monthStart, monthEnd);
+        } catch (Exception e) {
+            pagesUsed = 0;
+        }
         boolean canUpload = (statementLimit == Integer.MAX_VALUE || statementsUsed < statementLimit);
         String upgradeUrl = "/subscription/upgrade";
         return new SubscriptionStatusDto(planType, startDate, endDate, status, statementsUsed, statementLimit, pagesUsed, pageLimit, canUpload, upgradeUrl);

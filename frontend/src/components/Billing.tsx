@@ -1,4 +1,19 @@
 import React, { useState, useEffect } from 'react';
+// Helper to load Razorpay script
+function loadRazorpayScript(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (window.Razorpay) {
+      resolve();
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Failed to load Razorpay SDK'));
+    document.body.appendChild(script);
+  });
+}
 import { 
   CreditCard, 
   Check, 
@@ -17,6 +32,7 @@ import { LoadingSpinner } from './ui/LoadingSpinner';
 import { UsageStats } from '../types';
 import { apiCall } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
+import { usePreferences } from '../contexts/PreferencesContext';
 import toast from 'react-hot-toast';
 
 interface PlanFeature {
@@ -40,88 +56,92 @@ interface Plan {
   buttonVariant: 'secondary' | 'primary' | 'premium';
 }
 
-const plans: Plan[] = [
-  {
-    id: 'FREE',
+
+// Plan type for API
+interface ApiPlan {
+  id: number;
+  planType: 'FREE' | 'PRO' | 'PREMIUM';
+  amount: number;
+  statementsPerMonth: number;
+  pagesPerStatement: number;
+  features: string; // comma-separated or JSON string
+  currency: string; // e.g. '₹', '$', '€'
+}
+
+type UiPlan = ApiPlan & {
+  name: string;
+  period: string;
+  description: string;
+  buttonText: string;
+  buttonVariant: 'secondary' | 'primary' | 'premium';
+  popular?: boolean;
+  price: number;
+  currency: string;
+  statementsLimit: string;
+  pagesPerStatementUi: string;
+  featuresUi: PlanFeature[];
+};
+
+const PLAN_LABELS: Record<string, { name: string; period: string; description: string; buttonText: string; buttonVariant: 'secondary' | 'primary' | 'premium'; popular?: boolean; } > = {
+  FREE: {
     name: 'Free Plan',
-    price: 0,
-    currency: '₹',
     period: 'forever',
     description: 'Ideal for casual users or those wanting to try out the service',
-    statementsLimit: 3,
-    pagesPerStatement: 10,
-    features: [
-      { name: 'AI Parsing & Categorization', included: true },
-      { name: 'Basic Dashboard & Analytics', included: true },
-      { name: 'Email Support', included: true, description: 'Standard response time' },
-      { name: 'Advanced Analytics', included: false },
-      { name: 'Priority Support', included: false },
-      { name: 'Priority Processing', included: false }
-    ],
     buttonText: 'Current Plan',
-    buttonVariant: 'secondary'
+    buttonVariant: 'secondary',
   },
-  {
-    id: 'PRO',
+  PRO: {
     name: 'Pro Plan',
-    price: 129,
-    currency: '₹',
     period: 'month',
     description: 'Perfect for power users tracking multiple accounts or statement-heavy banks',
-    statementsLimit: 5,
-    pagesPerStatement: 50,
-    popular: true,
-    features: [
-      { name: 'AI Parsing & Categorization', included: true },
-      { name: 'Advanced Dashboard & Analytics', included: true },
-      { name: 'Basic Spending Trends', included: true },
-      { name: 'Category Breakdown', included: true },
-      { name: 'Priority Support', included: true },
-      { name: 'Priority Processing', included: false },
-      { name: 'Early Access Features', included: false }
-    ],
     buttonText: 'Upgrade to Pro',
-    buttonVariant: 'primary'
+    buttonVariant: 'primary',
+    popular: true,
   },
-  {
-    id: 'PREMIUM',
+  PREMIUM: {
     name: 'Premium Plan',
-    price: 299,
-    currency: '₹',
     period: 'month',
     description: 'Best for business, heavy users, or those who want no limits',
-    statementsLimit: 'unlimited',
-    pagesPerStatement: 100,
-    features: [
-      { name: 'AI Parsing & Categorization', included: true },
-      { name: 'Full Analytics Suite', included: true },
-      { name: 'Advanced Spending Trends', included: true },
-      { name: 'Budget Tracking', included: true },
-      { name: 'Priority Processing', included: true },
-      { name: 'Top-Priority Support', included: true },
-      { name: 'Early Access to New Features', included: true }
-    ],
     buttonText: 'Upgrade to Premium',
-    buttonVariant: 'premium'
-  }
-];
+    buttonVariant: 'premium',
+  },
+};
+
+
+function parseFeatures(features: string): PlanFeature[] {
+  // Try to parse as JSON, fallback to comma-separated
+  try {
+    const arr = JSON.parse(features);
+    if (Array.isArray(arr)) return arr;
+  } catch {}
+  return features.split(',').map((f: string) => ({ name: f.trim(), included: true }));
+}
 
 export const Billing: React.FC = () => {
   const { user } = useAuth();
+  const { preferences } = usePreferences();
   const [usage, setUsage] = useState<UsageStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [upgrading, setUpgrading] = useState<string | null>(null);
+  const [plans, setPlans] = useState<UiPlan[]>([]);
 
-  useEffect(() => {
-    fetchUsageStats();
-  }, []);
-
+  // Helper: fetchUsageStats
   const fetchUsageStats = async () => {
     try {
       setLoading(true);
       const data = await apiCall<UsageStats>('GET', '/user/usage');
       setUsage(data);
     } catch (error: any) {
+      // JWT expired error handling
+      if (error && error.message &&
+        (error.message.includes('JWT expired') || error.message.includes('ExpiredJwtException') || error.message.includes('jwt expired'))
+      ) {
+        toast.error('Your session has expired. Please log in again.');
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 1500);
+        return;
+      }
       console.error('Usage stats error:', error);
       // Set default values if API fails
       setUsage({
@@ -137,29 +157,43 @@ export const Billing: React.FC = () => {
     }
   };
 
-  const handleUpgrade = async (planId: string) => {
-    if (planId === 'FREE') return;
-    
-    try {
-      setUpgrading(planId);
-      const response = await apiCall<{ url: string }>('POST', '/payments/subscribe', {
-        planType: planId,
-        userEmail: user?.email
-      });
-      
-      if (response.url) {
-        window.location.href = response.url;
-      }
-    } catch (error: any) {
-      toast.error('Failed to initiate upgrade process');
-    } finally {
-      setUpgrading(null);
-    }
-  };
+  useEffect(() => {
+    fetchUsageStats();
+    fetchPlans();
+  }, []);
 
-  const getCurrentPlan = () => {
-    if (!usage) return plans[0];
-    return plans.find(plan => plan.id === usage.planType) || plans[0];
+  const fetchPlans = async () => {
+    try {
+      // 1. Try region from preferences
+      let region = '';
+      if (preferences && preferences.locale && preferences.locale.includes('-')) {
+        region = preferences.locale.split('-')[1].toUpperCase();
+      }
+      // 2. Fallback to browser locale
+      if (!region && typeof navigator !== 'undefined' && navigator.language && navigator.language.includes('-')) {
+        region = navigator.language.split('-')[1].toUpperCase();
+      }
+      // 3. Default to IN
+      if (!region) region = 'IN';
+
+      const data = await apiCall<ApiPlan[]>('GET', `/plans?region=${region}`);
+      // Merge API data with UI labels and parse features
+      const merged: UiPlan[] = data.map((plan) => {
+        const label = PLAN_LABELS[plan.planType] || {};
+        return {
+          ...plan,
+          ...label,
+          price: plan.amount,
+          currency: plan.currency || '₹',
+          statementsLimit: plan.statementsPerMonth === -1 ? 'unlimited' : String(plan.statementsPerMonth),
+          pagesPerStatementUi: plan.pagesPerStatement === -1 ? 'unlimited' : String(plan.pagesPerStatement),
+          featuresUi: parseFeatures(plan.features),
+        };
+      });
+      setPlans(merged);
+    } catch (error) {
+      toast.error('Failed to load plans');
+    }
   };
 
   const getUsagePercentage = (used: number, limit: number | 'unlimited') => {
@@ -173,6 +207,10 @@ export const Billing: React.FC = () => {
     return 'bg-primary-600';
   };
 
+
+  // Show upgrade prompt if subscription is expired
+  const isExpired = usage && usage['status'] === 'EXPIRED';
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -181,12 +219,88 @@ export const Billing: React.FC = () => {
     );
   }
 
+  // Helper: getCurrentPlan
+
+  const getCurrentPlan = () => {
+    if (!usage) return plans[0];
+    return plans.find(plan => plan.planType === usage.planType) || plans[0];
+  };
   const currentPlan = getCurrentPlan();
   const statementsPercentage = usage ? getUsagePercentage(usage.statementsThisMonth, usage.statementLimit) : 0;
   const pagesPercentage = usage ? getUsagePercentage(usage.pagesThisMonth, usage.pageLimit) : 0;
 
+  // Helper: handleUpgrade
+  const handleUpgrade = async (planId: string) => {
+    if (planId === 'FREE') return;
+    try {
+      setUpgrading(planId);
+      await loadRazorpayScript();
+      // Call backend to create Razorpay order
+      const response = await apiCall<any>('POST', '/payment/order', {
+        planType: planId
+      });
+      if (response && response.orderId && response.key && response.amount && response.currency) {
+        const options = {
+          key: response.key,
+          amount: response.amount,
+          currency: response.currency,
+          name: 'Expense Monitor',
+          description: `${planId} Plan Subscription`,
+          order_id: response.orderId,
+          handler: function (rzpResponse: any) {
+            toast.success('Payment successful!');
+            fetchUsageStats();
+          },
+          prefill: {
+            email: user?.email || '',
+          },
+          theme: { color: '#6366f1' },
+          modal: {
+            ondismiss: function () {
+              toast.error('Payment cancelled. No changes made.');
+            }
+          },
+          // Listen for payment failure
+          "callback_url": undefined,
+        };
+        // @ts-ignore
+        const rzp = new window.Razorpay(options);
+        rzp.on('payment.failed', function (response: any) {
+          toast.error('Payment failed. Please try again.');
+        });
+        rzp.open();
+      } else {
+        toast.error('Failed to create payment order');
+      }
+    } catch (error: any) {
+      toast.error('Failed to initiate upgrade process');
+    } finally {
+      setUpgrading(null);
+    }
+  };
+
+  // Map ISO currency code to symbol
+  const currencySymbol = (code: string) => {
+    switch (code) {
+      case 'INR': return '₹';
+      case 'USD': return '$';
+      case 'EUR': return '€';
+      default: return code;
+    }
+  };
+
+
   return (
     <div className="space-y-8 animate-fade-in">
+      {isExpired && (
+        <div className="p-4 bg-yellow-100 border border-yellow-300 rounded-lg flex items-center space-x-3">
+          <AlertTriangle className="w-5 h-5 text-yellow-600" />
+          <div>
+            <div className="font-semibold text-yellow-900">Your subscription has expired</div>
+            <div className="text-yellow-800 text-sm">Upgrade to Pro or Premium to restore access to premium features.</div>
+          </div>
+        </div>
+      )}
       <div>
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Billing & Plans</h1>
         <p className="text-gray-600">
@@ -210,7 +324,7 @@ export const Billing: React.FC = () => {
             <div className="text-right">
               <div className="text-sm font-medium text-gray-900">{currentPlan.name}</div>
               <div className="text-xs text-gray-500">
-                {currentPlan.price > 0 ? `${currentPlan.currency}${currentPlan.price}/${currentPlan.period}` : 'Free'}
+                {Number(currentPlan.price) > 0 ? `${currentPlan.currency}${currentPlan.price}/${currentPlan.period}` : 'Free'}
               </div>
             </div>
           </div>
@@ -294,7 +408,7 @@ export const Billing: React.FC = () => {
               className={`relative rounded-2xl border-2 p-6 ${
                 plan.popular
                   ? 'border-primary-500 bg-primary-50'
-                  : currentPlan.id === plan.id
+                  : currentPlan.planType === plan.planType
                   ? 'border-green-500 bg-green-50'
                   : 'border-gray-200 bg-white'
               } transition-all duration-200 hover:shadow-lg`}
@@ -310,7 +424,7 @@ export const Billing: React.FC = () => {
               )}
 
               {/* Current Plan Badge */}
-              {currentPlan.id === plan.id && !plan.popular && (
+              {currentPlan.planType === plan.planType && !plan.popular && (
                 <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
                   <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-600 text-white">
                     <Check className="w-3 h-3 mr-1" />
@@ -322,8 +436,8 @@ export const Billing: React.FC = () => {
               <div className="text-center mb-6">
                 <h3 className="text-xl font-bold text-gray-900 mb-2">{plan.name}</h3>
                 <div className="mb-2">
-                  <span className="text-3xl font-bold text-gray-900">{plan.currency}{plan.price}</span>
-                  {plan.price > 0 && <span className="text-gray-500">/{plan.period}</span>}
+                  <span className="text-3xl font-bold text-gray-900">{currencySymbol(plan.currency)}{plan.price}</span>
+                  {Number(plan.price) > 0 && <span className="text-gray-500">/{plan.period}</span>}
                 </div>
                 <p className="text-sm text-gray-600">{plan.description}</p>
               </div>
@@ -345,7 +459,7 @@ export const Billing: React.FC = () => {
                     <span className="text-sm font-medium text-gray-700">Pages per statement</span>
                   </div>
                   <span className="text-sm font-bold text-gray-900">
-                    {plan.pagesPerStatement === 'unlimited' ? '∞' : `up to ${plan.pagesPerStatement}`}
+                    {plan.pagesPerStatementUi === 'unlimited' ? '∞' : `up to ${plan.pagesPerStatementUi}`}
                   </span>
                 </div>
               </div>
@@ -353,7 +467,7 @@ export const Billing: React.FC = () => {
               {/* Features List */}
               <div className="mb-6">
                 <ul className="space-y-2">
-                  {plan.features.map((feature, index) => (
+                  {plan.featuresUi.map((feature, index) => (
                     <li key={index} className="flex items-start space-x-2">
                       {feature.included ? (
                         <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
@@ -375,24 +489,24 @@ export const Billing: React.FC = () => {
 
               {/* Action Button */}
               <button
-                onClick={() => handleUpgrade(plan.id)}
-                disabled={currentPlan.id === plan.id || upgrading === plan.id}
+                onClick={() => handleUpgrade(plan.planType)}
+                disabled={isExpired ? plan.planType === 'FREE' || upgrading === plan.planType : currentPlan.planType === plan.planType || upgrading === plan.planType}
                 className={`w-full py-3 px-4 rounded-lg font-medium transition-colors duration-200 flex items-center justify-center space-x-2 ${
                   plan.buttonVariant === 'primary'
                     ? 'bg-primary-600 hover:bg-primary-700 text-white'
                     : plan.buttonVariant === 'premium'
                     ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white'
                     : 'bg-gray-100 text-gray-500 cursor-not-allowed'
-                } ${currentPlan.id === plan.id ? 'cursor-not-allowed' : ''}`}
+                } ${isExpired ? (plan.planType === 'FREE' ? 'cursor-not-allowed' : '') : (currentPlan.planType === plan.planType ? 'cursor-not-allowed' : '')}`}
               >
-                {upgrading === plan.id ? (
+                {upgrading === plan.planType ? (
                   <LoadingSpinner size="sm" className="text-white" />
-                ) : currentPlan.id === plan.id ? (
+                ) : currentPlan.planType === plan.planType ? (
                   <>
                     <Check className="w-4 h-4" />
                     <span>Current Plan</span>
                   </>
-                ) : plan.id === 'PREMIUM' ? (
+                ) : plan.planType === 'PREMIUM' ? (
                   <>
                     <Crown className="w-4 h-4" />
                     <span>{plan.buttonText}</span>

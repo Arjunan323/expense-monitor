@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { LoadingSpinner } from './ui/LoadingSpinner';
 import { EmptyState } from './ui/EmptyState';
-import { Transaction } from '../types';
+import { Transaction, DashboardStats } from '../types';
 import { apiCall } from '../utils/api';
 import { formatCurrency, formatDate, getCategoryColor } from '../utils/formatters';
 import toast from 'react-hot-toast';
@@ -23,19 +23,24 @@ export const Transactions: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
+  const [usage, setUsage] = useState<DashboardStats | null>(null);
   const itemsPerPage = 50;
 
   useEffect(() => {
-    fetchTransactions();
+    fetchTransactionsAndUsage();
   }, []);
 
-  const fetchTransactions = async () => {
+  const fetchTransactionsAndUsage = async () => {
     try {
       setLoading(true);
-      const data = await apiCall<Transaction[]>('GET', '/transactions');
-      setTransactions(data);
+      const [txns, usageData] = await Promise.all([
+        apiCall<Transaction[]>('GET', '/transactions'),
+        apiCall<DashboardStats>('GET', '/dashboard/summary'),
+      ]);
+      setTransactions(txns);
+      setUsage(usageData);
     } catch (error: any) {
-      toast.error('Failed to load transactions');
+      toast.error('Failed to load transactions or usage');
       console.error('Transactions error:', error);
     } finally {
       setLoading(false);
@@ -119,8 +124,25 @@ export const Transactions: React.FC = () => {
         </div>
       </div>
 
-      {/* Coming Soon Banner */}
-      {usage && usage.planType === 'FREE' && (
+      {/* Expired Subscription Banner */}
+      {usage && usage.status === 'EXPIRED' && (
+        <div className="card bg-yellow-100 border-yellow-300 mb-4 flex items-center space-x-3">
+          <Settings className="w-5 h-5 text-yellow-600 mt-0.5" />
+          <div>
+            <div className="font-semibold text-yellow-900">Your subscription has expired</div>
+            <div className="text-yellow-800 text-sm">Upgrade to Pro or Premium to restore access to advanced features.</div>
+          </div>
+          <button
+            onClick={() => window.location.href = '/billing'}
+            className="btn-primary text-sm ml-auto"
+          >
+            Upgrade Plan
+          </button>
+        </div>
+      )}
+
+      {/* Plan Feature Lock/Upgrade Banner */}
+      {usage && usage.advancedAnalyticsLocked && usage.status !== 'EXPIRED' && (
         <div className="card bg-gradient-to-r from-yellow-50 to-orange-50 border-yellow-200">
           <div className="flex items-start justify-between">
             <div className="flex items-start space-x-3">
@@ -128,7 +150,7 @@ export const Transactions: React.FC = () => {
               <div>
                 <h3 className="text-sm font-semibold text-yellow-800">Unlock Advanced Features</h3>
                 <p className="text-sm text-yellow-700 mt-1">
-                  Upgrade to Pro or Premium for manual transaction editing, custom categorization, and advanced filtering.
+                  {usage.upgradePrompt || 'Upgrade to Pro or Premium for manual transaction editing, custom categorization, and advanced filtering.'}
                 </p>
               </div>
             </div>

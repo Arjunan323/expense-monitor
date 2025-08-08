@@ -1,5 +1,15 @@
+
+// Vite env type fix for TypeScript
+interface ImportMetaEnv {
+  readonly VITE_API_BASE_URL?: string;
+}
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
+}
+
 import axios, { AxiosResponse } from 'axios';
 import { ApiResponse, PaginatedResponse } from '../types';
+import toast from 'react-hot-toast';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
@@ -52,7 +62,33 @@ export const apiCall = async <T>(
     });
     return response.data;
   } catch (error: any) {
-    throw new Error(error.response?.data?.message || error.message || 'An error occurred');
+    // Global JWT/session expired handling
+    const msg = error.response?.data?.message || error.message || '';
+    // If backend sends a JWT expired message
+    if (
+      msg.includes('JWT expired') ||
+      msg.includes('ExpiredJwtException') ||
+      msg.includes('jwt expired')
+    ) {
+      toast.error('Your session has expired. Please log in again.');
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      setTimeout(() => {
+        window.location.href = '/login';
+      }, 1500);
+      throw new Error('Session expired');
+    }
+    // If backend only sends 403 Forbidden for expired JWT
+    if (error.response?.status === 403) {
+      toast.error('Your session has expired or you are not authorized. Please log in again.');
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      setTimeout(() => {
+        window.location.href = '/login';
+      }, 1500);
+      throw new Error('Session expired or forbidden');
+    }
+    throw new Error(msg || 'An error occurred');
   }
 };
 

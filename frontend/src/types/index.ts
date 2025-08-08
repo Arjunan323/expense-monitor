@@ -6,6 +6,8 @@ export interface User {
   createdAt: string;
   isPremium?: boolean;
   isSubscribed?: boolean;
+  locale?: string; // e.g. 'en-US', 'en-IN'
+  currency?: string; // e.g. '$', '₹'
 }
 
 export interface Transaction {
@@ -42,6 +44,10 @@ export interface DashboardStats {
   bankSources: string[];
   isMultiBank: boolean;
   hasBalanceDiscrepancy?: boolean;
+  // 3-tier plan feature lock fields
+  advancedAnalyticsLocked?: boolean;
+  upgradePrompt?: string;
+  status?: string; // e.g. 'ACTIVE', 'EXPIRED', etc.
 }
 
 export interface CategorySummary {
@@ -58,6 +64,7 @@ export interface UsageStats {
   pagesThisMonth: number;
   pageLimit: number;
   canUpload: boolean;
+  status?: string; // e.g. 'ACTIVE', 'EXPIRED', etc.
 }
 
 export interface ParseResult {

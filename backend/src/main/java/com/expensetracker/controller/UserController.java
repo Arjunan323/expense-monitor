@@ -1,4 +1,10 @@
+
 package com.expensetracker.controller;
+import com.expensetracker.dto.UsageStatsDto;
+import com.expensetracker.repository.RawStatementRepository;
+import com.expensetracker.model.Subscription;
+import java.time.YearMonth;
+import java.time.LocalDateTime;
 
 
 import org.springframework.web.bind.annotation.*;
@@ -15,10 +21,46 @@ import com.expensetracker.config.JwtUtil;
 public class UserController {
     private final UserRepository userRepository;
     private final JwtUtil jwtUtil;
+    private final RawStatementRepository rawStatementRepository;
 
-    public UserController(UserRepository userRepository, JwtUtil jwtUtil) {
+    public UserController(UserRepository userRepository, JwtUtil jwtUtil, RawStatementRepository rawStatementRepository) {
         this.userRepository = userRepository;
         this.jwtUtil = jwtUtil;
+        this.rawStatementRepository = rawStatementRepository;
+    }
+
+    @GetMapping("/usage")
+    public UsageStatsDto getUsage(@RequestHeader("Authorization") String authHeader) {
+        String token = authHeader.replace("Bearer ", "");
+        String username = jwtUtil.extractUsername(token);
+        User user = userRepository.findByUsername(username).orElse(null);
+        if (user == null) {
+            return new UsageStatsDto(0, 3, "FREE", 0, 10, true);
+        }
+
+        Subscription sub = user.getSubscription();
+        String planType = "FREE";
+        int statementLimit = 3;
+        int pageLimit = 10;
+        if (sub != null && sub.getPlanType() != null && "ACTIVE".equals(sub.getStatus())) {
+            planType = sub.getPlanType().name();
+            // TODO: Lookup plan limits from Plan entity if needed
+        }
+
+        // Count statements/pages for current month
+        YearMonth now = YearMonth.now();
+        LocalDateTime start = now.atDay(1).atStartOfDay();
+        LocalDateTime end = now.atEndOfMonth().atTime(23,59,59);
+        int statementsThisMonth = (int) rawStatementRepository.countByUserAndUploadDateBetween(user, start, end);
+        int pagesThisMonth = 0;
+        try {
+            pagesThisMonth = rawStatementRepository.sumPagesByUserAndUploadDateBetween(user, start, end);
+        } catch (Exception e) {
+            pagesThisMonth = 0;
+        }
+
+        boolean canUpload = statementLimit == -1 || statementsThisMonth < statementLimit;
+        return new UsageStatsDto(statementsThisMonth, statementLimit, planType, pagesThisMonth, pageLimit, canUpload);
     }
 
     @GetMapping("/status")
