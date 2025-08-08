@@ -27,7 +27,15 @@ public class UserController {
         String username = jwtUtil.extractUsername(token);
         User user = userRepository.findByUsername(username).orElse(null);
         if (user != null) {
-            return new UserStatusDto(user.isSubscribed());
+            boolean isSubscribed = false;
+            String planType = "FREE";
+            String status = "INACTIVE";
+            if (user.getSubscription() != null && user.getSubscription().getStatus() != null && user.getSubscription().getStatus().equals("ACTIVE")) {
+                isSubscribed = true;
+                planType = user.getSubscription().getPlanType().name();
+                status = user.getSubscription().getStatus();
+            }
+            return new UserStatusDto(isSubscribed, planType, status);
         }
         return new UserStatusDto("User not found");
     }

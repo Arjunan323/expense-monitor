@@ -13,8 +13,11 @@ public class DashboardStatsDto {
     private boolean isMultiBank;
     private boolean hasBalanceDiscrepancy;
     private String lastUpdateTime;
+    // Feature gating fields
+    private boolean advancedAnalyticsLocked;
+    private String upgradePrompt;
 
-    public DashboardStatsDto(double totalBalance, double monthlyIncome, double monthlyExpenses, int transactionCount, List<CategorySummaryDto> topCategories, List<TransactionDto> recentTransactions, List<String> bankSources, boolean isMultiBank, boolean hasBalanceDiscrepancy, String lastUpdateTime) {
+    public DashboardStatsDto(double totalBalance, double monthlyIncome, double monthlyExpenses, int transactionCount, List<CategorySummaryDto> topCategories, List<TransactionDto> recentTransactions, List<String> bankSources, boolean isMultiBank, boolean hasBalanceDiscrepancy, String lastUpdateTime, boolean advancedAnalyticsLocked, String upgradePrompt) {
         this.totalBalance = totalBalance;
         this.monthlyIncome = monthlyIncome;
         this.monthlyExpenses = monthlyExpenses;
@@ -25,6 +28,8 @@ public class DashboardStatsDto {
         this.isMultiBank = isMultiBank;
         this.hasBalanceDiscrepancy = hasBalanceDiscrepancy;
         this.lastUpdateTime = lastUpdateTime;
+        this.advancedAnalyticsLocked = advancedAnalyticsLocked;
+        this.upgradePrompt = upgradePrompt;
     }
 
     public double getTotalBalance() { return totalBalance; }
@@ -47,4 +52,8 @@ public class DashboardStatsDto {
     public void setHasBalanceDiscrepancy(boolean hasBalanceDiscrepancy) { this.hasBalanceDiscrepancy = hasBalanceDiscrepancy; }
     public String getLastUpdateTime() { return lastUpdateTime; }
     public void setLastUpdateTime(String lastUpdateTime) { this.lastUpdateTime = lastUpdateTime; }
+    public boolean isAdvancedAnalyticsLocked() { return advancedAnalyticsLocked; }
+    public void setAdvancedAnalyticsLocked(boolean advancedAnalyticsLocked) { this.advancedAnalyticsLocked = advancedAnalyticsLocked; }
+    public String getUpgradePrompt() { return upgradePrompt; }
+    public void setUpgradePrompt(String upgradePrompt) { this.upgradePrompt = upgradePrompt; }
 }

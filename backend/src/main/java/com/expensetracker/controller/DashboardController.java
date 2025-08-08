@@ -34,6 +34,11 @@ public class DashboardController {
             .filter(t -> t.getUser() != null && t.getUser().getId().equals(user.getId()))
             .toList();
 
+        String planType = "FREE";
+        if (user.getSubscription() != null && user.getSubscription().getStatus() != null && user.getSubscription().getStatus().equals("ACTIVE")) {
+            planType = user.getSubscription().getPlanType().name();
+        }
+
         // Bank sources and multi-bank logic
         Map<String, List<Transaction>> bankGroups = txns.stream().collect(Collectors.groupingBy(t -> t.getBankName() != null ? t.getBankName() : "Unknown"));
         List<String> bankSources = new ArrayList<>(bankGroups.keySet());
@@ -58,10 +63,6 @@ public class DashboardController {
             .filter(t -> t.getAmount() < 0)
             .mapToDouble(Transaction::getAmount).sum();
         int transactionCount = txns.size();
-
-        // Optionally: add per-bank breakdown for future UI
-        // Map<String, Double> perBankBalance = bankGroups.entrySet().stream()
-        //     .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().stream().mapToDouble(Transaction::getAmount).sum()));
 
         // Top categories with count and percentage
         Map<String, List<Transaction>> categoryGroups = txns.stream().collect(Collectors.groupingBy(Transaction::getCategory));
@@ -92,7 +93,17 @@ public class DashboardController {
             ))
             .collect(Collectors.toList());
 
-        // Optionally: expose bankBalances in DashboardStatsDto (requires DTO update)
+        // Feature gating: lock advanced analytics for FREE plan
+        boolean advancedAnalyticsLocked = false;
+        String upgradePrompt = null;
+        if (planType.equals("FREE")) {
+            // Remove advanced analytics (e.g., topCategories, multi-bank, etc.)
+            topCategories = null;
+            isMultiBank = false;
+            hasBalanceDiscrepancy = false;
+            advancedAnalyticsLocked = true;
+            upgradePrompt = "Upgrade to Pro or Premium to unlock advanced analytics and multi-bank support.";
+        }
 
         return new DashboardStatsDto(
             totalBalance,
@@ -104,7 +115,9 @@ public class DashboardController {
             bankSources,
             isMultiBank,
             hasBalanceDiscrepancy,
-            lastUpdateTime
+            lastUpdateTime,
+            advancedAnalyticsLocked,
+            upgradePrompt
         );
     }
 

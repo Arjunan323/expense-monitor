@@ -93,7 +93,7 @@ export const Dashboard: React.FC = () => {
     );
   }
 
-  const chartData = stats.topCategories.slice(0, 5).map(cat => ({
+  const chartData = stats.topCategories?.slice(0, 5).map(cat => ({
     name: cat.category,
     value: Math.abs(cat.amount),
     color: getCategoryColor(cat.category)
@@ -187,7 +187,7 @@ export const Dashboard: React.FC = () => {
               View all transactions
             </button>
           </div>
-          {chartData.length > 0 ? (
+          {chartData?.length > 0 ? (
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <RechartsPieChart>

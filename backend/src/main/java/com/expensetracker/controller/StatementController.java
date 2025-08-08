@@ -19,6 +19,7 @@ import java.time.LocalDate;
 import java.util.Scanner;
 import java.util.List;
 import java.util.ArrayList;
+import org.apache.pdfbox.pdmodel.PDDocument;
 import com.expensetracker.dto.StatementUploadResponseDto;
 
 @RestController
@@ -40,14 +41,37 @@ public class StatementController {
             String token = authHeader.replace("Bearer ", "");
             String username = new com.expensetracker.config.JwtUtil().extractUsername(token);
             User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException(username));
-            // Pricing gate: allow max 3 uploads per user unless subscribed
-            if (user != null && !user.isSubscribed()) {
-                long statementCount = rawStatementRepository.findAll().stream()
-                    .filter(s -> s.getUser() != null && s.getUser().getId().equals(user.getId()))
-                    .count();
-                if (statementCount >= 3) {
-                    return new StatementUploadResponseDto(false, "Free limit reached. Please subscribe to continue.");
+            // Subscription plan enforcement
+            int statementLimit = 3, pageLimit = 10;
+            String planType = "FREE";
+            if (user.getSubscription() != null) {
+                planType = user.getSubscription().getPlanType().name();
+                if (user.getSubscription().getPlanType() == com.expensetracker.model.Subscription.PlanType.PRO) {
+                    statementLimit = 5; pageLimit = 50;
+                } else if (user.getSubscription().getPlanType() == com.expensetracker.model.Subscription.PlanType.PREMIUM) {
+                    statementLimit = Integer.MAX_VALUE; pageLimit = 100; // or Integer.MAX_VALUE for unlimited
                 }
+            }
+            // Count statements uploaded this month
+            java.time.LocalDateTime monthStart = java.time.LocalDate.now().withDayOfMonth(1).atStartOfDay();
+            long statementsThisMonth = rawStatementRepository.findAll().stream()
+                .filter(s -> s.getUser() != null && s.getUser().getId().equals(user.getId()))
+                .filter(s -> s.getUploadDate() != null && s.getUploadDate().isAfter(monthStart))
+                .count();
+            if (statementLimit != Integer.MAX_VALUE && statementsThisMonth >= statementLimit) {
+                return new StatementUploadResponseDto(false, "You have reached your plan's statement upload limit. Upgrade for more.");
+            }
+            // Enforce page-per-statement limit
+            try {
+                // Use PDFBox to count pages
+                org.apache.pdfbox.pdmodel.PDDocument pdfDoc = org.apache.pdfbox.pdmodel.PDDocument.load(file.getBytes());
+                int numPages = pdfDoc.getNumberOfPages();
+                pdfDoc.close();
+                if (pageLimit != Integer.MAX_VALUE && numPages > pageLimit) {
+                    return new StatementUploadResponseDto(false, "This statement has " + numPages + " pages. Your plan allows up to " + pageLimit + " pages per statement. Upgrade for more.");
+                }
+            } catch (Exception e) {
+                return new StatementUploadResponseDto(false, "Failed to read PDF for page count: " + e.getMessage());
             }
             // Save PDF temporarily
             File tempFile = File.createTempFile("statement", ".pdf");

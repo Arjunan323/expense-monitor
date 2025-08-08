@@ -13,9 +13,11 @@ public class User {
     private String email;
     private String firstName;
     private String lastName;
-    private boolean subscribed = false;
     private String currency = "USD";
     private String locale = "en-US";
+
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private Subscription subscription;
 
     // Getters and setters
     public Long getId() { return id; }
@@ -30,10 +32,10 @@ public class User {
     public void setFirstName(String firstName) { this.firstName = firstName; }
     public String getLastName() { return lastName; }
     public void setLastName(String lastName) { this.lastName = lastName; }
-    public boolean isSubscribed() { return subscribed; }
-    public void setSubscribed(boolean subscribed) { this.subscribed = subscribed; }
     public String getCurrency() { return currency; }
     public void setCurrency(String currency) { this.currency = currency; }
     public String getLocale() { return locale; }
     public void setLocale(String locale) { this.locale = locale; }
+    public Subscription getSubscription() { return subscription; }
+    public void setSubscription(Subscription subscription) { this.subscription = subscription; }
 }
