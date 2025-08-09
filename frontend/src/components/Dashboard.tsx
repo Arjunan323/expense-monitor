@@ -8,11 +8,16 @@ import {
   Calendar,
   AlertTriangle,
   Building2,
-  Clock
+  Clock,
+  Filter,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { StatCard } from './ui/StatCard';
 import { LoadingSpinner } from './ui/LoadingSpinner';
 import { EmptyState } from './ui/EmptyState';
+import { DateRangePicker } from './ui/DateRangePicker';
+import { MultiSelect } from './ui/MultiSelect';
 import { DashboardStats } from '../types';
 import { apiCall } from '../utils/api';
 import { formatCurrency, formatDate, formatDateTime, getCategoryColor } from '../utils/formatters';
@@ -23,17 +28,32 @@ import { useNavigate } from 'react-router-dom';
 export const Dashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedBanks, setSelectedBanks] = useState<string[]>([]);
+  const [dateRange, setDateRange] = useState({ start: '', end: '' });
+  const [showPerBank, setShowPerBank] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [selectedBanks, dateRange]);
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const data = await apiCall<DashboardStats>('GET', '/dashboard/summary');
+      const params = new URLSearchParams();
+      if (selectedBanks.length > 0) {
+        params.append('banks', selectedBanks.join(','));
+      }
+      if (dateRange.start) params.append('startDate', dateRange.start);
+      if (dateRange.end) params.append('endDate', dateRange.end);
+      
+      const data = await apiCall<DashboardStats>('GET', `/dashboard/summary?${params.toString()}`);
       setStats(data);
+      
+      // Initialize selected banks if not set
+      if (selectedBanks.length === 0 && data.bankSources.length > 0) {
+        setSelectedBanks(data.bankSources);
+      }
     } catch (error: any) {
       toast.error('Failed to load dashboard data');
       console.error('Dashboard error:', error);
@@ -41,6 +61,38 @@ export const Dashboard: React.FC = () => {
       setLoading(false);
     }
   };
+
+  const handleDateRangeChange = (start: string, end: string) => {
+    setDateRange({ start, end });
+  };
+
+  const getFilteredStats = () => {
+    if (!stats || selectedBanks.length === 0) return stats;
+    
+    // If all banks selected, return original stats
+    if (selectedBanks.length === stats.bankSources.length) return stats;
+    
+    // Calculate filtered stats based on selected banks
+    const filteredBalance = selectedBanks.reduce((sum, bank) => 
+      sum + (stats.balanceByBank?.[bank] || 0), 0);
+    const filteredIncome = selectedBanks.reduce((sum, bank) => 
+      sum + (stats.incomeByBank?.[bank] || 0), 0);
+    const filteredExpenses = selectedBanks.reduce((sum, bank) => 
+      sum + (stats.expensesByBank?.[bank] || 0), 0);
+    const filteredTransactionCount = selectedBanks.reduce((sum, bank) => 
+      sum + (stats.transactionCountByBank?.[bank] || 0), 0);
+
+    return {
+      ...stats,
+      totalBalance: filteredBalance,
+      monthlyIncome: filteredIncome,
+      monthlyExpenses: filteredExpenses,
+      transactionCount: filteredTransactionCount,
+      isMultiBank: selectedBanks.length > 1
+    };
+  };
+
+  const filteredStats = getFilteredStats();
 
   if (loading) {
     return (
@@ -93,7 +145,13 @@ export const Dashboard: React.FC = () => {
     );
   }
 
-  const chartData = stats.topCategories?.slice(0, 5).map(cat => ({
+  const bankOptions = stats.bankSources.map(bank => ({
+    value: bank,
+    label: bank,
+    count: stats.transactionCountByBank?.[bank]
+  }));
+
+  const chartData = filteredStats?.topCategories?.slice(0, 5).map(cat => ({
     name: cat.category,
     value: Math.abs(cat.amount),
     color: getCategoryColor(cat.category)
@@ -101,8 +159,8 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Header with Upload CTA */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      {/* Header with Filters */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Financial Overview</h1>
           <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 mt-1 space-y-1 sm:space-y-0">
@@ -112,34 +170,61 @@ export const Dashboard: React.FC = () => {
                 <span>Last updated: {formatDateTime(stats.lastUpdateTime)}</span>
               </div>
             )}
-            {stats.bankSources && stats.bankSources.length > 0 && (
+            {selectedBanks.length > 0 && (
               <div className="flex items-center space-x-2 text-sm text-gray-600">
                 <Building2 className="w-4 h-4" />
                 <span>
-                  {stats.isMultiBank ? 'Multiple Banks' : (stats.bankSources[0] || 'Unknown Bank')}
+                  {selectedBanks.length === stats.bankSources.length 
+                    ? 'All Banks' 
+                    : selectedBanks.length === 1 
+                    ? selectedBanks[0] 
+                    : `${selectedBanks.length} Banks Selected`
+                  }
                 </span>
               </div>
             )}
           </div>
         </div>
-        <button
-          onClick={() => navigate('/upload')}
-          className="btn-primary flex items-center space-x-2"
-        >
-          <Upload className="w-4 h-4" />
-          <span>Upload Statement</span>
-        </button>
+        
+        <div className="flex flex-col sm:flex-row gap-3">
+          {/* Multi-bank Selector */}
+          {stats.isMultiBank && (
+            <MultiSelect
+              options={bankOptions}
+              selected={selectedBanks}
+              onChange={setSelectedBanks}
+              placeholder="Select banks"
+              className="min-w-[200px]"
+            />
+          )}
+          
+          {/* Date Range Picker */}
+          <DateRangePicker
+            startDate={dateRange.start}
+            endDate={dateRange.end}
+            onDateChange={handleDateRangeChange}
+            className="min-w-[200px]"
+          />
+          
+          <button
+            onClick={() => navigate('/upload')}
+            className="btn-primary flex items-center space-x-2 whitespace-nowrap"
+          >
+            <Upload className="w-4 h-4" />
+            <span>Upload Statement</span>
+          </button>
+        </div>
       </div>
 
       {/* Balance Discrepancy Warning */}
-      {stats.hasBalanceDiscrepancy && (
+      {stats.hasBalanceDiscrepancy && selectedBanks.length > 1 && (
         <div className="card bg-yellow-50 border-yellow-200">
           <div className="flex items-start space-x-3">
             <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5" />
             <div>
               <h3 className="text-sm font-semibold text-yellow-800">Data Not Fully Reconciled</h3>
               <p className="text-sm text-yellow-700 mt-1">
-                We've detected multiple bank accounts. Balances may not add up correctly across different statements.
+                Multiple bank accounts detected. Balances may not add up correctly across different statements.
               </p>
             </div>
           </div>
@@ -150,33 +235,54 @@ export const Dashboard: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Current Balance"
-          value={stats.totalBalance}
+          value={filteredStats?.totalBalance || 0}
           icon={DollarSign}
           format="currency"
-          subtitle={stats.isMultiBank ? "Across all accounts" : undefined}
+          subtitle={selectedBanks.length > 1 ? "Across selected accounts" : undefined}
+          showPerBank={showPerBank && stats.isMultiBank}
+          bankData={showPerBank ? stats.balanceByBank : undefined}
         />
         <StatCard
           title="Monthly Income"
-          value={stats.monthlyIncome}
+          value={filteredStats?.monthlyIncome || 0}
           icon={TrendingUp}
           format="currency"
           subtitle="Credits this month"
+          showPerBank={showPerBank && stats.isMultiBank}
+          bankData={showPerBank ? stats.incomeByBank : undefined}
         />
         <StatCard
           title="Monthly Expenses"
-          value={Math.abs(stats.monthlyExpenses)}
+          value={Math.abs(filteredStats?.monthlyExpenses || 0)}
           icon={TrendingDown}
           format="currency"
           subtitle="Debits this month"
+          showPerBank={showPerBank && stats.isMultiBank}
+          bankData={showPerBank ? stats.expensesByBank : undefined}
         />
         <StatCard
           title="Total Transactions"
-          value={stats.transactionCount}
+          value={filteredStats?.transactionCount || 0}
           icon={Receipt}
           format="number"
-          subtitle="All uploaded statements"
+          subtitle="Selected period"
+          showPerBank={showPerBank && stats.isMultiBank}
+          bankData={showPerBank ? stats.transactionCountByBank : undefined}
         />
       </div>
+
+      {/* Per-Bank Toggle */}
+      {stats.isMultiBank && (
+        <div className="flex justify-end">
+          <button
+            onClick={() => setShowPerBank(!showPerBank)}
+            className="flex items-center space-x-2 text-sm text-gray-600 hover:text-gray-900"
+          >
+            {showPerBank ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            <span>{showPerBank ? 'Hide' : 'Show'} per-bank breakdown</span>
+          </button>
+        </div>
+      )}
 
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -219,11 +325,11 @@ export const Dashboard: React.FC = () => {
           )}
         </div>
 
-        {/* Category Breakdown */}
+        {/* Category Breakdown Table */}
         <div className="card">
           <h3 className="text-lg font-semibold text-gray-900 mb-6">Category Breakdown</h3>
           <div className="space-y-4">
-            {stats.topCategories?.slice(0, 5).map((category, index) => (
+            {filteredStats?.topCategories?.slice(0, 6).map((category, index) => (
               <div key={category.category} className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <div 
@@ -248,6 +354,25 @@ export const Dashboard: React.FC = () => {
               </div>
             ))}
           </div>
+          
+          {showPerBank && stats.isMultiBank && stats.topCategoriesByBank && (
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <h4 className="text-sm font-semibold text-gray-900 mb-4">Per-Bank Breakdown</h4>
+              {selectedBanks.map(bank => (
+                <div key={bank} className="mb-4">
+                  <h5 className="text-xs font-medium text-gray-700 mb-2">{bank}</h5>
+                  <div className="space-y-2">
+                    {stats.topCategoriesByBank[bank]?.slice(0, 3).map(cat => (
+                      <div key={`${bank}-${cat.category}`} className="flex justify-between text-xs">
+                        <span className="text-gray-600">{cat.category}</span>
+                        <span className="font-medium">{formatCurrency(Math.abs(cat.amount))}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -264,7 +389,7 @@ export const Dashboard: React.FC = () => {
         </div>
         <div className="overflow-hidden">
           <div className="space-y-3">
-            {(stats.recentTransactions?.slice(0, 8) || []).map((transaction) => (
+            {(filteredStats?.recentTransactions?.slice(0, 8) || []).map((transaction) => (
               <div key={transaction.id} className="flex items-center justify-between py-3 border-b border-gray-100 last:border-b-0">
                 <div className="flex items-center space-x-3">
                   <div 
@@ -279,6 +404,12 @@ export const Dashboard: React.FC = () => {
                       <p className="text-xs text-gray-500">
                         {formatDate(transaction.date)}
                       </p>
+                      {transaction.bankName && (
+                        <span className="text-xs text-gray-400">•</span>
+                      )}
+                      {transaction.bankName && (
+                        <span className="text-xs text-gray-500">{transaction.bankName}</span>
+                      )}
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                         {transaction.category}
                       </span>

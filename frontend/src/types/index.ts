@@ -35,10 +35,15 @@ export interface RawStatement {
 
 export interface DashboardStats {
   totalBalance: number;
+  balanceByBank: { [bankName: string]: number };
   monthlyIncome: number;
   monthlyExpenses: number;
+  incomeByBank: { [bankName: string]: number };
+  expensesByBank: { [bankName: string]: number };
   transactionCount: number;
+  transactionCountByBank: { [bankName: string]: number };
   topCategories: CategorySummary[];
+  topCategoriesByBank: { [bankName: string]: CategorySummary[] };
   recentTransactions: Transaction[];
   lastUpdateTime: string;
   bankSources: string[];
@@ -95,4 +100,21 @@ export interface PaginatedResponse<T> {
   totalPages: number;
   size: number;
   number: number;
+}
+
+export interface TransactionFilters {
+  banks: string[];
+  dateRange: {
+    start: string;
+    end: string;
+  };
+  categories: string[];
+  amountRange: {
+    min: number | null;
+    max: number | null;
+  };
+  transactionType: 'all' | 'credit' | 'debit';
+  description: string;
+  sortBy: 'date' | 'amount' | 'category' | 'bank';
+  sortOrder: 'asc' | 'desc';
 }

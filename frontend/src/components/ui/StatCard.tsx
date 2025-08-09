@@ -14,6 +14,8 @@ interface StatCardProps {
   format?: 'currency' | 'number';
   className?: string;
   subtitle?: string;
+  showPerBank?: boolean;
+  bankData?: { [bankName: string]: number };
 }
 
 export const StatCard: React.FC<StatCardProps> = ({
@@ -24,6 +26,8 @@ export const StatCard: React.FC<StatCardProps> = ({
   format = 'currency',
   className = '',
   subtitle,
+  showPerBank = false,
+  bankData,
 }) => {
   const { preferences } = usePreferences();
   const formattedValue = format === 'currency'
@@ -38,6 +42,21 @@ export const StatCard: React.FC<StatCardProps> = ({
           <p className="text-2xl font-bold text-gray-900">{formattedValue}</p>
           {subtitle && (
             <p className="text-xs text-gray-500 mt-1">{subtitle}</p>
+          )}
+          {showPerBank && bankData && (
+            <div className="mt-3 space-y-1">
+              {Object.entries(bankData).map(([bank, amount]) => (
+                <div key={bank} className="flex justify-between text-xs">
+                  <span className="text-gray-600">{bank}</span>
+                  <span className="font-medium text-gray-900">
+                    {format === 'currency' 
+                      ? formatCurrency(amount, undefined, preferences)
+                      : amount.toLocaleString(preferences.locale)
+                    }
+                  </span>
+                </div>
+              ))}
+            </div>
           )}
           {trend && (
             <div className="flex items-center mt-2">
