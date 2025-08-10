@@ -4,7 +4,8 @@ import { Calendar, X } from 'lucide-react';
 interface DateRangePickerProps {
   startDate: string;
   endDate: string;
-  onDateChange: (start: string, end: string) => void;
+  onDateChange?: (start: string, end: string) => void;
+  onApply?: (start: string, end: string) => void;
   className?: string;
 }
 
@@ -12,20 +13,31 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
   startDate,
   endDate,
   onDateChange,
+  onApply,
   className = ''
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [tempStart, setTempStart] = useState(startDate);
+  const [tempEnd, setTempEnd] = useState(endDate);
+
+  // Sync local state with props
+  React.useEffect(() => {
+    setTempStart(startDate);
+    setTempEnd(endDate);
+  }, [startDate, endDate]);
 
   const handleStartDateChange = (date: string) => {
-    onDateChange(date, endDate);
+    setTempStart(date);
   };
 
   const handleEndDateChange = (date: string) => {
-    onDateChange(startDate, date);
+    setTempEnd(date);
   };
 
   const clearDates = () => {
-    onDateChange('', '');
+    setTempStart('');
+    setTempEnd('');
+    if (onDateChange) onDateChange('', '');
   };
 
   const formatDateForDisplay = (date: string) => {
@@ -72,7 +84,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
               </label>
               <input
                 type="date"
-                value={startDate}
+                value={tempStart}
                 onChange={(e) => handleStartDateChange(e.target.value)}
                 className="input-field"
               />
@@ -83,7 +95,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
               </label>
               <input
                 type="date"
-                value={endDate}
+                value={tempEnd}
                 onChange={(e) => handleEndDateChange(e.target.value)}
                 className="input-field"
               />
@@ -96,7 +108,10 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
                 Clear
               </button>
               <button
-                onClick={() => setIsOpen(false)}
+                onClick={() => {
+                  if (onApply) onApply(tempStart, tempEnd);
+                  setIsOpen(false);
+                }}
                 className="btn-primary text-sm"
               >
                 Apply

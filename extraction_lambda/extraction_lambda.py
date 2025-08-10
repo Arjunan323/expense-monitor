@@ -114,33 +114,36 @@ def extract_transactions_from_pdf(pdf_path):
     transactions = []
     empty_pdf = True
     bank_name = None
+    all_text = ""
 
     with pdfplumber.open(pdf_path) as pdf:
-        for i, page in enumerate(pdf.pages):
+        for page in pdf.pages:
             text = page.extract_text()
             if not text or not text.strip():
                 # Try OCR if no text
                 image = convert_from_path(pdf_path, first_page=page.page_number, last_page=page.page_number)[0]
                 processed_image = preprocess_image(image)
                 text = pytesseract.image_to_string(processed_image)
-
             if text and text.strip():
                 empty_pdf = False
-                for chunk in chunk_text(text):
-                    result = call_gpt_text_vision(chunk)
-                    if not isinstance(result, list):
-                        logging.warning(f"Non-standard GPT response: {result}")
-                        continue
-                    # On first page, try to extract bankName from first transaction
-                    if i == 0 and result and isinstance(result, list) and 'bankName' in result[0]:
-                        bank_name = result[0]['bankName']
-                    transactions.extend(result)
+                all_text += "\n" + text
             else:
                 logging.warning(f"Page {page.page_number} is empty or unreadable.")
 
     if empty_pdf:
         logging.error(f"PDF {pdf_path} appears to be empty or non-standard. No transactions extracted.")
         return []
+
+    # Now chunk and process the combined text
+    for chunk in chunk_text(all_text):
+        result = call_gpt_text_vision(chunk)
+        if not isinstance(result, list):
+            logging.warning(f"Non-standard GPT response: {result}")
+            continue
+        # Try to extract bankName from first transaction
+        if bank_name is None and result and isinstance(result, list) and 'bankName' in result[0]:
+            bank_name = result[0]['bankName']
+        transactions.extend(result)
 
     processed = postprocess_transactions(transactions, bank_name)
     if not processed:

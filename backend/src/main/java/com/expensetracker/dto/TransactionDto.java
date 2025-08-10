@@ -1,4 +1,5 @@
-package com.expensetracker.dto;
+
+    package com.expensetracker.dto;
 
 import java.time.LocalDate;
 
@@ -10,6 +11,18 @@ public class TransactionDto {
     private double balance;
     private String category;
     private String bankName;
+
+    public static TransactionDto fromEntity(com.expensetracker.model.Transaction t) {
+        return new TransactionDto(
+            t.getId(),
+            t.getDate(),
+            t.getDescription(),
+            t.getAmount() != null ? t.getAmount() : 0.0,
+            t.getBalance() != null ? t.getBalance() : 0.0,
+            t.getCategory(),
+            t.getBankName()
+        );
+    }
 
     public TransactionDto(Long id, LocalDate date, String description, double amount, double balance, String category, String bankName) {
         this.id = id;

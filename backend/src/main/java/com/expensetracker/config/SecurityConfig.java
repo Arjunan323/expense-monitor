@@ -40,4 +40,9 @@ public class SecurityConfig {
         // JWT filter should be added here in a full implementation
         return http.build();
     }
+
+   @Bean
+    public org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder passwordEncoder() {
+        return new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder();
+    }
 }

@@ -37,6 +37,11 @@ export const Dashboard: React.FC = () => {
     fetchDashboardData();
   }, [selectedBanks, dateRange]);
 
+  // Only trigger fetch when user clicks Apply in date picker
+  const handleDateRangeApply = (start: string, end: string) => {
+    setDateRange({ start, end });
+  };
+
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
@@ -44,12 +49,13 @@ export const Dashboard: React.FC = () => {
       if (selectedBanks.length > 0) {
         params.append('banks', selectedBanks.join(','));
       }
-      if (dateRange.start) params.append('startDate', dateRange.start);
-      if (dateRange.end) params.append('endDate', dateRange.end);
-      
+      // Always send startDate and endDate, even if empty, to ensure backend receives them as null if not set
+      params.append('startDate', dateRange.start || '');
+      params.append('endDate', dateRange.end || '');
+
       const data = await apiCall<DashboardStats>('GET', `/dashboard/summary?${params.toString()}`);
       setStats(data);
-      
+
       // Initialize selected banks if not set
       if (selectedBanks.length === 0 && data.bankSources.length > 0) {
         setSelectedBanks(data.bankSources);
@@ -62,9 +68,7 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const handleDateRangeChange = (start: string, end: string) => {
-    setDateRange({ start, end });
-  };
+  // Remove handleDateRangeChange, use handleDateRangeApply instead
 
   const getFilteredStats = () => {
     if (!stats || selectedBanks.length === 0) return stats;
@@ -102,14 +106,15 @@ export const Dashboard: React.FC = () => {
     );
   }
 
-  if (!stats || stats.transactionCount === 0) {
+  // Show onboarding only if there is truly no data and no filters are applied
+  const noFiltersApplied = selectedBanks.length === (stats?.bankSources?.length || 0) && !dateRange.start && !dateRange.end;
+  if (!stats || (stats.transactionCount === 0 && noFiltersApplied)) {
     return (
       <div className="space-y-6">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Welcome to Expense Monitor</h1>
           <p className="text-gray-600">Get started by uploading your first bank statement</p>
         </div>
-        
         <EmptyState
           icon={Receipt}
           title="No transactions yet"
@@ -119,7 +124,6 @@ export const Dashboard: React.FC = () => {
             onClick: () => navigate('/upload')
           }}
         />
-        
         <div className="card bg-blue-50 border-blue-200">
           <h3 className="text-lg font-semibold text-blue-900 mb-3">How it works</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-blue-800">
@@ -145,6 +149,10 @@ export const Dashboard: React.FC = () => {
     );
   }
 
+
+  // Inline empty state message if filters return no results, but show the rest of the dashboard (with zeroed/empty data)
+  const showNoResults = stats && filteredStats && filteredStats.transactionCount === 0;
+
   const bankOptions = stats.bankSources.map(bank => ({
     value: bank,
     label: bank,
@@ -155,10 +163,27 @@ export const Dashboard: React.FC = () => {
     name: cat.category,
     value: Math.abs(cat.amount),
     color: getCategoryColor(cat.category)
-  }));
+  })) || [];
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Inline filter empty state */}
+      {showNoResults && (
+        <div className="card bg-yellow-50 border-yellow-200 text-center py-6">
+          <h1 className="text-xl font-bold text-gray-900 mb-2">No results for your filters</h1>
+          <p className="text-gray-600">Try adjusting your date range or bank selection to see results.</p>
+          <button
+            className="btn-primary mt-4"
+            onClick={() => {
+              setDateRange({ start: '', end: '' });
+              setSelectedBanks(stats.bankSources);
+            }}
+          >
+            Reset Filters
+          </button>
+        </div>
+      )}
+
       {/* Header with Filters */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
@@ -202,7 +227,7 @@ export const Dashboard: React.FC = () => {
           <DateRangePicker
             startDate={dateRange.start}
             endDate={dateRange.end}
-            onDateChange={handleDateRangeChange}
+            onApply={handleDateRangeApply}
             className="min-w-[200px]"
           />
           
@@ -297,7 +322,7 @@ export const Dashboard: React.FC = () => {
               View all transactions
             </button>
           </div>
-          {chartData?.length > 0 ? (
+          {chartData.length > 0 ? (
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <RechartsPieChart>

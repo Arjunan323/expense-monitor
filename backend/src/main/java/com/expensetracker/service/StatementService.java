@@ -71,7 +71,7 @@ public class StatementService {
             if (output == null) {
                 return new StatementUploadResponseDto(false, AppConstants.ERROR_EXTRACTION_FAILED);
             }
-            RawStatement rawStatement = storeRawStatement(user, file.getOriginalFilename(), output);
+            RawStatement rawStatement = storeRawStatement(user, file.getOriginalFilename(), output, numPages);
             List<Transaction> transactions = parseTransactions(output, user, rawStatement.getBankName());
             transactionRepository.saveAll(transactions);
             tempFile.delete();
@@ -167,26 +167,27 @@ public class StatementService {
         return output.toString();
     }
 
-    private RawStatement storeRawStatement(User user, String filename, String rawJson) {
-        RawStatement rawStatement = new RawStatement();
-        rawStatement.setUploadDate(LocalDateTime.now());
-        rawStatement.setFilename(filename);
-        rawStatement.setRawJson(rawJson);
-        rawStatement.setUser(user);
-        String bankName = null;
-        try {
-            org.json.JSONArray arr = new org.json.JSONArray(rawJson);
-            if (arr.length() > 0) {
-                org.json.JSONObject first = arr.getJSONObject(0);
-                bankName = first.optString("bankName", null);
-            }
-        } catch (Exception e) {
-            bankName = null;
+private RawStatement storeRawStatement(User user, String filename, String rawJson, int pageCount) {
+    RawStatement rawStatement = new RawStatement();
+    rawStatement.setUploadDate(LocalDateTime.now());
+    rawStatement.setFilename(filename);
+    rawStatement.setRawJson(rawJson);
+    rawStatement.setUser(user);
+    rawStatement.setPageCount(pageCount);
+    String bankName = null;
+    try {
+        org.json.JSONArray arr = new org.json.JSONArray(rawJson);
+        if (arr.length() > 0) {
+            org.json.JSONObject first = arr.getJSONObject(0);
+            bankName = first.optString("bankName", null);
         }
-        rawStatement.setBankName(bankName);
-        rawStatementRepository.save(rawStatement);
-        return rawStatement;
+    } catch (Exception e) {
+        bankName = null;
     }
+    rawStatement.setBankName(bankName);
+    rawStatementRepository.save(rawStatement);
+    return rawStatement;
+}
 
     private List<Transaction> parseTransactions(String rawJson, User user, String bankName) {
         List<Transaction> transactions = new ArrayList<>();

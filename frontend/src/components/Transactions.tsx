@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   ArrowUpDown, 
   Filter, 
@@ -17,23 +17,23 @@ import { LoadingSpinner } from './ui/LoadingSpinner';
 import { EmptyState } from './ui/EmptyState';
 import { DateRangePicker } from './ui/DateRangePicker';
 import { MultiSelect } from './ui/MultiSelect';
-import { Transaction, DashboardStats, TransactionFilters } from '../types';
+import { Transaction, DashboardStats, TransactionFilters, PaginatedResponse } from '../types';
 import { apiCall } from '../utils/api';
 import { formatCurrency, formatDate, getCategoryColor } from '../utils/formatters';
 import toast from 'react-hot-toast';
 
 export const Transactions: React.FC = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>([]);
+  const [totalElements, setTotalElements] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [usage, setUsage] = useState<DashboardStats | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [availableBanks, setAvailableBanks] = useState<string[]>([]);
   const [availableCategories, setAvailableCategories] = useState<string[]>([]);
-  
+  const [categoryCounts, setCategoryCounts] = useState<{ category: string; count: number }[]>([]);
   const itemsPerPage = 50;
-
   const [filters, setFilters] = useState<TransactionFilters>({
     banks: [],
     dateRange: { start: '', end: '' },
@@ -45,115 +45,98 @@ export const Transactions: React.FC = () => {
     sortOrder: 'desc'
   });
 
+  // Fetch usage and filter options (banks) on mount
   useEffect(() => {
-    fetchTransactionsAndUsage();
+    const fetchUsageAndOptions = async () => {
+      try {
+        setLoading(true);
+        const usageData = await apiCall<DashboardStats>('GET', '/dashboard/summary');
+        setUsage(usageData);
+        setAvailableBanks(usageData.bankSources || []);
+        setFilters(prev => ({ ...prev, banks: usageData.bankSources || [] }));
+      } catch (error: any) {
+        toast.error('Failed to load usage data');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchUsageAndOptions();
   }, []);
 
+  // Fetch category counts from backend when relevant filters change (except categories)
+  const prevCategoryFilters = useRef<any>(null);
   useEffect(() => {
-    applyFilters();
-  }, [transactions, filters]);
+    const fetchCategoryCounts = async () => {
+      try {
+        const params = new URLSearchParams();
+        if (filters.banks.length > 0) params.append('banks', filters.banks.join(','));
+        if (filters.dateRange.start) params.append('startDate', filters.dateRange.start);
+        if (filters.dateRange.end) params.append('endDate', filters.dateRange.end);
+        if (filters.amountRange.min !== null) params.append('amountMin', String(filters.amountRange.min));
+        if (filters.amountRange.max !== null) params.append('amountMax', String(filters.amountRange.max));
+        if (filters.transactionType !== 'all') params.append('transactionType', filters.transactionType);
+        if (filters.description) params.append('description', filters.description);
+        // Do NOT include categories in this request
+        const response = await apiCall<{ category: string; count: number }[]>('GET', `/transactions/category-counts?${params.toString()}`);
+        setCategoryCounts(response);
+        setAvailableCategories(response.map(c => c.category));
+      } catch (error) {
+        setCategoryCounts([]);
+        setAvailableCategories([]);
+      }
+    };
+    // Only refetch if non-category filters change
+    const relevant = JSON.stringify({
+      banks: filters.banks,
+      dateRange: filters.dateRange,
+      amountRange: filters.amountRange,
+      transactionType: filters.transactionType,
+      description: filters.description
+    });
+    if (prevCategoryFilters.current !== relevant) {
+      fetchCategoryCounts();
+      prevCategoryFilters.current = relevant;
+    }
+  }, [filters.banks, filters.dateRange, filters.amountRange, filters.transactionType, filters.description]);
 
-  const fetchTransactionsAndUsage = async () => {
+  // Fetch transactions from backend when filters or page change
+  const fetchTransactions = useCallback(async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const [txns, usageData] = await Promise.all([
-        apiCall<Transaction[]>('GET', '/transactions'),
-        apiCall<DashboardStats>('GET', '/dashboard/summary'),
-      ]);
-      setTransactions(txns);
-      setUsage(usageData);
-      
-      // Extract unique banks and categories
-      const banks = [...new Set(txns.map(t => t.bankName).filter(Boolean))];
-      const categories = [...new Set(txns.map(t => t.category).filter(Boolean))];
-      setAvailableBanks(banks);
-      setAvailableCategories(categories);
-      
-      // Initialize filters with all banks selected
-      setFilters(prev => ({ ...prev, banks }));
+      const params = new URLSearchParams();
+      params.append('page', String(currentPage - 1));
+      params.append('size', String(itemsPerPage));
+      if (filters.banks.length > 0) params.append('banks', filters.banks.join(','));
+      if (filters.dateRange.start) params.append('startDate', filters.dateRange.start);
+      if (filters.dateRange.end) params.append('endDate', filters.dateRange.end);
+      if (filters.categories.length > 0) params.append('categories', filters.categories.join(','));
+      if (filters.amountRange.min !== null) params.append('amountMin', String(filters.amountRange.min));
+      if (filters.amountRange.max !== null) params.append('amountMax', String(filters.amountRange.max));
+      if (filters.transactionType !== 'all') params.append('transactionType', filters.transactionType);
+      if (filters.description) params.append('description', filters.description);
+      params.append('sortBy', filters.sortBy);
+      params.append('sortOrder', filters.sortOrder);
+
+      const response = await apiCall<PaginatedResponse<Transaction>>('GET', `/transactions?${params.toString()}`);
+      setTransactions(response.content);
+      setTotalElements(response.totalElements);
+      setTotalPages(response.totalPages);
     } catch (error: any) {
-      toast.error('Failed to load transactions or usage');
-      console.error('Transactions error:', error);
+      toast.error('Failed to load transactions');
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters, currentPage]);
 
-  const applyFilters = () => {
-    let filtered = [...transactions];
+  useEffect(() => {
+    fetchTransactions();
+  }, [fetchTransactions]);
 
-    // Bank filter
-    if (filters.banks.length > 0) {
-      filtered = filtered.filter(t => filters.banks.includes(t.bankName || ''));
-    }
 
-    // Date range filter
-    if (filters.dateRange.start) {
-      filtered = filtered.filter(t => t.date >= filters.dateRange.start);
-    }
-    if (filters.dateRange.end) {
-      filtered = filtered.filter(t => t.date <= filters.dateRange.end);
-    }
-
-    // Category filter
-    if (filters.categories.length > 0) {
-      filtered = filtered.filter(t => filters.categories.includes(t.category));
-    }
-
-    // Amount range filter
-    if (filters.amountRange.min !== null) {
-      filtered = filtered.filter(t => Math.abs(t.amount) >= filters.amountRange.min!);
-    }
-    if (filters.amountRange.max !== null) {
-      filtered = filtered.filter(t => Math.abs(t.amount) <= filters.amountRange.max!);
-    }
-
-    // Transaction type filter
-    if (filters.transactionType === 'credit') {
-      filtered = filtered.filter(t => t.amount > 0);
-    } else if (filters.transactionType === 'debit') {
-      filtered = filtered.filter(t => t.amount < 0);
-    }
-
-    // Description search
-    if (filters.description) {
-      filtered = filtered.filter(t => 
-        t.description.toLowerCase().includes(filters.description.toLowerCase())
-      );
-    }
-
-    // Sorting
-    filtered.sort((a, b) => {
-      let aValue: any, bValue: any;
-      
-      switch (filters.sortBy) {
-        case 'amount':
-          aValue = Math.abs(a.amount);
-          bValue = Math.abs(b.amount);
-          break;
-        case 'category':
-          aValue = a.category;
-          bValue = b.category;
-          break;
-        case 'bank':
-          aValue = a.bankName || '';
-          bValue = b.bankName || '';
-          break;
-        default: // date
-          aValue = new Date(a.date).getTime();
-          bValue = new Date(b.date).getTime();
-      }
-
-      if (filters.sortOrder === 'asc') {
-        return aValue > bValue ? 1 : -1;
-      } else {
-        return aValue < bValue ? 1 : -1;
-      }
-    });
-
-    setFilteredTransactions(filtered);
-    setCurrentPage(1); // Reset to first page when filters change
-  };
+  // When filters change, reset to first page and fetch
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters]);
 
   const resetFilters = () => {
     setFilters({
@@ -195,21 +178,23 @@ export const Transactions: React.FC = () => {
     }
   };
 
-  const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedTransactions = filteredTransactions.slice(startIndex, startIndex + itemsPerPage);
 
   const bankOptions = availableBanks.map(bank => ({
     value: bank,
     label: bank,
-    count: transactions.filter(t => t.bankName === bank).length
+    // count is not available without all transactions, so omit or set to 0
+    count: 0
   }));
 
-  const categoryOptions = availableCategories.map(category => ({
-    value: category,
-    label: category,
-    count: transactions.filter(t => t.category === category).length
-  }));
+  const categoryOptions = availableCategories.map(category => {
+    const found = categoryCounts.find(c => c.category === category);
+    return {
+      value: category,
+      label: category,
+      count: found ? found.count : 0
+    };
+  });
 
   const activeFiltersCount = [
     filters.banks.length < availableBanks.length ? 1 : 0,
@@ -228,7 +213,7 @@ export const Transactions: React.FC = () => {
     );
   }
 
-  if (transactions.length === 0) {
+  if (transactions.length === 0 && !loading) {
     return (
       <EmptyState
         icon={Tag}
@@ -245,11 +230,11 @@ export const Transactions: React.FC = () => {
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">All Transactions</h1>
           <p className="text-gray-600 mt-1">
-            {filteredTransactions.length} of {transactions.length} transactions
+            {totalElements} transactions
             {activeFiltersCount > 0 && (
               <span className="text-primary-600"> • {activeFiltersCount} filter{activeFiltersCount > 1 ? 's' : ''} applied</span>
             )}
@@ -458,7 +443,7 @@ export const Transactions: React.FC = () => {
       )}
 
       {/* No Results */}
-      {filteredTransactions.length === 0 && (
+  {transactions.length === 0 && !loading && (
         <div className="card text-center py-12">
           <Tag className="w-12 h-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-900 mb-2">No transactions found</h3>
@@ -472,7 +457,7 @@ export const Transactions: React.FC = () => {
       )}
 
       {/* Transactions Table */}
-      {filteredTransactions.length > 0 && (
+  {transactions.length > 0 && (
         <div className="card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -499,7 +484,7 @@ export const Transactions: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {paginatedTransactions.map((transaction) => (
+                {transactions.map((transaction) => (
                   <tr key={transaction.id} className="hover:bg-gray-50 transition-colors duration-150">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <div className="flex items-center space-x-2">
@@ -566,9 +551,9 @@ export const Transactions: React.FC = () => {
                   <p className="text-sm text-gray-700">
                     Showing <span className="font-medium">{startIndex + 1}</span> to{' '}
                     <span className="font-medium">
-                      {Math.min(startIndex + itemsPerPage, filteredTransactions.length)}
+                      {Math.min(startIndex + itemsPerPage, totalElements)}
                     </span>{' '}
-                    of <span className="font-medium">{filteredTransactions.length}</span> results
+                    of <span className="font-medium">{totalElements}</span> results
                   </p>
                 </div>
                 <div>

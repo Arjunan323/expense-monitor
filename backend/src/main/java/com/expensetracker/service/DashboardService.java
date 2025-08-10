@@ -26,12 +26,27 @@ public class DashboardService {
         this.userRepository = userRepository;
     }
 
-    public DashboardStatsDto getSummary(String token) {
+
+    public DashboardStatsDto getSummary(String token, String startDateStr, String endDateStr) {
         String username = new com.expensetracker.config.JwtUtil().extractUsername(token);
         User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException(username));
-        List<Transaction> txns = transactionRepository.findAll().stream()
-            .filter(t -> t.getUser() != null && t.getUser().getId().equals(user.getId()))
-            .toList();
+
+    java.time.LocalDate startDate = (startDateStr != null && !startDateStr.isEmpty()) ? java.time.LocalDate.parse(startDateStr) : null;
+    java.time.LocalDate endDate = (endDateStr != null && !endDateStr.isEmpty()) ? java.time.LocalDate.parse(endDateStr) : null;
+    // Use Specification for date range filtering
+    List<Transaction> txns = transactionRepository.findAll(
+        com.expensetracker.repository.TransactionSpecifications.filter(
+            user,
+            null, // banks
+            null, // categories
+            startDate,
+            endDate,
+            null, // amountMin
+            null, // amountMax
+            null, // transactionType
+            null  // description
+        )
+    );
 
         String planType = AppConstants.PLAN_FREE;
         if (user.getSubscription() != null && AppConstants.STATUS_ACTIVE.equals(user.getSubscription().getStatus())) {

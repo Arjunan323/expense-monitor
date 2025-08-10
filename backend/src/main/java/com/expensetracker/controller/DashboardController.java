@@ -17,9 +17,12 @@ public class DashboardController {
     }
 
     @GetMapping("/summary")
-    public ResponseEntity<DashboardStatsDto> getSummary(@RequestHeader("Authorization") String authHeader) {
+    public ResponseEntity<DashboardStatsDto> getSummary(
+            @RequestHeader("Authorization") String authHeader,
+            @RequestParam(value = "startDate", required = false) String startDate,
+            @RequestParam(value = "endDate", required = false) String endDate) {
         String token = authHeader.replace("Bearer ", "");
-        DashboardStatsDto stats = dashboardService.getSummary(token);
+        DashboardStatsDto stats = dashboardService.getSummary(token, startDate, endDate);
         return ResponseEntity.ok(stats);
     }
 

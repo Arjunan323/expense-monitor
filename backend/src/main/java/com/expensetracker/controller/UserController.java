@@ -3,6 +3,8 @@ package com.expensetracker.controller;
 import com.expensetracker.dto.UsageStatsDto;
 import com.expensetracker.repository.RawStatementRepository;
 import com.expensetracker.model.Subscription;
+import com.expensetracker.repository.PlanRepository;
+import com.expensetracker.model.Plan;
 import java.time.YearMonth;
 import java.time.LocalDateTime;
 
@@ -22,11 +24,13 @@ public class UserController {
     private final UserRepository userRepository;
     private final JwtUtil jwtUtil;
     private final RawStatementRepository rawStatementRepository;
+    private final PlanRepository planRepository;
 
-    public UserController(UserRepository userRepository, JwtUtil jwtUtil, RawStatementRepository rawStatementRepository) {
+    public UserController(UserRepository userRepository, JwtUtil jwtUtil, RawStatementRepository rawStatementRepository, PlanRepository planRepository) {
         this.userRepository = userRepository;
         this.jwtUtil = jwtUtil;
         this.rawStatementRepository = rawStatementRepository;
+        this.planRepository = planRepository;
     }
 
     @GetMapping("/usage")
@@ -35,7 +39,7 @@ public class UserController {
         String username = jwtUtil.extractUsername(token);
         User user = userRepository.findByUsername(username).orElse(null);
         if (user == null) {
-            return new UsageStatsDto(0, 3, "FREE", 0, 10, true);
+            return new UsageStatsDto(0, 3, "FREE", 0, 30, true);
         }
 
         Subscription sub = user.getSubscription();
@@ -44,7 +48,13 @@ public class UserController {
         int pageLimit = 10;
         if (sub != null && sub.getPlanType() != null && "ACTIVE".equals(sub.getStatus())) {
             planType = sub.getPlanType().name();
-            // TODO: Lookup plan limits from Plan entity if needed
+            // Lookup plan limits from Plan entity
+            String region = user.getLocale() != null && user.getLocale().contains("IN") ? "IN" : "IN"; // Default to IN, adjust as needed
+            Plan plan = planRepository.findByPlanTypeAndRegion(planType, region).orElse(null);
+            if (plan != null) {
+                statementLimit = plan.getStatementsPerMonth();
+                pageLimit = plan.getPagesPerStatement();
+            }
         }
 
         // Count statements/pages for current month
