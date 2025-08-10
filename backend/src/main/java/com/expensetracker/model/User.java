@@ -16,6 +16,9 @@ public class User {
     private String currency = "USD";
     private String locale = "en-US";
 
+    @Column(nullable = false)
+    private boolean subscribed = false;
+
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private Subscription subscription;
 
@@ -38,4 +41,7 @@ public class User {
     public void setLocale(String locale) { this.locale = locale; }
     public Subscription getSubscription() { return subscription; }
     public void setSubscription(Subscription subscription) { this.subscription = subscription; }
+
+    public boolean isSubscribed() { return subscribed; }
+    public void setSubscribed(boolean subscribed) { this.subscribed = subscribed; }
 }

@@ -13,7 +13,11 @@
       "backgroundColor": "#0ea5e9"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.arjunan.expensemonitormobile",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -24,6 +28,14 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "291ccdab-e8b0-4d58-96a8-719fdfc28f8c"
+      }
+    },
+    "plugins": [
+      "expo-secure-store"
+    ]
   }
 }

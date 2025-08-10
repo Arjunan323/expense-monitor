@@ -33,14 +33,15 @@ public class AuthService {
             return new RegisterResponseDto(false, "User already exists");
         }
         User user = new User();
-        user.setUsername(username);
-        user.setPassword(passwordEncoder.encode(body.getPassword()));
-        user.setEmail(body.getEmail());
-        user.setFirstName(body.getFirstName() != null ? body.getFirstName() : "");
-        user.setLastName(body.getLastName() != null ? body.getLastName() : "");
-        user.setCurrency(body.getCurrency() != null ? body.getCurrency() : "INR");
-        user.setLocale(body.getLocale() != null ? body.getLocale() : "en-US");
-        userRepository.save(user);
+    user.setUsername(username);
+    user.setPassword(passwordEncoder.encode(body.getPassword()));
+    user.setEmail(body.getEmail());
+    user.setFirstName(body.getFirstName() != null ? body.getFirstName() : "");
+    user.setLastName(body.getLastName() != null ? body.getLastName() : "");
+    user.setCurrency(body.getCurrency() != null ? body.getCurrency() : "INR");
+    user.setLocale(body.getLocale() != null ? body.getLocale() : "en-US");
+    user.setSubscribed(false);
+    userRepository.save(user);
         return new RegisterResponseDto(true, "User registered successfully");
     }
 
