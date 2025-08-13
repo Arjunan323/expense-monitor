@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import { 
-  ArrowRight, 
-  Smartphone, 
-  Monitor, 
+import {
+  ArrowRight,
+  Smartphone,
+  Monitor,
   Star,
   CheckCircle,
   BarChart3,
   PieChart,
-  Sync,
+  RefreshCcw,
   Shield,
   Zap,
   TrendingUp,
@@ -16,12 +16,26 @@ import {
   Download,
   Play,
   Menu,
-  X
+  X,
+  Upload
 } from 'lucide-react';
+import { AboutUsSection } from './AboutUs';
+import { FAQSection } from './FAQ';
+import { SupportSection } from './Support';
+import { ContactSection } from './ContactUs';
+import { PrivacyPolicySection } from './PrivacyPolicy';
+import { TermsSection } from './TermsOfService';
+import { Modal } from './ui/Modal';
 
 export const LandingPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
+  const [showContact, setShowContact] = useState(false);
+  const [contactForm, setContactForm] = useState({ name: '', email: '', message: '' });
+  const [contactSubmitting, setContactSubmitting] = useState(false);
+  const [contactSent, setContactSent] = useState(false);
 
   const handleEmailSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,13 +58,15 @@ export const LandingPage: React.FC = () => {
                 <span className="text-xl font-bold text-gray-900">Expense Monitor</span>
               </div>
             </div>
-            
+
             {/* Desktop Navigation */}
             <div className="hidden md:block">
               <div className="ml-10 flex items-baseline space-x-4">
                 <a href="#features" className="text-gray-600 hover:text-gray-900 px-3 py-2 text-sm font-medium">Features</a>
                 <a href="#how-it-works" className="text-gray-600 hover:text-gray-900 px-3 py-2 text-sm font-medium">How It Works</a>
                 <a href="#pricing" className="text-gray-600 hover:text-gray-900 px-3 py-2 text-sm font-medium">Pricing</a>
+                <a href="#about" className="text-gray-600 hover:text-gray-900 px-3 py-2 text-sm font-medium">About</a>
+                <a href="#faq" className="text-gray-600 hover:text-gray-900 px-3 py-2 text-sm font-medium">FAQ</a>
                 <a href="/login" className="text-gray-600 hover:text-gray-900 px-3 py-2 text-sm font-medium">Sign In</a>
                 <a href="/login" className="btn-primary">Get Started</a>
               </div>
@@ -75,6 +91,8 @@ export const LandingPage: React.FC = () => {
               <a href="#features" className="block px-3 py-2 text-base font-medium text-gray-600 hover:text-gray-900">Features</a>
               <a href="#how-it-works" className="block px-3 py-2 text-base font-medium text-gray-600 hover:text-gray-900">How It Works</a>
               <a href="#pricing" className="block px-3 py-2 text-base font-medium text-gray-600 hover:text-gray-900">Pricing</a>
+              <a href="#about" className="block px-3 py-2 text-base font-medium text-gray-600 hover:text-gray-900">About</a>
+              <a href="#faq" className="block px-3 py-2 text-base font-medium text-gray-600 hover:text-gray-900">FAQ</a>
               <a href="/login" className="block px-3 py-2 text-base font-medium text-gray-600 hover:text-gray-900">Sign In</a>
               <a href="/login" className="block px-3 py-2 text-base font-medium bg-primary-600 text-white rounded-lg">Get Started</a>
             </div>
@@ -92,7 +110,7 @@ export const LandingPage: React.FC = () => {
                 <span className="text-primary-600 block">finances</span>
               </h1>
               <p className="text-xl text-gray-600 mb-8 leading-relaxed">
-                AI-powered expense tracking that automatically categorizes your transactions, 
+                AI-powered expense tracking that automatically categorizes your transactions,
                 provides insights, and helps you make smarter financial decisions.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
@@ -109,11 +127,11 @@ export const LandingPage: React.FC = () => {
                 No credit card required • Free forever plan available
               </p>
             </div>
-            
+
             <div className="relative">
               <div className="relative z-10">
-                <img 
-                  src="https://images.pexels.com/photos/590022/pexels-photo-590022.jpeg?auto=compress&cs=tinysrgb&w=800" 
+                <img
+                  src="https://images.pexels.com/photos/590022/pexels-photo-590022.jpeg?auto=compress&cs=tinysrgb&w=800"
                   alt="Expense Monitor Dashboard"
                   className="rounded-2xl shadow-2xl"
                 />
@@ -160,7 +178,7 @@ export const LandingPage: React.FC = () => {
 
             <div className="card text-center group hover:shadow-lg transition-shadow duration-300">
               <div className="w-16 h-16 bg-blue-100 rounded-xl flex items-center justify-center mx-auto mb-6 group-hover:bg-blue-200 transition-colors">
-                <Sync className="w-8 h-8 text-blue-600" />
+                <RefreshCcw className="w-8 h-8 text-blue-600" />
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-3">Cross-Platform Sync</h3>
               <p className="text-gray-600">
@@ -215,8 +233,8 @@ export const LandingPage: React.FC = () => {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div>
-              <img 
-                src="https://images.pexels.com/photos/265087/pexels-photo-265087.jpeg?auto=compress&cs=tinysrgb&w=800" 
+              <img
+                src="https://images.pexels.com/photos/265087/pexels-photo-265087.jpeg?auto=compress&cs=tinysrgb&w=800"
                 alt="Dashboard Interface"
                 className="rounded-2xl shadow-xl"
               />
@@ -277,8 +295,8 @@ export const LandingPage: React.FC = () => {
                 "Expense Monitor helped me identify where I was overspending. I saved ₹15,000 in just 3 months!"
               </p>
               <div className="flex items-center justify-center space-x-3">
-                <img 
-                  src="https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=100" 
+                <img
+                  src="https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=100"
                   alt="Priya Sharma"
                   className="w-12 h-12 rounded-full object-cover"
                 />
@@ -299,8 +317,8 @@ export const LandingPage: React.FC = () => {
                 "The AI categorization is incredibly accurate. It saves me hours of manual work every month."
               </p>
               <div className="flex items-center justify-center space-x-3">
-                <img 
-                  src="https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=100" 
+                <img
+                  src="https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=100"
                   alt="Rajesh Kumar"
                   className="w-12 h-12 rounded-full object-cover"
                 />
@@ -321,8 +339,8 @@ export const LandingPage: React.FC = () => {
                 "Perfect for my small business. The multi-bank support helps me track all my accounts in one place."
               </p>
               <div className="flex items-center justify-center space-x-3">
-                <img 
-                  src="https://images.pexels.com/photos/1181686/pexels-photo-1181686.jpeg?auto=compress&cs=tinysrgb&w=100" 
+                <img
+                  src="https://images.pexels.com/photos/1181686/pexels-photo-1181686.jpeg?auto=compress&cs=tinysrgb&w=100"
                   alt="Anita Desai"
                   className="w-12 h-12 rounded-full object-cover"
                 />
@@ -531,7 +549,7 @@ export const LandingPage: React.FC = () => {
           <p className="text-xl text-primary-100 mb-8">
             Get weekly insights, budgeting tips, and product updates delivered to your inbox
           </p>
-          
+
           <form onSubmit={handleEmailSubmit} className="max-w-md mx-auto">
             <div className="flex flex-col sm:flex-row gap-4">
               <div className="flex-1">
@@ -555,6 +573,54 @@ export const LandingPage: React.FC = () => {
           </form>
         </div>
       </section>
+
+      {/* Reused Sections (excluding contact/privacy/terms now in modals) */}
+      <div className="bg-white"><AboutUsSection /></div>
+      <div className="bg-gray-50"><FAQSection /></div>
+      <div className="bg-white"><SupportSection /></div>
+      {/* ContactSection removed from main flow */}
+      {/* PrivacyPolicySection and TermsSection removed from main flow */}
+
+      {/* Modals */}
+      <Modal open={showPrivacy} onClose={() => setShowPrivacy(false)} title="Privacy Policy">
+        <PrivacyPolicySection />
+      </Modal>
+      <Modal open={showTerms} onClose={() => setShowTerms(false)} title="Terms of Service">
+        <TermsSection />
+      </Modal>
+      <Modal open={showContact} onClose={() => { setShowContact(false); setTimeout(() => setContactSent(false), 300); }} title="Contact Us">
+        {contactSent ? (
+          <div className="text-center py-6">
+            <div className="text-2xl mb-4">🎉</div>
+            <p className="text-gray-700 font-medium mb-2">Message sent!</p>
+            <p className="text-sm text-gray-500">We'll get back to you within 24 hours.</p>
+            <button onClick={() => setShowContact(false)} className="btn-primary mt-6">Close</button>
+          </div>
+        ) : (
+          <form onSubmit={async (e) => { e.preventDefault(); setContactSubmitting(true); await new Promise(r => setTimeout(r, 800)); setContactSubmitting(false); setContactSent(true); }} className="space-y-5">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+              <input required value={contactForm.name} onChange={e => setContactForm(f => ({ ...f, name: e.target.value }))} className="input-field" placeholder="Your name" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input type="email" required value={contactForm.email} onChange={e => setContactForm(f => ({ ...f, email: e.target.value }))} className="input-field" placeholder="you@example.com" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+              <textarea required value={contactForm.message} onChange={e => setContactForm(f => ({ ...f, message: e.target.value }))} className="input-field min-h-[120px] resize-y" placeholder="How can we help?" />
+            </div>
+            <div className="flex items-center justify-between">
+              <button type="button" onClick={() => setShowContact(false)} className="btn-secondary">Cancel</button>
+              <button type="submit" disabled={contactSubmitting} className="btn-primary flex items-center space-x-2">
+                {contactSubmitting && <span className="animate-pulse">Sending...</span>}
+                {!contactSubmitting && <span>Send Message</span>}
+              </button>
+            </div>
+            <p className="text-xs text-gray-400">By submitting, you agree to our <button type="button" onClick={() => { setShowContact(false); setShowPrivacy(true); }} className="underline hover:text-gray-600">Privacy Policy</button>.</p>
+          </form>
+        )}
+      </Modal>
 
       {/* Footer */}
       <footer className="bg-gray-900 text-white py-16">
@@ -586,19 +652,20 @@ export const LandingPage: React.FC = () => {
               <h4 className="font-semibold mb-4">Product</h4>
               <ul className="space-y-2 text-gray-400">
                 <li><a href="#features" className="hover:text-white transition-colors">Features</a></li>
+                <li><a href="#how-it-works" className="hover:text-white transition-colors">How It Works</a></li>
                 <li><a href="#pricing" className="hover:text-white transition-colors">Pricing</a></li>
-                <li><a href="/login" className="hover:text-white transition-colors">Sign Up</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">FAQ</a></li>
+                <li><a href="#faq" className="hover:text-white transition-colors">FAQ</a></li>
               </ul>
             </div>
 
             <div>
-              <h4 className="font-semibold mb-4">Support</h4>
+              <h4 className="font-semibold mb-4">Company</h4>
               <ul className="space-y-2 text-gray-400">
-                <li><a href="#" className="hover:text-white transition-colors">Contact Us</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Privacy Policy</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Terms of Service</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">About Us</a></li>
+                <li><a href="#about" className="hover:text-white transition-colors">About Us</a></li>
+                <li><a href="#support" className="hover:text-white transition-colors">Support</a></li>
+                <li><button onClick={() => setShowContact(true)} className="hover:text-white transition-colors text-left">Contact</button></li>
+                <li><button onClick={() => setShowPrivacy(true)} className="hover:text-white transition-colors text-left">Privacy Policy</button></li>
+                <li><button onClick={() => setShowTerms(true)} className="hover:text-white transition-colors text-left">Terms of Service</button></li>
               </ul>
             </div>
           </div>

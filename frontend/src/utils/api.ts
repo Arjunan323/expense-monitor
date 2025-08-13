@@ -10,6 +10,7 @@ interface ImportMeta {
 import axios, { AxiosResponse } from 'axios';
 import { ApiResponse, PaginatedResponse } from '../types';
 import toast from 'react-hot-toast';
+import { AnalyticsSummary, AnalyticsFeedbackPayload, FeedbackResponse } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
@@ -93,3 +94,21 @@ export const apiCall = async <T>(
 };
 
 export default api;
+
+// Analytics APIs
+export const fetchAnalyticsSummary = async (params?: { startDate?: string; endDate?: string; }) => {
+  const query = new URLSearchParams();
+  if (params?.startDate) query.append('startDate', params.startDate);
+  if (params?.endDate) query.append('endDate', params.endDate);
+  const q = query.toString();
+  return apiCall<AnalyticsSummary>('GET', `/analytics/summary${q ? `?${q}` : ''}`);
+};
+
+export const submitAnalyticsFeedback = async (payload: AnalyticsFeedbackPayload) => {
+  return apiCall<FeedbackResponse>('POST', '/feedback/analytics', {
+    email: payload.email,
+    message: payload.message || 'Analytics feature feedback',
+    type: 'ANALYTICS',
+    meta: JSON.stringify({ features: payload.features })
+  });
+};

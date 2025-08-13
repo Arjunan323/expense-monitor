@@ -94,6 +94,17 @@ export interface ApiResponse<T> {
   success: boolean;
 }
 
+export interface AnalyticsFeedbackPayload {
+  email?: string; // optional if user logged in
+  features: string[]; // selected feature identifiers
+  message?: string;
+}
+
+export interface FeedbackResponse {
+  success: boolean;
+  message: string;
+}
+
 export interface PaginatedResponse<T> {
   content: T[];
   totalElements: number;
@@ -117,4 +128,20 @@ export interface TransactionFilters {
   description: string;
   sortBy: 'date' | 'amount' | 'category' | 'bank';
   sortOrder: 'asc' | 'desc';
+}
+
+// Analytics
+export interface AnalyticsCategorySpend {
+  category: string;
+  amount: number; // negative = spend, positive = income
+  transactions: number;
+}
+
+export interface AnalyticsSummary {
+  topCategories: AnalyticsCategorySpend[];
+  totalInflow: number;
+  totalOutflow: number; // negative
+  netCashFlow: number;
+  monthlyTrend: { [month: string]: number }; // yyyy-MM -> net
+  averageDailySpend: number;
 }

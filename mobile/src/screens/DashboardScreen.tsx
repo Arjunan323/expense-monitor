@@ -7,6 +7,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';

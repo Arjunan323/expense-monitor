@@ -1,7 +1,34 @@
-import React from 'react';
-import { BarChart3, TrendingUp, MessageSquare, Clock } from 'lucide-react';
+import React, { useState } from 'react';
+import { BarChart3, TrendingUp, MessageSquare, Clock, Loader2, CheckCircle2 } from 'lucide-react';
+import { submitAnalyticsFeedback } from '../utils/api';
+import { useAuth } from '../contexts/AuthContext';
 
 export const Analytics: React.FC = () => {
+  const featureOptions = [
+    { id: 'spending_trends', label: 'Monthly spending trends and comparisons' },
+    { id: 'budget_tracking', label: 'Budget setting and tracking by category' },
+    { id: 'anomaly_alerts', label: 'Unusual spending pattern alerts' },
+    { id: 'cashflow_forecast', label: 'Cash flow forecasting' },
+    { id: 'goal_tracking', label: 'Goal tracking (savings, debt reduction)' },
+    { id: 'tax_expense', label: 'Tax-related expense categorization' },
+  ];
+  const { user } = useAuth();
+  const [selected, setSelected] = useState<string[]>([]);
+  const [message, setMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const toggle = (id: string) => setSelected(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  const submit = async () => {
+    if (selected.length === 0 && !message.trim()) return;
+    try {
+      setSubmitting(true);
+      await submitAnalyticsFeedback({ email: user?.email, features: selected, message });
+      setSubmitted(true);
+      setTimeout(() => setSubmitted(false), 4000);
+      setSelected([]); setMessage('');
+    } finally { setSubmitting(false); }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
@@ -57,47 +84,27 @@ export const Analytics: React.FC = () => {
 
       {/* Feedback Form */}
       <div className="card">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          What analytics features would be most valuable to you?
-        </h3>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">What analytics features would be most valuable to you?</h3>
         <div className="space-y-3">
-          <label className="flex items-center space-x-3">
-            <input type="checkbox" className="rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
-            <span className="text-sm text-gray-700">Monthly spending trends and comparisons</span>
-          </label>
-          <label className="flex items-center space-x-3">
-            <input type="checkbox" className="rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
-            <span className="text-sm text-gray-700">Budget setting and tracking by category</span>
-          </label>
-          <label className="flex items-center space-x-3">
-            <input type="checkbox" className="rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
-            <span className="text-sm text-gray-700">Unusual spending pattern alerts</span>
-          </label>
-          <label className="flex items-center space-x-3">
-            <input type="checkbox" className="rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
-            <span className="text-sm text-gray-700">Cash flow forecasting</span>
-          </label>
-          <label className="flex items-center space-x-3">
-            <input type="checkbox" className="rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
-            <span className="text-sm text-gray-700">Goal tracking (savings, debt reduction)</span>
-          </label>
-          <label className="flex items-center space-x-3">
-            <input type="checkbox" className="rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
-            <span className="text-sm text-gray-700">Tax-related expense categorization</span>
-          </label>
+          {featureOptions.map(opt => (
+            <label key={opt.id} className="flex items-center space-x-3 cursor-pointer">
+              <input type="checkbox" checked={selected.includes(opt.id)} onChange={() => toggle(opt.id)} className="rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
+              <span className="text-sm text-gray-700">{opt.label}</span>
+            </label>
+          ))}
         </div>
-        
         <div className="mt-4">
-          <textarea
-            className="input-field"
-            rows={3}
-            placeholder="Any other analytics features you'd like to see?"
-          />
+          <textarea className="input-field" rows={3} value={message} onChange={e => setMessage(e.target.value)} placeholder="Any other analytics features you'd like to see?" />
         </div>
-        
-        <button className="btn-primary mt-4">
-          Submit Feedback
-        </button>
+        <div className="mt-4 flex items-center space-x-3">
+          <button disabled={submitting || (selected.length === 0 && !message.trim())} onClick={submit} className="btn-primary flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed">
+            {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+            {!submitting && <MessageSquare className="w-4 h-4" />}
+            <span>{submitting ? 'Submitting...' : 'Submit Feedback'}</span>
+          </button>
+          {submitted && <span className="flex items-center text-sm text-success-600"><CheckCircle2 className="w-4 h-4 mr-1" /> Thank you!</span>}
+        </div>
+        <p className="mt-2 text-xs text-gray-400">Your input helps us prioritize. We aggregate responses; no personal data is shared.</p>
       </div>
     </div>
   );

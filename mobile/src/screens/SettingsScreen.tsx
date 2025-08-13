@@ -8,6 +8,7 @@ import {
   TextInput,
   Alert,
   Linking,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
