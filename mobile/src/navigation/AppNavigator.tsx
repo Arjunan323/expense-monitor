@@ -1,4 +1,5 @@
 import React from 'react';
+import { Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createDrawerNavigator } from '@react-navigation/drawer';
@@ -53,9 +54,13 @@ const TabNavigator = () => {
           backgroundColor: '#ffffff',
           borderTopWidth: 1,
           borderTopColor: '#e5e7eb',
-          paddingBottom: 8,
+          paddingBottom: Platform.OS === 'ios' ? 34 : 8,
           paddingTop: 8,
-          height: 60,
+          height: Platform.OS === 'ios' ? 88 : 60,
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
         },
         tabBarLabelStyle: {
           fontSize: 12,

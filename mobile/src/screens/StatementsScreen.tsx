@@ -247,6 +247,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8fafc',
+    paddingBottom: Platform.OS === 'ios' ? 88 : 60,
   },
   header: {
     padding: 24,

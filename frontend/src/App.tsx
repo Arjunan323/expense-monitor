@@ -11,6 +11,7 @@ import { Analytics } from './components/Analytics';
 import { Statements } from './components/Statements';
 import { Billing } from './components/Billing';
 import { Settings } from './components/Settings';
+import { LandingPage } from './components/LandingPage';
 import { LoadingSpinner } from './components/ui/LoadingSpinner';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -124,6 +125,7 @@ const AppRoutes: React.FC = () => {
           }
         />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/landing" element={<LandingPage />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </Router>
