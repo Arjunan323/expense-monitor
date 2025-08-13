@@ -2,7 +2,7 @@ import axios, { AxiosResponse } from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { ApiResponse, PaginatedResponse } from '../types';
 
-const API_BASE_URL = 'https://6558e7cec67a.ngrok-free.app'; // Update for production
+const API_BASE_URL = 'https://macaw-deciding-hermit.ngrok-free.app'; // Update for production
 
 export const api = axios.create({
   baseURL: API_BASE_URL,

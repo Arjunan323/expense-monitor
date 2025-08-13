@@ -14,8 +14,8 @@ public class AppConstants {
     public static final String UPGRADE_PROMPT = "Upgrade to Pro or Premium to unlock advanced analytics and multi-bank support.";
     public static final String CSV_HEADER = "date,description,amount,balance,category\n";
 
-    public static final String RAZORPAY_KEY = "";
-    public static final String RAZORPAY_SECRET = "";
+    public static final String RAZORPAY_KEY = "rzp_test_wQbGBqfYJDdZZZ";
+    public static final String RAZORPAY_SECRET = "9yXz8n7l96ILXc5cMDgguv6A";
     public static final String REGION_DEFAULT = "IN";
     public static final String EVENT_PAYMENT_CAPTURED = "payment.captured";
     public static final String EVENT_ORDER_PAID = "order.paid";

@@ -230,7 +230,7 @@ export const Transactions: React.FC = () => {
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
-  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">All Transactions</h1>
           <p className="text-gray-600 mt-1">
@@ -260,6 +260,17 @@ export const Transactions: React.FC = () => {
               </span>
             )}
           </button>
+          {/* Persistent Reset Filters button */}
+          {activeFiltersCount > 0 && (
+            <button
+              onClick={resetFilters}
+              className="btn-secondary flex items-center space-x-2 border border-primary-200 text-primary-700 hover:bg-primary-50"
+              title="Reset all filters"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>Reset Filters</span>
+            </button>
+          )}
         </div>
       </div>
 

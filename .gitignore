@@ -6,3 +6,4 @@
 .env
 /backend/target
 /mobile/node_modules
+/mobile/android

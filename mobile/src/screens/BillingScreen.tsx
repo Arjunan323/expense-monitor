@@ -8,6 +8,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import RazorpayCheckout from 'react-native-razorpay';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { UsageStats } from '../types';
 import { apiCall } from '../utils/api';
@@ -137,7 +138,6 @@ export const BillingScreen: React.FC = () => {
 
   const handleUpgrade = async (planId: string) => {
     if (planId === 'FREE') return;
-    
     Alert.alert(
       'Upgrade Plan',
       `Upgrade to ${planId} plan?`,
@@ -148,11 +148,33 @@ export const BillingScreen: React.FC = () => {
           onPress: async () => {
             try {
               setUpgrading(planId);
-              // Implement payment flow here
-              Alert.alert('Success', 'Plan upgraded successfully!');
-              fetchUsageStats();
+              // 1. Call backend to create Razorpay order
+              const resp = await apiCall<any>('POST', '/payment/order', { planType: planId });
+              if (!resp || !resp.orderId) throw new Error('Order creation failed');
+              // 2. Open Razorpay native checkout
+              const options = {
+                description: `${planId} Plan Subscription`,
+                image: 'https://yourdomain.com/logo.png',
+                currency: resp.currency,
+                key: resp.key,
+                amount: resp.amount,
+                name: 'Expense Monitor',
+                order_id: resp.orderId,
+                prefill: {
+                  email: user?.email,
+                },
+                theme: { color: '#6366f1' },
+              };
+              RazorpayCheckout.open(options)
+                .then(() => {
+                  Alert.alert('Success', 'Payment successful!');
+                  fetchUsageStats();
+                })
+                .catch(() => {
+                  Alert.alert('Cancelled', 'Payment cancelled.');
+                });
             } catch (error: any) {
-              Alert.alert('Error', 'Failed to upgrade plan');
+              Alert.alert('Error', error?.message || 'Failed to upgrade plan');
             } finally {
               setUpgrading(null);
             }
