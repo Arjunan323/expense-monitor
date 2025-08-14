@@ -1,8 +1,7 @@
 import React from 'react';
-import { Platform } from 'react-native';
+import { Platform, View, Text, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { createDrawerNavigator } from '@react-navigation/drawer';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
@@ -19,135 +18,220 @@ import { SettingsScreen } from '../screens/SettingsScreen';
 import { UploadScreen } from '../screens/UploadScreen';
 
 const Tab = createBottomTabNavigator();
-const Drawer = createDrawerNavigator();
 const Stack = createStackNavigator();
-const MainStack = createStackNavigator();
+
+// Custom Tab Bar Component
+const CustomTabBar = ({ state, descriptors, navigation }: any) => {
+  return (
+    <View style={styles.tabBarContainer}>
+      <View style={styles.tabBar}>
+        {state.routes.map((route: any, index: number) => {
+          const { options } = descriptors[route.key];
+          const label = options.tabBarLabel !== undefined ? options.tabBarLabel : options.title !== undefined ? options.title : route.name;
+          const isFocused = state.index === index;
+
+          const onPress = () => {
+            const event = navigation.emit({
+              type: 'tabPress',
+              target: route.key,
+              canPreventDefault: true,
+            });
+
+            if (!isFocused && !event.defaultPrevented) {
+              navigation.navigate(route.name);
+            }
+          };
+
+          let iconName: keyof typeof Ionicons.glyphMap;
+          let iconColor = isFocused ? '#FFFFFF' : '#9CA3AF';
+          let backgroundColor = isFocused ? '#00B77D' : 'transparent';
+
+          switch (route.name) {
+            case 'Dashboard':
+              iconName = 'home';
+              break;
+            case 'Transactions':
+              iconName = 'receipt';
+              break;
+            case 'Upload':
+              iconName = 'cloud-upload';
+              backgroundColor = isFocused ? '#FFD60A' : 'transparent';
+              iconColor = isFocused ? '#1F2937' : '#9CA3AF';
+              break;
+            case 'Analytics':
+              iconName = 'bar-chart';
+              break;
+            case 'More':
+              iconName = 'grid';
+              break;
+            default:
+              iconName = 'ellipse';
+          }
+
+          return (
+            <View key={route.key} style={styles.tabItem}>
+              <View style={[styles.tabButton, { backgroundColor }]}>
+                <Ionicons
+                  name={iconName}
+                  size={isFocused ? 24 : 20}
+                  color={iconColor}
+                  onPress={onPress}
+                />
+              </View>
+              {isFocused && (
+                <Text style={[styles.tabLabel, { color: iconColor === '#FFFFFF' ? '#00B77D' : '#FFD60A' }]}>
+                  {label}
+                </Text>
+              )}
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+};
 
 const TabNavigator = () => {
   return (
     <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName: keyof typeof Ionicons.glyphMap;
-
-          if (route.name === 'Dashboard') {
-            iconName = focused ? 'home' : 'home-outline';
-          } else if (route.name === 'Transactions') {
-            iconName = focused ? 'receipt' : 'receipt-outline';
-          } else if (route.name === 'Analytics') {
-            iconName = focused ? 'bar-chart' : 'bar-chart-outline';
-          } else if (route.name === 'Statements') {
-            iconName = focused ? 'document-text' : 'document-text-outline';
-          } else if (route.name === 'Billing') {
-            iconName = focused ? 'card' : 'card-outline';
-          } else if (route.name === 'Upload') {
-            iconName = focused ? 'cloud-upload' : 'cloud-upload-outline';
-          } else {
-            iconName = 'ellipse-outline';
-          }
-
-          return <Ionicons name={iconName} size={size} color={color} />;
-        },
-        tabBarActiveTintColor: '#0ea5e9',
-        tabBarActiveTintColor: '#00B77D',
-        tabBarInactiveTintColor: '#5C5C5C',
-        tabBarStyle: {
-          backgroundColor: '#ffffff',
-          borderTopWidth: 2,
-          borderTopColor: '#F4F4F4',
-          paddingBottom: Platform.OS === 'ios' ? 34 : 8,
-          paddingTop: 8,
-          height: Platform.OS === 'ios' ? 88 : 60,
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          borderTopLeftRadius: 20,
-          borderTopRightRadius: 20,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 10,
-          elevation: 10,
-        },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '600',
-        },
-        headerStyle: {
-          backgroundColor: '#ffffff',
-          borderBottomWidth: 2,
-          borderBottomColor: '#F4F4F4',
-        },
-        headerTitleStyle: {
-          fontSize: 18,
-          fontWeight: '700',
-          color: '#00B77D',
-        },
-        headerTintColor: '#00B77D',
-      })}
+      tabBar={(props) => <CustomTabBar {...props} />}
+      screenOptions={{
+        headerShown: false,
+      }}
     >
       <Tab.Screen 
         name="Dashboard" 
         component={DashboardScreen}
-        options={{
-          title: 'Dashboard',
-          headerTitle: 'Expense Monitor',
-        }}
+        options={{ title: 'Home' }}
       />
       <Tab.Screen 
         name="Transactions" 
         component={TransactionsScreen}
-        options={{
-          title: 'Transactions',
-        }}
-      />
-      <Tab.Screen 
-        name="Analytics" 
-        component={AnalyticsScreen}
-        options={{
-          title: 'Analytics',
-        }}
-      />
-      <Tab.Screen 
-        name="Statements" 
-        component={StatementsScreen}
-        options={{
-          title: 'Statements',
-        }}
-      />
-      <Tab.Screen 
-        name="Billing" 
-        component={BillingScreen}
-        options={{
-          title: 'Billing',
-        }}
+        options={{ title: 'Transactions' }}
       />
       <Tab.Screen 
         name="Upload" 
         component={UploadScreen}
-        options={{
-          title: 'Upload',
-          headerTitle: 'Upload Statement',
-        }}
+        options={{ title: 'Upload' }}
+      />
+      <Tab.Screen 
+        name="Analytics" 
+        component={AnalyticsScreen}
+        options={{ title: 'Analytics' }}
+      />
+      <Tab.Screen 
+        name="More" 
+        component={MoreScreen}
+        options={{ title: 'More' }}
       />
     </Tab.Navigator>
   );
 };
 
+// More Screen with additional options
+const MoreScreen = () => {
+  const { logout } = useAuth();
+  const navigation = useNavigation<any>();
+
+  const menuItems = [
+    { title: 'Statements', icon: 'document-text', screen: 'Statements', color: '#0077B6' },
+    { title: 'Billing & Plans', icon: 'card', screen: 'Billing', color: '#00B77D' },
+    { title: 'Settings', icon: 'settings', screen: 'Settings', color: '#6366F1' },
+    { title: 'Sign Out', icon: 'log-out', action: 'logout', color: '#EF4444' },
+  ];
+
+  const handleItemPress = (item: any) => {
+    if (item.action === 'logout') {
+      Alert.alert(
+        'Sign Out',
+        'Are you sure you want to sign out?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Sign Out', style: 'destructive', onPress: logout },
+        ]
+      );
+    } else {
+      navigation.navigate(item.screen);
+    }
+  };
+
+  return (
+    <View style={moreStyles.container}>
+      <View style={moreStyles.header}>
+        <View style={moreStyles.logoContainer}>
+          <Text style={moreStyles.logoEmoji}>✂️</Text>
+        </View>
+        <Text style={moreStyles.brandName}>CutTheSpend</Text>
+        <Text style={moreStyles.tagline}>See it. Cut it. Save more.</Text>
+      </View>
+
+      <View style={moreStyles.menuContainer}>
+        {menuItems.map((item, index) => (
+          <TouchableOpacity
+            key={index}
+            style={[moreStyles.menuItem, { borderLeftColor: item.color }]}
+            onPress={() => handleItemPress(item)}
+            activeOpacity={0.7}
+          >
+            <View style={[moreStyles.menuIcon, { backgroundColor: item.color + '20' }]}>
+              <Ionicons name={item.icon as any} size={24} color={item.color} />
+            </View>
+            <View style={moreStyles.menuContent}>
+              <Text style={moreStyles.menuTitle}>{item.title}</Text>
+              {item.screen && (
+                <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+              )}
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <View style={moreStyles.footer}>
+        <Text style={moreStyles.footerText}>Version 1.0.0</Text>
+        <Text style={moreStyles.footerSubtext}>Made with ❤️ for savers everywhere</Text>
+      </View>
+    </View>
+  );
+};
+
 const MainNavigator = () => {
   return (
-    <MainStack.Navigator screenOptions={{ headerShown: false }}>
-      <MainStack.Screen name="Tabs" component={TabNavigator} />
-      <MainStack.Screen 
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Tabs" component={TabNavigator} />
+      <Stack.Screen 
+        name="Statements" 
+        component={StatementsScreen}
+        options={{
+          headerShown: true,
+          title: 'Statements',
+          headerStyle: { backgroundColor: '#FFFFFF' },
+          headerTitleStyle: { color: '#00B77D', fontWeight: 'bold' },
+          headerTintColor: '#00B77D',
+        }}
+      />
+      <Stack.Screen 
+        name="Billing" 
+        component={BillingScreen}
+        options={{
+          headerShown: true,
+          title: 'Billing & Plans',
+          headerStyle: { backgroundColor: '#FFFFFF' },
+          headerTitleStyle: { color: '#00B77D', fontWeight: 'bold' },
+          headerTintColor: '#00B77D',
+        }}
+      />
+      <Stack.Screen 
         name="Settings" 
         component={SettingsScreen}
         options={{
           headerShown: true,
           title: 'Settings',
+          headerStyle: { backgroundColor: '#FFFFFF' },
+          headerTitleStyle: { color: '#00B77D', fontWeight: 'bold' },
+          headerTintColor: '#00B77D',
         }}
       />
-    </MainStack.Navigator>
+    </Stack.Navigator>
   );
 };
 
@@ -170,3 +254,153 @@ export const AppNavigator: React.FC = () => {
     </NavigationContainer>
   );
 };
+
+const styles = StyleSheet.create({
+  tabBarContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'transparent',
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    paddingTop: 10,
+    paddingHorizontal: 20,
+  },
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 25,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 15,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  tabLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+});
+
+const moreStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    paddingBottom: Platform.OS === 'ios' ? 120 : 100,
+  },
+  header: {
+    alignItems: 'center',
+    paddingTop: 60,
+    paddingBottom: 40,
+    backgroundColor: '#FFFFFF',
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  logoContainer: {
+    width: 80,
+    height: 80,
+    backgroundColor: '#00B77D',
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    shadowColor: '#00B77D',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 15,
+    elevation: 10,
+  },
+  logoEmoji: {
+    fontSize: 40,
+    color: '#FFFFFF',
+  },
+  brandName: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#00B77D',
+    marginBottom: 4,
+  },
+  tagline: {
+    fontSize: 16,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  menuContainer: {
+    paddingHorizontal: 24,
+    paddingTop: 32,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  menuIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  menuContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  menuTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  footer: {
+    alignItems: 'center',
+    paddingTop: 40,
+  },
+  footerText: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    fontWeight: '500',
+  },
+  footerSubtext: {
+    fontSize: 12,
+    color: '#D1D5DB',
+    marginTop: 4,
+  },
+});
+
+// Import necessary components
+import { TouchableOpacity, Alert } from 'react-native';
+import { useNavigation } from '@react-navigation/native';

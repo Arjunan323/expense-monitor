@@ -8,10 +8,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
+
+const { width } = Dimensions.get('window');
 
 export const AuthScreen: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -50,113 +53,159 @@ export const AuthScreen: React.FC = () => {
       style={styles.container} 
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      {/* Funky Background */}
+      <View style={styles.backgroundDecorations}>
+        <View style={[styles.floatingCircle, styles.circle1]} />
+        <View style={[styles.floatingCircle, styles.circle2]} />
+        <View style={[styles.floatingCircle, styles.circle3]} />
+        <View style={[styles.floatingCircle, styles.circle4]} />
+      </View>
+
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.header}>
           <View style={styles.logoContainer}>
             <Text style={styles.logo}>✂️</Text>
+            <View style={styles.logoGlow} />
           </View>
           <Text style={styles.brandName}>CutTheSpend</Text>
           <Text style={styles.tagline}>See it. Cut it. Save more.</Text>
-          <Text style={styles.title}>
-            {isLogin ? 'Welcome back! 👋' : 'Start saving today! 🚀'}
-          </Text>
-          <Text style={styles.subtitle}>
-            {isLogin 
-              ? 'Sign in to continue your financial journey' 
-              : 'Join thousands who are already saving more money'
-            }
-          </Text>
-        </View>
-
-        <View style={styles.form}>
-          {!isLogin && (
-            <View style={styles.nameRow}>
-              <View style={[styles.inputContainer, { flex: 1, marginRight: 8 }]}>
-                <Ionicons name="person-outline" size={20} color="#9ca3af" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="First name"
-                  value={formData.firstName}
-                  onChangeText={(text) => setFormData(prev => ({ ...prev, firstName: text }))}
-                  autoCapitalize="words"
-                />
-              </View>
-              <View style={[styles.inputContainer, { flex: 1, marginLeft: 8 }]}>
-                <TextInput
-                  style={[styles.input, { paddingLeft: 16 }]}
-                  placeholder="Last name"
-                  value={formData.lastName}
-                  onChangeText={(text) => setFormData(prev => ({ ...prev, lastName: text }))}
-                  autoCapitalize="words"
-                />
-              </View>
-            </View>
-          )}
-
-          <View style={styles.inputContainer}>
-            <Ionicons name="mail-outline" size={20} color="#9ca3af" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Email address"
-              value={formData.email}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, email: text }))}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Ionicons name="lock-closed-outline" size={20} color="#9ca3af" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              value={formData.password}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, password: text }))}
-              secureTextEntry={!showPassword}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <TouchableOpacity
-              style={styles.passwordToggle}
-              onPress={() => setShowPassword(!showPassword)}
-            >
-              <Ionicons 
-                name={showPassword ? "eye-off-outline" : "eye-outline"} 
-                size={20} 
-                color="#9ca3af" 
-              />
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity
-            style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
-            onPress={handleSubmit}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (
-              <LoadingSpinner size="small" color="#ffffff" />
-            ) : (
-              <>
-                <Text style={styles.submitButtonText}>
-                  {isLogin ? 'Sign in' : 'Create account'}
-                </Text>
-                <Ionicons name="arrow-forward" size={16} color="#ffffff" />
-              </>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.switchButton}
-            onPress={() => setIsLogin(!isLogin)}
-          >
-            <Text style={styles.switchButtonText}>
+          
+          <View style={styles.titleContainer}>
+            <Text style={styles.title}>
+              {isLogin ? 'Welcome back! 👋' : 'Start saving today! 🚀'}
+            </Text>
+            <Text style={styles.subtitle}>
               {isLogin 
-                ? "Don't have an account? Sign up" 
-                : 'Already have an account? Sign in'
+                ? 'Sign in to continue your financial journey' 
+                : 'Join thousands who are already saving more money'
               }
             </Text>
-          </TouchableOpacity>
+          </View>
+
+          {/* Trust Indicators */}
+          <View style={styles.trustIndicators}>
+            <View style={styles.trustItem}>
+              <View style={[styles.trustDot, { backgroundColor: '#00B77D' }]} />
+              <Text style={styles.trustText}>Bank-level security</Text>
+            </View>
+            <View style={styles.trustItem}>
+              <View style={[styles.trustDot, { backgroundColor: '#0077B6' }]} />
+              <Text style={styles.trustText}>Free forever plan</Text>
+            </View>
+            <View style={styles.trustItem}>
+              <View style={[styles.trustDot, { backgroundColor: '#FFD60A' }]} />
+              <Text style={styles.trustText}>No credit card required</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.formContainer}>
+          <View style={styles.form}>
+            {!isLogin && (
+              <View style={styles.nameRow}>
+                <View style={[styles.inputContainer, { flex: 1, marginRight: 8 }]}>
+                  <View style={styles.inputIconContainer}>
+                    <Ionicons name="person" size={20} color="#00B77D" />
+                  </View>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="First name"
+                    placeholderTextColor="#9CA3AF"
+                    value={formData.firstName}
+                    onChangeText={(text) => setFormData(prev => ({ ...prev, firstName: text }))}
+                    autoCapitalize="words"
+                  />
+                </View>
+                <View style={[styles.inputContainer, { flex: 1, marginLeft: 8 }]}>
+                  <TextInput
+                    style={[styles.input, { paddingLeft: 20 }]}
+                    placeholder="Last name"
+                    placeholderTextColor="#9CA3AF"
+                    value={formData.lastName}
+                    onChangeText={(text) => setFormData(prev => ({ ...prev, lastName: text }))}
+                    autoCapitalize="words"
+                  />
+                </View>
+              </View>
+            )}
+
+            <View style={styles.inputContainer}>
+              <View style={styles.inputIconContainer}>
+                <Ionicons name="mail" size={20} color="#0077B6" />
+              </View>
+              <TextInput
+                style={styles.input}
+                placeholder="Email address"
+                placeholderTextColor="#9CA3AF"
+                value={formData.email}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, email: text }))}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <View style={styles.inputIconContainer}>
+                <Ionicons name="lock-closed" size={20} color="#6366F1" />
+              </View>
+              <TextInput
+                style={styles.input}
+                placeholder="Password"
+                placeholderTextColor="#9CA3AF"
+                value={formData.password}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, password: text }))}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TouchableOpacity
+                style={styles.passwordToggle}
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                <Ionicons 
+                  name={showPassword ? "eye-off" : "eye"} 
+                  size={20} 
+                  color="#9CA3AF" 
+                />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
+              onPress={handleSubmit}
+              disabled={isSubmitting}
+              activeOpacity={0.8}
+            >
+              <View style={styles.submitButtonContent}>
+                {isSubmitting ? (
+                  <LoadingSpinner size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Ionicons name="sparkles" size={20} color="#FFFFFF" />
+                    <Text style={styles.submitButtonText}>
+                      {isLogin ? 'Sign in' : 'Create account'}
+                    </Text>
+                    <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
+                  </>
+                )}
+              </View>
+              <View style={styles.buttonGlow} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.switchButton}
+              onPress={() => setIsLogin(!isLogin)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.switchButtonText}>
+                {isLogin 
+                  ? "Don't have an account? Sign up 🎉" 
+                  : 'Already have an account? Sign in 💫'
+                }
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -166,63 +215,154 @@ export const AuthScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#F8FAFC',
+  },
+  backgroundDecorations: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  floatingCircle: {
+    position: 'absolute',
+    borderRadius: 50,
+    opacity: 0.1,
+  },
+  circle1: {
+    width: 100,
+    height: 100,
+    backgroundColor: '#00B77D',
+    top: 100,
+    left: -20,
+  },
+  circle2: {
+    width: 80,
+    height: 80,
+    backgroundColor: '#FFD60A',
+    top: 200,
+    right: -10,
+  },
+  circle3: {
+    width: 60,
+    height: 60,
+    backgroundColor: '#0077B6',
+    bottom: 300,
+    left: 50,
+  },
+  circle4: {
+    width: 120,
+    height: 120,
+    backgroundColor: '#6366F1',
+    bottom: 100,
+    right: -30,
   },
   scrollContainer: {
     flexGrow: 1,
     justifyContent: 'center',
     padding: 24,
+    paddingTop: 60,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 40,
   },
   logoContainer: {
-    width: 64,
-    height: 64,
+    width: 80,
+    height: 80,
     backgroundColor: '#00B77D',
-    borderRadius: 20,
+    borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
+    position: 'relative',
     shadowColor: '#00B77D',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowRadius: 15,
+    elevation: 10,
   },
   logo: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#ffffff',
+    fontSize: 40,
+    color: '#FFFFFF',
+  },
+  logoGlow: {
+    position: 'absolute',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#00B77D',
+    opacity: 0.2,
+    top: -10,
+    left: -10,
   },
   brandName: {
-    fontSize: 24,
+    fontSize: 32,
     fontWeight: 'bold',
     color: '#00B77D',
-    marginBottom: 4,
+    marginBottom: 8,
+    textAlign: 'center',
   },
   tagline: {
-    fontSize: 14,
-    color: '#5C5C5C',
-    fontWeight: '500',
-    marginBottom: 16,
+    fontSize: 16,
+    color: '#6B7280',
+    fontWeight: '600',
+    marginBottom: 32,
+    textAlign: 'center',
+  },
+  titleContainer: {
+    alignItems: 'center',
+    marginBottom: 24,
   },
   title: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: 'bold',
-    color: '#111827',
+    color: '#1F2937',
     marginBottom: 8,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
-    color: '#6b7280',
+    color: '#6B7280',
     textAlign: 'center',
     lineHeight: 22,
+    paddingHorizontal: 20,
+  },
+  trustIndicators: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 16,
+  },
+  trustItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  trustDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  trustText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  formContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 25,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 15,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
   },
   form: {
-    gap: 16,
+    gap: 20,
   },
   nameRow: {
     flexDirection: 'row',
@@ -230,54 +370,89 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
     paddingHorizontal: 16,
     height: 56,
+    position: 'relative',
   },
-  inputIcon: {
+  inputIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   input: {
     flex: 1,
     fontSize: 16,
-    color: '#111827',
+    color: '#1F2937',
+    fontWeight: '500',
   },
   passwordToggle: {
-    padding: 4,
+    padding: 8,
   },
   submitButton: {
+    borderRadius: 20,
+    height: 60,
+    marginTop: 12,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  submitButtonContent: {
     backgroundColor: '#00B77D',
-    borderRadius: 16,
-    height: 56,
+    flex: 1,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 8,
+    gap: 12,
+    borderRadius: 20,
     shadowColor: '#00B77D',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowRadius: 15,
+    elevation: 10,
+  },
+  buttonGlow: {
+    position: 'absolute',
+    top: -20,
+    left: -20,
+    right: -20,
+    bottom: -20,
+    backgroundColor: '#00B77D',
+    opacity: 0.1,
+    borderRadius: 40,
   },
   submitButtonDisabled: {
     opacity: 0.6,
   },
   submitButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
   switchButton: {
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: 20,
+    backgroundColor: '#F0F9FF',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#0077B6',
+    borderStyle: 'dashed',
   },
   switchButtonText: {
-    color: '#0ea5e9',
+    color: '#0077B6',
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });
