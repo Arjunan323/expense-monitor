@@ -7,9 +7,13 @@ import os
 import cv2
 import numpy as np
 from PIL import Image
+from typing import Optional, List
 
-# Set your OpenAI API key (for local development)
-client = OpenAI(api_key="")
+# OpenAI client – expects OPENAI_API_KEY in environment (never hardcode secrets)
+api_key = os.getenv("OPENAI_API_KEY")
+if not api_key:
+    raise RuntimeError("Missing OPENAI_API_KEY environment variable.")
+client = OpenAI(api_key=api_key)
 
 # -------------- Image Preprocessing --------------
 def preprocess_image(pil_image):
@@ -18,7 +22,7 @@ def preprocess_image(pil_image):
     return Image.fromarray(thresh)
 
 # -------------- Chunking Text --------------
-def chunk_text(text, chunk_size=3000):
+def chunk_text(text: str, chunk_size: int = 3000) -> List[str]:
     return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
 
 # -------------- GPT-4 Text Extraction Logic --------------
@@ -109,26 +113,31 @@ def postprocess_transactions(transactions, bank_name=None):
     return cleaned
 
 # -------------- Main Extraction Pipeline --------------
-def extract_transactions_from_pdf(pdf_path):
+def extract_transactions_from_pdf(pdf_path: str, password: Optional[str] = None):
     import logging
     transactions = []
     empty_pdf = True
     bank_name = None
     all_text = ""
-
-    with pdfplumber.open(pdf_path) as pdf:
-        for page in pdf.pages:
-            text = page.extract_text()
-            if not text or not text.strip():
-                # Try OCR if no text
-                image = convert_from_path(pdf_path, first_page=page.page_number, last_page=page.page_number)[0]
-                processed_image = preprocess_image(image)
-                text = pytesseract.image_to_string(processed_image)
-            if text and text.strip():
-                empty_pdf = False
-                all_text += "\n" + text
-            else:
-                logging.warning(f"Page {page.page_number} is empty or unreadable.")
+    try:
+        with pdfplumber.open(pdf_path, password=password) as pdf:
+            for page in pdf.pages:
+                text = page.extract_text()
+                if not text or not text.strip():
+                    # Try OCR if no extractable text
+                    image = convert_from_path(pdf_path, first_page=page.page_number, last_page=page.page_number)[0]
+                    processed_image = preprocess_image(image)
+                    text = pytesseract.image_to_string(processed_image)
+                if text and text.strip():
+                    empty_pdf = False
+                    all_text += "\n" + text
+                else:
+                    logging.warning(f"Page {page.page_number} is empty or unreadable.")
+    except Exception as e:
+        # Provide clearer guidance for password-protected PDFs
+        if 'password' in str(e).lower():
+            raise RuntimeError("PDF appears to be password-protected. Provide password via function arg or CLI: python extraction_lambda.py <pdf> <password>") from e
+        raise
 
     if empty_pdf:
         logging.error(f"PDF {pdf_path} appears to be empty or non-standard. No transactions extracted.")
@@ -155,9 +164,10 @@ def extract_transactions_from_pdf(pdf_path):
 if __name__ == "__main__":
     import sys
     if len(sys.argv) < 2:
-        print("Usage: python extract_transactions.py <path_to_pdf>")
+        print("Usage: python extraction_lambda.py <path_to_pdf> [pdf_password]")
         sys.exit(1)
 
     pdf_path = sys.argv[1]
-    txns = extract_transactions_from_pdf(pdf_path)
+    pdf_password = sys.argv[2] if len(sys.argv) > 2 else None
+    txns = extract_transactions_from_pdf(pdf_path, password=pdf_password)
     print(json.dumps(txns, indent=2))

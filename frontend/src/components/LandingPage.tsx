@@ -55,7 +55,7 @@ export const LandingPage: React.FC = () => {
       <nav className="bg-white/90 backdrop-blur-lg border-b border-brand-gray-100 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-18">
-            <div className="logo-container">
+            <div className="logo-container pt-4">
               <div className="logo-icon">
                 <img 
                   src="/logo.png" 
@@ -84,7 +84,7 @@ export const LandingPage: React.FC = () => {
                 <a href="#about" className="nav-link">About</a>
                 <a href="#faq" className="nav-link">FAQ</a>
                 <a href="/login" className="nav-link">Sign In</a>
-                <a href="/login" className="btn-primary">
+                <a href="/login" className="btn-primary flex items-center">
                   <Sparkles className="w-4 h-4 mr-2" />
                   Get Started Free
                 </a>

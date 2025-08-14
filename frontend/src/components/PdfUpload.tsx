@@ -20,6 +20,11 @@ export const PdfUpload: React.FC = () => {
   const [usage, setUsage] = useState<UsageStats | null>(null);
   const [loadingUsage, setLoadingUsage] = useState(true);
   const { user } = useAuth();
+  const [globalPdfPassword, setGlobalPdfPassword] = useState(''); // optional password applied to all initial uploads
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [passwordModalValue, setPasswordModalValue] = useState('');
+  const [passwordRetryIndex, setPasswordRetryIndex] = useState<number | null>(null);
+  const [passwordSubmitting, setPasswordSubmitting] = useState(false);
 
   React.useEffect(() => {
     fetchUsage();
@@ -63,10 +68,15 @@ export const PdfUpload: React.FC = () => {
     
     setUploadedFiles(prev => [...prev, ...newFiles]);
     
-    // Start uploading each file
-    newFiles.forEach((fileObj, index) => {
-      uploadFile(fileObj.file, uploadedFiles.length + index);
-    });
+    // Start uploading each file sequentially so we can pause if a password is needed
+    (async () => {
+      for (let i = 0; i < newFiles.length; i++) {
+        const globalIndex = uploadedFiles.length + i;
+        await uploadFile(newFiles[i].file, globalIndex);
+        // If a password prompt opened, pause remaining until resolved
+        if (passwordRetryIndex !== null) break;
+      }
+    })();
   }, [uploadedFiles.length, usage]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -89,6 +99,9 @@ export const PdfUpload: React.FC = () => {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      if (globalPdfPassword.trim()) {
+        formData.append('pdfPassword', globalPdfPassword.trim());
+      }
 
       // Simulate progress for better UX
       progressInterval = setInterval(() => {
@@ -101,13 +114,21 @@ export const PdfUpload: React.FC = () => {
         );
       }, 200);
 
-      const result = await apiCall<ParseResult>('POST', '/statements', formData, {
+      const result = await apiCall<any>('POST', '/statements', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
 
       if (progressInterval) clearInterval(progressInterval);
+      if (result?.passwordRequired) {
+        setPasswordRetryIndex(index);
+        setPasswordModalValue('');
+        setPasswordModalOpen(true);
+        // Mark as error awaiting password instead of success
+        setUploadedFiles(prev => prev.map((f,i)=> i===index ? { ...f, status:'error', progress:0, error:'Password required' } : f));
+        return;
+      }
       
       setUploadedFiles(prev => 
         prev.map((f, i) => 
@@ -117,13 +138,19 @@ export const PdfUpload: React.FC = () => {
         )
       );
 
-      if (result.warnings && result.warnings.length > 0) {
+  if (result.warnings && result.warnings.length > 0) {
         toast.success(`${file.name} uploaded with warnings`);
       } else {
         toast.success(`${file.name} uploaded successfully!`);
       }
     } catch (error: any) {
       if (progressInterval) clearInterval(progressInterval);
+      if (error?.response?.data?.passwordRequired) {
+        setPasswordRetryIndex(index);
+        setPasswordModalValue('');
+        setPasswordModalOpen(true);
+        return; // pause normal error flow until user acts
+      }
       setUploadedFiles(prev => 
         prev.map((f, i) => 
           i === index 
@@ -142,6 +169,22 @@ export const PdfUpload: React.FC = () => {
     
     // Refresh usage after upload
     fetchUsage();
+  };
+
+  const uploadFileWithPassword = async (file: File, index: number, password: string) => {
+    setUploadedFiles(prev => prev.map((f,i)=> i===index ? { ...f, status:'uploading', progress:0 } : f));
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('pdfPassword', password);
+    try {
+      const result = await apiCall<any>('POST', '/statements', formData, { headers: { 'Content-Type':'multipart/form-data' } });
+      setUploadedFiles(prev => prev.map((f,i)=> i===index ? { ...f, status:'success', progress:100, parseResult: result } : f));
+      toast.success(`${file.name} uploaded successfully!`);
+      fetchUsage();
+    } catch (err:any){
+      setUploadedFiles(prev => prev.map((f,i)=> i===index ? { ...f, status:'error', error: err.message || 'Upload failed' } : f));
+      toast.error(`Failed to upload ${file.name}`);
+    }
   };
 
   const removeFile = (index: number) => {
@@ -171,7 +214,7 @@ export const PdfUpload: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+  <div className="space-y-6 animate-fade-in relative">
       {usage && usage.status === 'EXPIRED' && (
         <div className="p-4 bg-yellow-100 border border-yellow-300 rounded-lg flex items-center space-x-3">
           <AlertTriangle className="w-5 h-5 text-yellow-600" />
@@ -275,6 +318,28 @@ export const PdfUpload: React.FC = () => {
 
       {/* Upload Area */}
       <div className="card">
+        <div className="mb-4 flex flex-col sm:flex-row sm:items-end gap-3">
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">PDF Password (optional)</label>
+            <input
+              type="password"
+              placeholder="Enter password if statement is protected"
+              value={globalPdfPassword}
+              onChange={e => setGlobalPdfPassword(e.target.value)}
+              className="input-field !py-2 !px-3 w-72"
+              autoComplete="off"
+            />
+          </div>
+          {globalPdfPassword && (
+            <button
+              type="button"
+              onClick={() => setGlobalPdfPassword('')}
+              className="text-xs text-gray-500 hover:text-gray-700 self-center"
+            >
+              Clear password
+            </button>
+          )}
+        </div>
         <div
           {...getRootProps()}
           className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors duration-200 ${
@@ -454,6 +519,59 @@ export const PdfUpload: React.FC = () => {
           </p>
         </div>
       </div>
+
+      {/* Password Retry Modal */}
+      {passwordModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-funky p-6 w-full max-w-sm space-y-5">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Password Required</h3>
+              <p className="text-sm text-gray-600 mt-1">This PDF is protected. Enter the password to retry extraction.</p>
+            </div>
+            <div>
+              <label className="text-xs uppercase font-semibold tracking-wide text-gray-500 mb-1 block">Password</label>
+              <input
+                type="password"
+                autoFocus
+                className="input-field !py-2 !px-3"
+                value={passwordModalValue}
+                onChange={e => setPasswordModalValue(e.target.value)}
+                placeholder="Enter PDF password"
+                disabled={passwordSubmitting}
+              />
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                className="btn-secondary !py-2 !px-4 text-sm"
+                disabled={passwordSubmitting}
+                onClick={() => { if (!passwordSubmitting) { setPasswordModalOpen(false); setPasswordRetryIndex(null); } }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary !py-2 !px-4 text-sm disabled:opacity-50"
+                disabled={!passwordModalValue || passwordSubmitting}
+                onClick={async () => {
+                  if (passwordRetryIndex == null) return;
+                  setPasswordSubmitting(true);
+                  try {
+                    await uploadFileWithPassword(uploadedFiles[passwordRetryIndex].file, passwordRetryIndex, passwordModalValue);
+                    setPasswordModalOpen(false);
+                    setPasswordRetryIndex(null);
+                    setPasswordModalValue('');
+                  } finally {
+                    setPasswordSubmitting(false);
+                  }
+                }}
+              >
+                {passwordSubmitting ? 'Submitting...' : 'Retry'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

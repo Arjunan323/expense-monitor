@@ -7,6 +7,7 @@ import {
   ScrollView,
   Alert,
   Platform,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
@@ -19,6 +20,10 @@ export const UploadScreen: React.FC = () => {
   const [usage, setUsage] = useState<UsageStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [pendingFile, setPendingFile] = useState<any | null>(null);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [pdfPassword, setPdfPassword] = useState('');
+  const [passwordSubmitting, setPasswordSubmitting] = useState(false);
 
   useEffect(() => {
     fetchUsage();
@@ -72,7 +77,7 @@ export const UploadScreen: React.FC = () => {
     }
   };
 
-  const uploadFile = async (file: any) => {
+  const uploadFile = async (file: any, overridePassword?: string) => {
     setUploading(true);
     try {
       const formData = new FormData();
@@ -81,22 +86,26 @@ export const UploadScreen: React.FC = () => {
         type: 'application/pdf',
         name: file.name,
       } as any);
+      if (overridePassword) {
+        formData.append('pdfPassword', overridePassword);
+      }
 
-      await apiCall('POST', '/statements', formData, {
+      const response = await apiCall<any>('POST', '/statements', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
-
-      Alert.alert(
-        'Success',
-        'Statement uploaded and processed successfully!',
-        [{ text: 'OK' }]
-      );
+      if (response?.passwordRequired) {
+        // store file and open modal for password input
+        setPendingFile(file);
+        setShowPasswordModal(true);
+      } else {
+        Alert.alert('Success','Statement uploaded and processed successfully!',[{ text: 'OK' }]);
+      }
       
       // Refresh usage stats
       fetchUsage();
-    } catch (error: any) {
+  } catch (error: any) {
       Alert.alert(
         'Upload Failed',
         error.message || 'Failed to upload statement',
@@ -302,6 +311,53 @@ export const UploadScreen: React.FC = () => {
           </Text>
         </View>
       </View>
+      {/* Password Modal */}
+      {showPasswordModal && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>PDF Password Required</Text>
+            <Text style={styles.modalSubtitle}>Enter the password to decrypt your statement.</Text>
+            <View style={styles.passwordInputWrapper}>
+              <Text style={styles.passwordLabel}>Password</Text>
+              <TextInput
+                secureTextEntry
+                value={pdfPassword}
+                onChangeText={setPdfPassword}
+                placeholder="Enter password"
+                style={styles.passwordInput}
+                editable={!passwordSubmitting}
+              />
+            </View>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonSecondary]}
+                onPress={() => { if(!passwordSubmitting){ setShowPasswordModal(false); setPdfPassword(''); setPendingFile(null);} }}
+                disabled={passwordSubmitting}
+              >
+                <Text style={styles.modalButtonSecondaryText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonPrimary, (!pdfPassword || passwordSubmitting) && styles.modalButtonDisabled]}
+                disabled={!pdfPassword || passwordSubmitting}
+                onPress={async () => {
+                  if (!pendingFile) return;
+                  setPasswordSubmitting(true);
+                  try {
+                    await uploadFile(pendingFile, pdfPassword);
+                    setShowPasswordModal(false);
+                    setPdfPassword('');
+                    setPendingFile(null);
+                  } finally {
+                    setPasswordSubmitting(false);
+                  }
+                }}
+              >
+                {passwordSubmitting ? <LoadingSpinner size="small" color="#ffffff" /> : <Text style={styles.modalButtonPrimaryText}>Submit</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </ScrollView>
   );
 };
@@ -432,6 +488,92 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#92400e',
     fontWeight: '500',
+  },
+  // Modal styles
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContainer: {
+    width: '100%',
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#374151',
+    marginBottom: 16,
+  },
+  passwordInputWrapper: {
+    marginBottom: 20,
+  },
+  passwordLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    color: '#6b7280',
+    marginBottom: 6,
+  },
+  passwordInput: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: Platform.OS === 'ios' ? 14 : 10,
+    fontSize: 16,
+    backgroundColor: '#f9fafb',
+    color: '#111827',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  modalButton: {
+    borderRadius: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  modalButtonSecondary: {
+    backgroundColor: '#f3f4f6',
+  },
+  modalButtonSecondaryText: {
+    color: '#374151',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modalButtonPrimary: {
+    backgroundColor: '#0ea5e9',
+  },
+  modalButtonPrimaryText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modalButtonDisabled: {
+    opacity: 0.5,
   },
   uploadArea: {
     backgroundColor: '#ffffff',

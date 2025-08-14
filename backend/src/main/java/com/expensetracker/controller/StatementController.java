@@ -19,8 +19,18 @@ public class StatementController {
     }
 
     @PostMapping
-    public StatementUploadResponseDto uploadStatement(@RequestParam("file") MultipartFile file, @RequestHeader("Authorization") String authHeader) {
-        return statementService.uploadStatement(file, authHeader);
+    public StatementUploadResponseDto uploadStatement(@RequestParam("file") MultipartFile file,
+                                                      @RequestParam(value = "pdfPassword", required = false) String pdfPassword,
+                                                      @RequestHeader("Authorization") String authHeader) {
+        try {
+            return statementService.uploadStatement(file, authHeader, pdfPassword);
+        } catch (Exception e) {
+            String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+            if (msg.contains("password")) {
+                return new StatementUploadResponseDto(false, "PDF password required or incorrect", true);
+            }
+            return new StatementUploadResponseDto(false, "Failed to process statement", false);
+        }
     }
 
     @GetMapping

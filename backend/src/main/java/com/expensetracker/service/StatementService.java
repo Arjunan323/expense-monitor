@@ -33,8 +33,14 @@ public class StatementService {
         this.userRepository = userRepository;
     }
 
+    // Backwards compatible existing signature – delegates with no password
     public StatementUploadResponseDto uploadStatement(MultipartFile file, String authHeader) {
-        try {
+    return uploadStatement(file, authHeader, null);
+    }
+
+    // New method supporting optional password for password-protected PDFs
+    public StatementUploadResponseDto uploadStatement(MultipartFile file, String authHeader, String pdfPassword) {
+    try {
             User user = getUserFromAuth(authHeader);
             int statementLimit = AppConstants.FREE_STATEMENT_LIMIT, pageLimit = AppConstants.FREE_PAGE_LIMIT;
             String planType = AppConstants.PLAN_FREE;
@@ -59,7 +65,7 @@ public class StatementService {
             if (statementLimit != Integer.MAX_VALUE && statementsThisMonth >= statementLimit) {
                 return new StatementUploadResponseDto(false, AppConstants.ERROR_STATEMENT_LIMIT);
             }
-            int numPages = getPdfPageCount(file);
+            int numPages = getPdfPageCount(file, pdfPassword);
             if (pageLimit != Integer.MAX_VALUE && numPages > pageLimit) {
                 return new StatementUploadResponseDto(false, String.format(AppConstants.ERROR_PAGE_LIMIT, numPages, pageLimit));
             }
@@ -67,7 +73,7 @@ public class StatementService {
             if (!tempFile.exists() || tempFile.length() == 0) {
                 return new StatementUploadResponseDto(false, AppConstants.ERROR_PDF_SAVE);
             }
-            String output = runExtractionScript(tempFile);
+            String output = runExtractionScript(tempFile, pdfPassword);
             if (output == null) {
                 return new StatementUploadResponseDto(false, AppConstants.ERROR_EXTRACTION_FAILED);
             }
@@ -77,11 +83,17 @@ public class StatementService {
             tempFile.delete();
             return new StatementUploadResponseDto(true, AppConstants.MSG_STATEMENT_SUCCESS);
         } catch (IOException | InterruptedException e) {
-            e.printStackTrace();
-            return new StatementUploadResponseDto(false, AppConstants.ERROR_PROCESSING_STATEMENT);
+            String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+            if (msg.contains("password")) {
+                return new StatementUploadResponseDto(false, "PDF password required or incorrect", true);
+            }
+            return new StatementUploadResponseDto(false, AppConstants.ERROR_PROCESSING_STATEMENT, false);
         } catch (Exception e) {
-            e.printStackTrace();
-            return new StatementUploadResponseDto(false, AppConstants.ERROR_PARSING_TRANSACTIONS);
+            String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+            if (msg.contains("password")) {
+                return new StatementUploadResponseDto(false, "PDF password required or incorrect", true);
+            }
+            return new StatementUploadResponseDto(false, AppConstants.ERROR_PARSING_TRANSACTIONS, false);
         }
     }
 
@@ -135,8 +147,18 @@ public class StatementService {
         return userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException(username));
     }
 
-    private int getPdfPageCount(MultipartFile file) throws IOException {
-        org.apache.pdfbox.pdmodel.PDDocument pdfDoc = org.apache.pdfbox.pdmodel.PDDocument.load(file.getBytes());
+    private int getPdfPageCount(MultipartFile file, String password) throws IOException {
+        org.apache.pdfbox.pdmodel.PDDocument pdfDoc = null;
+        try {
+            if (password != null && !password.isEmpty()) {
+                pdfDoc = org.apache.pdfbox.pdmodel.PDDocument.load(file.getBytes(), password);
+            } else {
+                pdfDoc = org.apache.pdfbox.pdmodel.PDDocument.load(file.getBytes());
+            }
+        } catch (org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException e) {
+            // Signal to caller that password is required
+            throw new IOException("PDF password required or incorrect", e);
+        }
         int numPages = pdfDoc.getNumberOfPages();
         pdfDoc.close();
         return numPages;
@@ -150,9 +172,25 @@ public class StatementService {
         return tempFile;
     }
 
-    private String runExtractionScript(File tempFile) throws IOException, InterruptedException {
-        ProcessBuilder pb = new ProcessBuilder("python", AppConstants.EXTRACTION_SCRIPT_PATH, tempFile.getAbsolutePath());
+    private String runExtractionScript(File tempFile, String password) throws IOException, InterruptedException {
+        List<String> cmd = new ArrayList<>();
+        cmd.add("python");
+        cmd.add(AppConstants.EXTRACTION_SCRIPT_PATH);
+        cmd.add(tempFile.getAbsolutePath());
+        if (password != null && !password.isEmpty()) {
+            cmd.add(password);
+        }
+        ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.redirectErrorStream(true);
+        // Pass through sensitive env vars (do NOT log values)
+        try {
+            String openAiKey = System.getenv("OPENAI_API_KEY");
+            if (openAiKey != null && !openAiKey.isEmpty()) {
+                pb.environment().put("OPENAI_API_KEY", openAiKey);
+            }
+        } catch (Exception ignored) {
+            // Silently ignore; Python script will raise a clear error if missing
+        }
         Process process = pb.start();
         StringBuilder output = new StringBuilder();
         try (Scanner scanner = new Scanner(process.getInputStream())) {
