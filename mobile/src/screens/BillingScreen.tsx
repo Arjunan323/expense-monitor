@@ -9,7 +9,18 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import RazorpayCheckout from 'react-native-razorpay';
+// Razorpay native module isn't available in Expo Go; we'll require it dynamically only in a dev build or custom build.
+import Constants from 'expo-constants';
+let RazorpayCheckout: any = null;
+const isExpoGo = Constants.appOwnership === 'expo';
+if (!isExpoGo) {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    RazorpayCheckout = require('react-native-razorpay');
+  } catch (e) {
+    // Ignore – module not present (e.g., web platform or missing native build)
+  }
+}
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { UsageStats } from '../types';
 import { apiCall } from '../utils/api';
@@ -152,28 +163,39 @@ export const BillingScreen: React.FC = () => {
               // 1. Call backend to create Razorpay order
               const resp = await apiCall<any>('POST', '/payment/order', { planType: planId });
               if (!resp || !resp.orderId) throw new Error('Order creation failed');
-              // 2. Open Razorpay native checkout
-              const options = {
-                description: `${planId} Plan Subscription`,
-                image: 'https://yourdomain.com/logo.png',
-                currency: resp.currency,
-                key: resp.key,
-                amount: resp.amount,
-                name: 'Expense Monitor',
-                order_id: resp.orderId,
-                prefill: {
-                  email: user?.email,
-                },
-                theme: { color: '#6366f1' },
-              };
-              RazorpayCheckout.open(options)
-                .then(() => {
-                  Alert.alert('Success', 'Payment successful!');
-                  fetchUsageStats();
-                })
-                .catch(() => {
-                  Alert.alert('Cancelled', 'Payment cancelled.');
-                });
+              if (isExpoGo || !RazorpayCheckout) {
+                // Simulate success flow inside Expo Go (no native module support)
+                Alert.alert(
+                  'Simulated Payment',
+                  'Running in Expo Go – Razorpay native module not available. Simulating successful upgrade.'
+                );
+                // Optionally call a backend test endpoint to mark upgrade (commented)
+                // await apiCall('POST', '/payment/mock-upgrade', { planType: planId });
+                fetchUsageStats();
+              } else {
+                // 2. Open Razorpay native checkout
+                const options = {
+                  description: `${planId} Plan Subscription`,
+                  image: 'https://yourdomain.com/logo.png',
+                  currency: resp.currency,
+                  key: resp.key,
+                  amount: resp.amount,
+                  name: 'Expense Monitor',
+                  order_id: resp.orderId,
+                  prefill: {
+                    email: user?.email,
+                  },
+                  theme: { color: '#6366f1' },
+                };
+                RazorpayCheckout.open(options)
+                  .then(() => {
+                    Alert.alert('Success', 'Payment successful!');
+                    fetchUsageStats();
+                  })
+                  .catch(() => {
+                    Alert.alert('Cancelled', 'Payment cancelled.');
+                  });
+              }
             } catch (error: any) {
               Alert.alert('Error', error?.message || 'Failed to upgrade plan');
             } finally {

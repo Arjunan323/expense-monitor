@@ -32,11 +32,12 @@
     },
     "extra": {
       "eas": {
-        "projectId": "291ccdab-e8b0-4d58-96a8-719fdfc28f8c"
+        "projectId": "94fa1963-ddfc-486d-bb12-d88d846d688b"
       }
     },
     "plugins": [
       "expo-secure-store"
-    ]
+    ],
+    "owner": "arjunan"
   }
 }

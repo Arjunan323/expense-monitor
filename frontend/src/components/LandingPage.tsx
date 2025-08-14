@@ -210,7 +210,7 @@ export const LandingPage: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            <div className="feature-card">
+            <div className="feature-card group">
               <div className="feature-icon bg-gradient-green group-hover:shadow-glow-green">
                 <Scissors className="w-8 h-8 text-white group-hover:animate-wiggle" />
               </div>
@@ -220,7 +220,7 @@ export const LandingPage: React.FC = () => {
               </p>
             </div>
 
-            <div className="feature-card">
+            <div className="feature-card group">
               <div className="feature-icon bg-gradient-blue group-hover:shadow-glow-blue">
                 <Zap className="w-8 h-8 text-white group-hover:animate-bounce-gentle" />
               </div>
@@ -230,7 +230,7 @@ export const LandingPage: React.FC = () => {
               </p>
             </div>
 
-            <div className="feature-card">
+            <div className="feature-card group">
               <div className="feature-icon bg-gradient-yellow group-hover:shadow-glow-yellow">
                 <PieChart className="w-8 h-8 text-brand-gray-900 group-hover:animate-wiggle" />
               </div>
@@ -240,7 +240,7 @@ export const LandingPage: React.FC = () => {
               </p>
             </div>
 
-            <div className="feature-card">
+            <div className="feature-card group">
               <div className="feature-icon bg-gradient-to-br from-brand-green-400 to-secondary-500 group-hover:shadow-glow-green">
                 <RefreshCcw className="w-8 h-8 text-white group-hover:animate-wiggle" />
               </div>
@@ -250,7 +250,7 @@ export const LandingPage: React.FC = () => {
               </p>
             </div>
 
-            <div className="feature-card">
+            <div className="feature-card group">
               <div className="feature-icon bg-gradient-to-br from-secondary-400 to-brand-green-500 group-hover:shadow-glow-blue">
                 <BarChart3 className="w-8 h-8 text-white group-hover:animate-bounce-gentle" />
               </div>
@@ -260,7 +260,7 @@ export const LandingPage: React.FC = () => {
               </p>
             </div>
 
-            <div className="feature-card">
+            <div className="feature-card group">
               <div className="feature-icon bg-gradient-to-br from-accent-400 to-brand-green-500 group-hover:shadow-glow-yellow">
                 <Shield className="w-8 h-8 text-white group-hover:animate-wiggle" />
               </div>
