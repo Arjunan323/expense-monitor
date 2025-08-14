@@ -101,13 +101,13 @@ public class DashboardService {
 
         boolean advancedAnalyticsLocked = false;
         String upgradePrompt = null;
-        if (AppConstants.PLAN_FREE.equals(planType)) {
-            topCategories = null;
-            isMultiBank = false;
-            hasBalanceDiscrepancy = false;
-            advancedAnalyticsLocked = true;
-            upgradePrompt = AppConstants.UPGRADE_PROMPT;
-        }
+        // if (AppConstants.PLAN_FREE.equals(planType)) {
+        //     topCategories = null;
+        //     isMultiBank = false;
+        //     hasBalanceDiscrepancy = false;
+        //     advancedAnalyticsLocked = true;
+        //     upgradePrompt = AppConstants.UPGRADE_PROMPT;
+        // }
 
         return new DashboardStatsDto(
             totalBalance,
