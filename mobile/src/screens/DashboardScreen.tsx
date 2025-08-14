@@ -593,11 +593,6 @@ export const DashboardScreen: React.FC = () => {
                     <Text style={styles.dateHint}>Please select start date first</Text>
                   )}
                 </View>
-        </Modal>
-      )}
-    </ScrollView>
-  );
-};
 
                 {/* Quick Date Range Options */}
                 <View style={styles.quickRangeSection}>
@@ -639,6 +634,14 @@ export const DashboardScreen: React.FC = () => {
                           start: last90Days.toISOString().split('T')[0],
                           end: today.toISOString().split('T')[0]
                         });
+                      }}
+                    >
+                      <Text style={styles.quickRangeButtonText}>Last 90 Days</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+
               {/* Action Buttons */}
               <View style={styles.dateRangeActions}>
                 <TouchableOpacity
@@ -665,9 +668,9 @@ export const DashboardScreen: React.FC = () => {
               </View>
             </View>
           </View>
-                      }}
-                    >
-                      <Text style={styles.quickRangeButtonText}>Last 90 Days</Text>
+        </Modal>
+      )}
+
       {/* Native Date Picker (iOS/Android) */}
       {activeDatePicker && (
         <DateTimePicker
@@ -691,10 +694,10 @@ export const DashboardScreen: React.FC = () => {
           }
         />
       )}
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
+    </ScrollView>
+  );
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -777,17 +780,6 @@ const styles = StyleSheet.create({
   logoEmoji: {
     fontSize: 28,
     color: '#FFFFFF',
-  },
-  brandName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  tagline: {
-    fontSize: 12,
-    color: '#FFFFFF',
-    opacity: 0.9,
-    fontWeight: '500',
   },
   settingsButton: {
     width: 44,
@@ -1109,6 +1101,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  bankList: {
+    maxHeight: 300,
+  },
+  bankOption: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -1163,11 +1166,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: 'bold',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
   },
   dateRangeModal: {
     backgroundColor: '#FFFFFF',
@@ -1307,7 +1305,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   applyButtonText: {
-    fontSize: 16,
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
   },
