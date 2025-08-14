@@ -49,11 +49,12 @@ const TabNavigator = () => {
           return <Ionicons name={iconName} size={size} color={color} />;
         },
         tabBarActiveTintColor: '#0ea5e9',
-        tabBarInactiveTintColor: '#6b7280',
+        tabBarActiveTintColor: '#00B77D',
+        tabBarInactiveTintColor: '#5C5C5C',
         tabBarStyle: {
           backgroundColor: '#ffffff',
-          borderTopWidth: 1,
-          borderTopColor: '#e5e7eb',
+          borderTopWidth: 2,
+          borderTopColor: '#F4F4F4',
           paddingBottom: Platform.OS === 'ios' ? 34 : 8,
           paddingTop: 8,
           height: Platform.OS === 'ios' ? 88 : 60,
@@ -61,22 +62,29 @@ const TabNavigator = () => {
           bottom: 0,
           left: 0,
           right: 0,
+          borderTopLeftRadius: 20,
+          borderTopRightRadius: 20,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 10,
+          elevation: 10,
         },
         tabBarLabelStyle: {
           fontSize: 12,
-          fontWeight: '500',
+          fontWeight: '600',
         },
         headerStyle: {
           backgroundColor: '#ffffff',
-          borderBottomWidth: 1,
-          borderBottomColor: '#e5e7eb',
+          borderBottomWidth: 2,
+          borderBottomColor: '#F4F4F4',
         },
         headerTitleStyle: {
           fontSize: 18,
-          fontWeight: '600',
-          color: '#111827',
+          fontWeight: '700',
+          color: '#00B77D',
         },
-        headerTintColor: '#0ea5e9',
+        headerTintColor: '#00B77D',
       })}
     >
       <Tab.Screen 

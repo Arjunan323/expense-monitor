@@ -53,15 +53,17 @@ export const AuthScreen: React.FC = () => {
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.header}>
           <View style={styles.logoContainer}>
-            <Text style={styles.logo}>EM</Text>
+            <Text style={styles.logo}>✂️</Text>
           </View>
+          <Text style={styles.brandName}>CutTheSpend</Text>
+          <Text style={styles.tagline}>See it. Cut it. Save more.</Text>
           <Text style={styles.title}>
-            {isLogin ? 'Welcome back' : 'Create your account'}
+            {isLogin ? 'Welcome back! 👋' : 'Start saving today! 🚀'}
           </Text>
           <Text style={styles.subtitle}>
             {isLogin 
-              ? 'Sign in to your account to continue' 
-              : 'Start tracking your expenses with AI-powered insights'
+              ? 'Sign in to continue your financial journey' 
+              : 'Join thousands who are already saving more money'
             }
           </Text>
         </View>
@@ -178,19 +180,36 @@ const styles = StyleSheet.create({
   logoContainer: {
     width: 64,
     height: 64,
-    backgroundColor: '#0ea5e9',
-    borderRadius: 16,
+    backgroundColor: '#00B77D',
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
+    shadowColor: '#00B77D',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   logo: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
     color: '#ffffff',
   },
+  brandName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#00B77D',
+    marginBottom: 4,
+  },
+  tagline: {
+    fontSize: 14,
+    color: '#5C5C5C',
+    fontWeight: '500',
+    marginBottom: 16,
+  },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#111827',
     marginBottom: 8,
@@ -230,14 +249,19 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   submitButton: {
-    backgroundColor: '#0ea5e9',
-    borderRadius: 12,
+    backgroundColor: '#00B77D',
+    borderRadius: 16,
     height: 56,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,
     marginTop: 8,
+    shadowColor: '#00B77D',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   submitButtonDisabled: {
     opacity: 0.6,

@@ -187,16 +187,16 @@ export const Dashboard: React.FC = () => {
       {/* Header with Filters */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Financial Overview</h1>
+          <h1 className="text-3xl font-heading font-bold gradient-text">Financial Overview</h1>
           <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 mt-1 space-y-1 sm:space-y-0">
             {stats.lastUpdateTime && (
-              <div className="flex items-center space-x-2 text-sm text-gray-500">
+              <div className="flex items-center space-x-2 text-sm text-brand-gray-500">
                 <Clock className="w-4 h-4" />
                 <span>Last updated: {formatDateTime(stats.lastUpdateTime)}</span>
               </div>
             )}
             {selectedBanks.length > 0 && (
-              <div className="flex items-center space-x-2 text-sm text-gray-600">
+              <div className="flex items-center space-x-2 text-sm text-brand-gray-600">
                 <Building2 className="w-4 h-4" />
                 <span>
                   {selectedBanks.length === stats.bankSources.length 
@@ -214,28 +214,32 @@ export const Dashboard: React.FC = () => {
         <div className="flex flex-col sm:flex-row gap-3">
           {/* Multi-bank Selector */}
           {stats.isMultiBank && (
-            <MultiSelect
-              options={bankOptions}
-              selected={selectedBanks}
-              onChange={setSelectedBanks}
-              placeholder="Select banks"
-              className="min-w-[200px]"
-            />
+            <div className="relative">
+              <MultiSelect
+                options={bankOptions}
+                selected={selectedBanks}
+                onChange={setSelectedBanks}
+                placeholder="🏦 Select banks"
+                className="min-w-[200px] filter-button"
+              />
+            </div>
           )}
           
           {/* Date Range Picker */}
-          <DateRangePicker
-            startDate={dateRange.start}
-            endDate={dateRange.end}
-            onApply={handleDateRangeApply}
-            className="min-w-[200px]"
-          />
+          <div className="relative">
+            <DateRangePicker
+              startDate={dateRange.start}
+              endDate={dateRange.end}
+              onApply={handleDateRangeApply}
+              className="min-w-[200px] filter-button"
+            />
+          </div>
           
           <button
             onClick={() => navigate('/upload')}
-            className="btn-primary flex items-center space-x-2 whitespace-nowrap"
+            className="btn-primary flex items-center space-x-2 whitespace-nowrap group"
           >
-            <Upload className="w-4 h-4" />
+            <Upload className="w-4 h-4 group-hover:animate-bounce-gentle" />
             <span>Upload Statement</span>
           </button>
         </div>

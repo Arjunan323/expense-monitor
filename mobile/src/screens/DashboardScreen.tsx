@@ -158,7 +158,7 @@ export const DashboardScreen: React.FC = () => {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <View>
-            <Text style={styles.headerTitle}>Financial Overview</Text>
+            <Text style={styles.headerTitle}>💰 Financial Overview</Text>
             {stats.lastUpdateTime && (
               <Text style={styles.lastUpdate}>
                 Last updated: {formatDate(stats.lastUpdateTime)}
@@ -444,9 +444,9 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: 'bold',
-    color: '#111827',
+    color: '#00B77D',
     marginBottom: 4,
   },
   headerSubtitle: {
