@@ -35,11 +35,10 @@ public class PaymentService {
 
     public ResponseEntity<RazorpayOrderResponseDto> createOrder(RazorpayOrderRequestDto req, String authHeader) {
         String planType = req.getPlanType();
-        String region = AppConstants.REGION_DEFAULT;
         String token = authHeader.replace("Bearer ", "");
         String username = new com.expensetracker.config.JwtUtil().extractUsername(token);
         User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException(username));
-        Plan plan = planRepository.findByPlanTypeAndRegion(planType, region).orElse(null);
+        Plan plan = planRepository.findByPlanTypeAndCurrency(planType, user.getCurrency()).orElse(null);
         if (plan == null) {
             return ResponseEntity.badRequest().build();
         }

@@ -514,12 +514,6 @@ export const TransactionsScreen: React.FC = () => {
                   </Modal>
                 )}
               </View>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  </Modal>
-                )}
-              </View>
 
               {/* Amount Range */}
               <View style={styles.filterSection}>

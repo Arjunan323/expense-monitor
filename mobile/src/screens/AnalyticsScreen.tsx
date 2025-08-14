@@ -121,6 +121,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 15,
     elevation: 10,
+    marginBottom: 24,
   },
   headerTitle: {
     fontSize: 28,

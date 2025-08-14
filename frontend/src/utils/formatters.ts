@@ -78,6 +78,11 @@ export const getCategoryColor = (category: string): string => {
     'Entertainment': '#ec4899',
     'Healthcare': '#10b981',
     'Education': '#f97316',
+    'Loan Payment': '#7c3aed', // purple variant
+    'Transfer': '#0891b2', // cyan variant
+    'Business Services': '#0d9488', // teal
+    'ATM Withdrawal': '#dc2626', // red variant
+    'Health & Wellness': '#16a34a', // green variant
     'Other': '#64748b',
   };
   return colors[category] || colors['Other'];

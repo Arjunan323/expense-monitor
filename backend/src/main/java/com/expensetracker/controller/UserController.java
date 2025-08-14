@@ -15,6 +15,7 @@ import com.expensetracker.dto.UserStatusDto;
 import com.expensetracker.dto.PreferencesDto;
 import com.expensetracker.dto.UserProfileDto;
 import com.expensetracker.repository.UserRepository;
+import com.expensetracker.util.AppConstants;
 import com.expensetracker.model.User;
 import com.expensetracker.config.JwtUtil;
 
@@ -49,8 +50,8 @@ public class UserController {
         if (sub != null && sub.getPlanType() != null && "ACTIVE".equals(sub.getStatus())) {
             planType = sub.getPlanType().name();
             // Lookup plan limits from Plan entity
-            String region = user.getLocale() != null && user.getLocale().contains("IN") ? "IN" : "IN"; // Default to IN, adjust as needed
-            Plan plan = planRepository.findByPlanTypeAndRegion(planType, region).orElse(null);
+            String currency = user.getCurrency() != null ? user.getCurrency() : AppConstants.REGION_DEFAULT;
+            Plan plan = planRepository.findByPlanTypeAndCurrency(planType, currency).orElse(null);
             if (plan != null) {
                 statementLimit = plan.getStatementsPerMonth();
                 pageLimit = plan.getPagesPerStatement();

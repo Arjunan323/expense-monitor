@@ -18,7 +18,8 @@ import { EmptyState } from './ui/EmptyState';
 import { DateRangePicker } from './ui/DateRangePicker';
 import { MultiSelect } from './ui/MultiSelect';
 import { Transaction, DashboardStats, TransactionFilters, PaginatedResponse } from '../types';
-import { apiCall } from '../utils/api';
+import { apiCall, fetchBanks, fetchCategories } from '../utils/api';
+import { BankRecord, CategoryRecord } from '../types';
 import { formatCurrency, formatDate, getCategoryColor } from '../utils/formatters';
 import toast from 'react-hot-toast';
 
@@ -32,6 +33,8 @@ export const Transactions: React.FC = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [availableBanks, setAvailableBanks] = useState<string[]>([]);
   const [availableCategories, setAvailableCategories] = useState<string[]>([]);
+  const [bankRecords, setBankRecords] = useState<BankRecord[]>([]);
+  const [categoryRecords, setCategoryRecords] = useState<CategoryRecord[]>([]);
   const [categoryCounts, setCategoryCounts] = useState<{ category: string; count: number }[]>([]);
   const itemsPerPage = 50;
   const [filters, setFilters] = useState<TransactionFilters>({
@@ -47,24 +50,38 @@ export const Transactions: React.FC = () => {
 
   // Fetch usage and filter options (banks) on mount
   useEffect(() => {
-    const fetchUsageAndOptions = async () => {
+    const init = async () => {
       try {
         setLoading(true);
-        const usageData = await apiCall<DashboardStats>('GET', '/dashboard/summary');
+        const [usageData, banksData, categoriesData] = await Promise.all([
+          apiCall<DashboardStats>('GET', '/dashboard/summary'),
+          fetchBanks().catch(() => []),
+          fetchCategories().catch(() => []),
+        ]);
         setUsage(usageData);
-        setAvailableBanks(usageData.bankSources || []);
-        setFilters(prev => ({ ...prev, banks: usageData.bankSources || [] }));
-      } catch (error: any) {
-        toast.error('Failed to load usage data');
+        // Banks (prefer persisted list; fallback to usageData.bankSources)
+        setBankRecords(banksData);
+        let bankNames = banksData.map(b => b.name).filter(Boolean);
+        if (bankNames.length === 0 && usageData.bankSources && usageData.bankSources.length > 0) {
+          bankNames = usageData.bankSources;
+        }
+        setAvailableBanks(bankNames);
+        // Categories
+        setCategoryRecords(categoriesData);
+        const categoryNames = categoriesData.map(c => c.name);
+        setAvailableCategories(categoryNames);
+        setFilters(prev => ({ ...prev, banks: bankNames }));
+      } catch (e) {
+        toast.error('Failed to load dashboard data');
       } finally {
         setLoading(false);
       }
     };
-    fetchUsageAndOptions();
+    init();
   }, []);
 
-  // Fetch category counts from backend when relevant filters change (except categories)
-  const prevCategoryFilters = useRef<any>(null);
+  // Server-side category counts (full filtered dataset) excluding category filter itself
+  const prevCategoryFilters = useRef<string | null>(null);
   useEffect(() => {
     const fetchCategoryCounts = async () => {
       try {
@@ -76,16 +93,24 @@ export const Transactions: React.FC = () => {
         if (filters.amountRange.max !== null) params.append('amountMax', String(filters.amountRange.max));
         if (filters.transactionType !== 'all') params.append('transactionType', filters.transactionType);
         if (filters.description) params.append('description', filters.description);
-        // Do NOT include categories in this request
-        const response = await apiCall<{ category: string; count: number }[]>('GET', `/transactions/category-counts?${params.toString()}`);
+        const response = await apiCall<{ category: string; count: number }[]>(
+          'GET',
+          `/transactions/category-counts?${params.toString()}`
+        );
         setCategoryCounts(response);
-        setAvailableCategories(response.map(c => c.category));
-      } catch (error) {
-        setCategoryCounts([]);
-        setAvailableCategories([]);
+        const names = response.map(c => c.category);
+        setAvailableCategories(prev => Array.from(new Set([...prev, ...names])));
+      } catch (err) {
+        // Fallback: derive counts from current page only (degraded accuracy)
+        const localCounts: { [k: string]: number } = {};
+        transactions.forEach(t => {
+          if (!t.category) return;
+            localCounts[t.category] = (localCounts[t.category] || 0) + 1;
+        });
+        const countsArr = Object.entries(localCounts).map(([category, count]) => ({ category, count }));
+        setCategoryCounts(countsArr);
       }
     };
-    // Only refetch if non-category filters change
     const relevant = JSON.stringify({
       banks: filters.banks,
       dateRange: filters.dateRange,
@@ -94,10 +119,10 @@ export const Transactions: React.FC = () => {
       description: filters.description
     });
     if (prevCategoryFilters.current !== relevant) {
-      fetchCategoryCounts();
       prevCategoryFilters.current = relevant;
+      fetchCategoryCounts();
     }
-  }, [filters.banks, filters.dateRange, filters.amountRange, filters.transactionType, filters.description]);
+  }, [filters.banks, filters.dateRange, filters.amountRange, filters.transactionType, filters.description, transactions]);
 
   // Fetch transactions from backend when filters or page change
   const fetchTransactions = useCallback(async () => {
@@ -131,6 +156,35 @@ export const Transactions: React.FC = () => {
   useEffect(() => {
     fetchTransactions();
   }, [fetchTransactions]);
+
+  // Derive banks from transactions if still empty (e.g., new user before Bank table populated)
+  useEffect(() => {
+    if (availableBanks.length === 0 && transactions.length > 0) {
+      const txBanks = Array.from(new Set(transactions.map(t => t.bankName).filter(Boolean))) as string[];
+      if (txBanks.length > 0) {
+        setAvailableBanks(txBanks);
+      }
+    }
+  }, [transactions, availableBanks.length]);
+
+  // When availableBanks updated and no banks selected yet, auto-select all
+  useEffect(() => {
+    if (availableBanks.length > 0 && filters.banks.length === 0) {
+      setFilters(prev => ({ ...prev, banks: availableBanks }));
+    }
+  }, [availableBanks, filters.banks.length]);
+
+  // Derive categories from currently loaded transactions if master list empty or missing entries
+  useEffect(() => {
+    if (!transactions || transactions.length === 0) return;
+    const txCats = Array.from(new Set(transactions.map(t => t.category).filter(Boolean)));
+    if (txCats.length === 0) return;
+    setAvailableCategories(prev => {
+      if (prev.length === 0) return txCats;
+      const merged = new Set([...prev, ...txCats]);
+      return Array.from(merged);
+    });
+  }, [transactions]);
 
 
   // When filters change, reset to first page and fetch
@@ -180,19 +234,22 @@ export const Transactions: React.FC = () => {
 
   const startIndex = (currentPage - 1) * itemsPerPage;
 
-  const bankOptions = availableBanks.map(bank => ({
-    value: bank,
-    label: bank,
-    // count is not available without all transactions, so omit or set to 0
-    count: 0
-  }));
+  const bankOptions = availableBanks.map(bank => {
+    const record = bankRecords.find(b => b.name === bank);
+    return {
+      value: bank,
+      label: bank,
+      count: record ? record.transactionCount : 0
+    };
+  });
 
   const categoryOptions = availableCategories.map(category => {
-    const found = categoryCounts.find(c => c.category === category);
+    const record = categoryRecords.find(c => c.name === category);
+    const dynamic = categoryCounts.find(c => c.category === category);
     return {
       value: category,
       label: category,
-      count: found ? found.count : 0
+      count: dynamic ? dynamic.count : (record ? record.transactionCount : 0)
     };
   });
 
@@ -213,19 +270,18 @@ export const Transactions: React.FC = () => {
     );
   }
 
-  if (transactions.length === 0 && !loading) {
-    return (
-      <EmptyState
-        icon={Tag}
-        title="No transactions found"
-        description="Upload your bank statements to see your transactions here"
-        action={{
-          label: 'Upload Statement',
-          onClick: () => window.location.href = '/upload'
-        }}
-      />
-    );
-  }
+  // Instead of hard early return, handle empty states within main render so Refine Filters button can open panel
+  const noData = !loading && transactions.length === 0;
+  const isFilteredView = noData && (
+    (availableBanks.length > 0 && filters.banks.length < availableBanks.length) ||
+    !!filters.dateRange.start ||
+    !!filters.dateRange.end ||
+    filters.categories.length > 0 ||
+    filters.amountRange.min !== null ||
+    filters.amountRange.max !== null ||
+    filters.transactionType !== 'all' ||
+    !!filters.description
+  );
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -273,6 +329,30 @@ export const Transactions: React.FC = () => {
           )}
         </div>
       </div>
+
+      {isFilteredView && !showFilters && (
+        <div className="card text-center py-12">
+          <Tag className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">No results for your filters</h3>
+            <p className="text-gray-600 mb-4 max-w-md mx-auto">Adjust filters or reset to view transactions.</p>
+            <div className="flex items-center justify-center gap-3">
+              <button onClick={resetFilters} className="btn-primary">Reset Filters</button>
+              <button onClick={() => setShowFilters(true)} className="btn-secondary">Refine Filters</button>
+            </div>
+        </div>
+      )}
+
+      {noData && !isFilteredView && (
+        <EmptyState
+          icon={Tag}
+          title="No transactions found"
+          description="Upload your bank statements to see your transactions here"
+          action={{
+            label: 'Upload Statement',
+            onClick: () => window.location.href = '/upload'
+          }}
+        />
+      )}
 
       {/* Expired Subscription Banner */}
       {usage && usage.status === 'EXPIRED' && (

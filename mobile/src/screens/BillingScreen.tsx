@@ -9,16 +9,19 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-// Razorpay native module isn't available in Expo Go; we'll require it dynamically only in a dev build or custom build.
 import Constants from 'expo-constants';
+// Dynamically load Razorpay only on a native build (won't work in Expo Go)
 let RazorpayCheckout: any = null;
-const isExpoGo = Constants.appOwnership === 'expo';
+const appOwnership = Constants.appOwnership; // 'expo' | 'standalone' | 'guest'
+const isExpoGo = appOwnership === 'expo';
 if (!isExpoGo) {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    RazorpayCheckout = require('react-native-razorpay');
+    const mod = require('react-native-razorpay');
+    // Handle both CommonJS and ES Module default export shapes
+    RazorpayCheckout = mod?.default?.open ? mod.default : (mod?.open ? mod : mod?.default ?? null);
   } catch (e) {
-    // Ignore – module not present (e.g., web platform or missing native build)
+    RazorpayCheckout = null; // Not available in this build
   }
 }
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
@@ -41,7 +44,8 @@ interface Plan {
   buttonVariant: 'secondary' | 'primary' | 'premium';
 }
 
-const PLANS: Plan[] = [
+// Remove static PLANS; will fetch from API, but keep fallback
+const FALLBACK_PLANS: Plan[] = [
   {
     id: 'FREE',
     name: 'Free Plan',
@@ -107,9 +111,12 @@ export const BillingScreen: React.FC = () => {
   const [usage, setUsage] = useState<UsageStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [upgrading, setUpgrading] = useState<string | null>(null);
+  const [plans, setPlans] = useState<Plan[]>(FALLBACK_PLANS);
+  const [plansLoading, setPlansLoading] = useState(false);
 
   useEffect(() => {
     fetchUsageStats();
+    fetchPlans();
   }, []);
 
   const fetchUsageStats = async () => {
@@ -132,6 +139,39 @@ export const BillingScreen: React.FC = () => {
     }
   };
 
+  const fetchPlans = async () => {
+    try {
+      setPlansLoading(true);
+      // Determine region from device locale
+      let region = 'IN';
+      const locale = (Intl as any)?.DateTimeFormat?.().resolvedOptions?.().locale;
+      if (locale && locale.includes('-')) {
+        region = locale.split('-')[1].toUpperCase();
+      }
+      const data = await apiCall<any[]>('GET', `/plans?region=${region}`);
+      // Map backend Plan to mobile Plan shape
+      const mapped: Plan[] = data.map(p => ({
+        id: p.planType,
+        name: p.planType === 'FREE' ? 'Free Plan' : p.planType === 'PRO' ? 'Pro Plan' : 'Premium Plan',
+        price: (p.amount / 100),
+        currency: p.currency === 'INR' ? '₹' : p.currency,
+        period: 'month',
+        description: p.planType === 'FREE' ? 'Ideal for casual users or those wanting to try out the service' : p.planType === 'PRO' ? 'Perfect for power users tracking multiple accounts' : 'Best for business, heavy users, or those who want no limits',
+        statementsLimit: p.statementsPerMonth === -1 ? 'Unlimited' : String(p.statementsPerMonth),
+        pagesPerStatement: p.pagesPerStatement === -1 ? 'Unlimited' : String(p.pagesPerStatement),
+        features: (p.features || '').split(',').map((f: string) => f.trim()).filter((f: string) => !!f),
+        popular: p.planType === 'PRO',
+        buttonText: p.planType === 'FREE' ? 'Current Plan' : (p.planType === 'PRO' ? 'Upgrade to Pro' : 'Upgrade to Premium'),
+        buttonVariant: p.planType === 'FREE' ? 'secondary' : (p.planType === 'PRO' ? 'primary' : 'premium')
+      }));
+      if (mapped.length) setPlans(mapped);
+    } catch (e) {
+      // Silent fallback to existing static plans
+    } finally {
+      setPlansLoading(false);
+    }
+  };
+
   const getUsagePercentage = (used: number, limit: number | string) => {
     if (limit === 'unlimited' || limit === -1) return 0;
     return (used / Number(limit)) * 100;
@@ -144,8 +184,8 @@ export const BillingScreen: React.FC = () => {
   };
 
   const getCurrentPlan = () => {
-    if (!usage) return PLANS[0];
-    return PLANS.find(plan => plan.id === usage.planType) || PLANS[0];
+    if (!usage) return plans[0];
+    return plans.find(plan => plan.id === usage.planType) || plans[0];
   };
 
   const handleUpgrade = async (planId: string) => {
@@ -163,11 +203,13 @@ export const BillingScreen: React.FC = () => {
               // 1. Call backend to create Razorpay order
               const resp = await apiCall<any>('POST', '/payment/order', { planType: planId });
               if (!resp || !resp.orderId) throw new Error('Order creation failed');
-              if (isExpoGo || !RazorpayCheckout) {
+              if (isExpoGo || !RazorpayCheckout || typeof RazorpayCheckout.open !== 'function') {
                 // Simulate success flow inside Expo Go (no native module support)
                 Alert.alert(
                   'Simulated Payment',
-                  'Running in Expo Go – Razorpay native module not available. Simulating successful upgrade.'
+                  !isExpoGo
+                    ? 'Razorpay module not linked or open() missing. Simulating successful upgrade.'
+                    : 'Running in Expo Go – native Razorpay not available. Simulating successful upgrade.'
                 );
                 // Optionally call a backend test endpoint to mark upgrade (commented)
                 // await apiCall('POST', '/payment/mock-upgrade', { planType: planId });
@@ -316,7 +358,7 @@ export const BillingScreen: React.FC = () => {
         <Text style={styles.plansTitle}>Choose Your Plan</Text>
         <Text style={styles.plansSubtitle}>Select the plan that best fits your needs</Text>
 
-        {PLANS.map((plan) => (
+        {plans.map((plan) => (
           <View
             key={plan.id}
             style={[
@@ -424,6 +466,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 15,
     elevation: 10,
+    marginBottom: 14,
   },
   headerTitle: {
     fontSize: 28,

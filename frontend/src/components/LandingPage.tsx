@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ArrowRight,
   Smartphone,
@@ -42,12 +42,38 @@ export const LandingPage: React.FC = () => {
   const [contactForm, setContactForm] = useState({ name: '', email: '', message: '' });
   const [contactSubmitting, setContactSubmitting] = useState(false);
   const [contactSent, setContactSent] = useState(false);
+  const [plans, setPlans] = useState<any[]>([]);
+  const [plansLoading, setPlansLoading] = useState(false);
+  const [plansError, setPlansError] = useState<string | null>(null);
 
   const handleEmailSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     console.log('Email submitted:', email);
     setEmail('');
   };
+
+  useEffect(() => {
+    const fetchPlans = async () => {
+      try {
+        setPlansLoading(true);
+        setPlansError(null);
+        let region = '';
+        if (navigator.language && navigator.language.includes('-')) {
+          region = navigator.language.split('-')[1].toUpperCase();
+        }
+        if (!region) region = 'IN';
+        const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/public/plans?region=${region}`);
+        if (!res.ok) throw new Error('Failed to load plans');
+        const data = await res.json();
+        setPlans(data);
+      } catch (e: any) {
+        setPlansError(e.message || 'Unable to load plans');
+      } finally {
+        setPlansLoading(false);
+      }
+    };
+    fetchPlans();
+  }, []);
 
   return (
     <div className="min-h-screen bg-white">
@@ -490,138 +516,39 @@ export const LandingPage: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Free Plan */}
-            <div className="card border-2 border-brand-gray-200 hover:border-brand-green-300 transition-all duration-300">
-              <div className="text-center mb-6">
-                <div className="w-16 h-16 bg-gradient-to-br from-brand-gray-100 to-brand-gray-200 rounded-3xl flex items-center justify-center mx-auto mb-4">
-                  <Sparkles className="w-8 h-8 text-brand-gray-600" />
+            {plansLoading && <div className="col-span-3 text-center text-gray-500">Loading plans...</div>}
+            {plansError && <div className="col-span-3 text-center text-red-600 text-sm">{plansError}</div>}
+            {!plansLoading && !plansError && plans.map(p => {
+              const price = (p.amount / 100).toFixed(0);
+              const statements = p.statementsPerMonth === -1 ? 'Unlimited' : p.statementsPerMonth;
+              const pages = p.pagesPerStatement === -1 ? 'Unlimited' : p.pagesPerStatement;
+              const featureList = (p.features || '').split(',').map((f: string) => f.trim()).filter(Boolean);
+              const popular = p.planType === 'PRO';
+              return (
+                <div key={p.id} className={`relative card-funky p-6 flex flex-col ${popular ? 'border-primary-400 ring-2 ring-primary-300' : ''}`}>
+                  {popular && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary-600 text-white text-xs font-semibold px-3 py-1 rounded-full shadow">Most Popular</div>
+                  )}
+                  <div className="mb-4 text-center">
+                    <h3 className="text-xl font-bold text-gray-900 mb-2">{p.planType.charAt(0) + p.planType.slice(1).toLowerCase()} Plan</h3>
+                    <p className="text-gray-600 text-sm">{p.planType === 'FREE' ? 'Ideal to get started' : p.planType === 'PRO' ? 'For power users' : 'For heavy / business users'}</p>
+                  </div>
+                  <div className="flex items-end justify-center mb-6">
+                    <span className="text-4xl font-extrabold text-gray-900">{p.currency === 'INR' ? '₹' : p.currency === 'USD' ? '$' : p.currency}</span>
+                    <span className="text-5xl font-extrabold text-gray-900 ml-1">{price}</span>
+                    <span className="text-gray-500 ml-2 mb-2">/month</span>
+                  </div>
+                  <ul className="space-y-2 mb-6 flex-1">
+                    <li className="text-sm text-gray-700">{statements} statements / month</li>
+                    <li className="text-sm text-gray-700">{pages} pages / statement</li>
+                    {featureList.map((f: string, idx: number) => (
+                      <li key={idx} className="text-sm text-gray-600 flex items-start"><span className="text-primary-500 mr-2">✔</span>{f}</li>
+                    ))}
+                  </ul>
+                  <button className={`w-full py-3 rounded-lg font-semibold transition ${p.planType === 'FREE' ? 'bg-gray-100 text-gray-700' : popular ? 'bg-primary-600 text-white hover:bg-primary-700' : 'bg-secondary-600 text-white hover:bg-secondary-700'}`}>{p.planType === 'FREE' ? 'Get Started Free' : 'Get Started'}</button>
                 </div>
-                <h3 className="text-xl font-heading font-bold text-brand-gray-900 mb-2">Free Plan</h3>
-                <div className="mb-2">
-                  <span className="text-4xl font-heading font-bold text-brand-gray-900">₹0</span>
-                  <span className="text-brand-gray-500">/forever</span>
-                </div>
-                <p className="text-sm text-brand-gray-600">Perfect for getting started</p>
-              </div>
-
-              <div className="space-y-4 mb-6">
-                <div className="flex items-center space-x-3">
-                  <CheckCircle className="w-5 h-5 text-brand-green-500" />
-                  <span className="text-sm text-brand-gray-700">3 statements per month</span>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <CheckCircle className="w-5 h-5 text-brand-green-500" />
-                  <span className="text-sm text-brand-gray-700">Up to 10 pages per statement</span>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <CheckCircle className="w-5 h-5 text-brand-green-500" />
-                  <span className="text-sm text-brand-gray-700">AI parsing & categorization</span>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <CheckCircle className="w-5 h-5 text-brand-green-500" />
-                  <span className="text-sm text-brand-gray-700">Basic dashboard & analytics</span>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <CheckCircle className="w-5 h-5 text-brand-green-500" />
-                  <span className="text-sm text-brand-gray-700">Email support</span>
-                </div>
-              </div>
-
-              <a href="/login" className="btn-secondary w-full text-center">
-                Get Started Free
-              </a>
-            </div>
-
-            {/* Pro Plan */}
-            <div className="card border-2 border-brand-green-400 bg-gradient-to-br from-brand-green-50 to-white relative transform scale-105 shadow-funky-lg">
-              <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                <span className="inline-flex items-center px-4 py-2 rounded-full text-sm font-bold bg-gradient-green text-white shadow-glow-green animate-pulse-slow">
-                  <Star className="w-4 h-4 mr-1" />
-                  Most Popular
-                </span>
-              </div>
-
-              <div className="text-center mb-6 pt-4">
-                <div className="w-16 h-16 bg-gradient-green rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-glow-green">
-                  <TrendingUp className="w-8 h-8 text-white" />
-                </div>
-                <h3 className="text-xl font-heading font-bold text-brand-gray-900 mb-2">Pro Plan</h3>
-                <div className="mb-2">
-                  <span className="text-4xl font-heading font-bold gradient-text">₹129</span>
-                  <span className="text-brand-gray-500">/month</span>
-                </div>
-                <p className="text-sm text-brand-gray-600">For power users and small businesses</p>
-              </div>
-
-              <div className="space-y-4 mb-6">
-                <div className="flex items-center space-x-3">
-                  <CheckCircle className="w-5 h-5 text-brand-green-500" />
-                  <span className="text-sm text-brand-gray-700">5 statements per month</span>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <CheckCircle className="w-5 h-5 text-brand-green-500" />
-                  <span className="text-sm text-brand-gray-700">Up to 50 pages per statement</span>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <CheckCircle className="w-5 h-5 text-brand-green-500" />
-                  <span className="text-sm text-brand-gray-700">Advanced analytics & trends</span>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <CheckCircle className="w-5 h-5 text-brand-green-500" />
-                  <span className="text-sm text-brand-gray-700">Category breakdown</span>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <CheckCircle className="w-5 h-5 text-brand-green-500" />
-                  <span className="text-sm text-brand-gray-700">Priority support</span>
-                </div>
-              </div>
-
-              <a href="/login" className="btn-primary w-full text-center">
-                Start Pro Trial
-              </a>
-            </div>
-
-            {/* Premium Plan */}
-            <div className="card border-2 border-accent-400 bg-gradient-to-br from-accent-50 to-white relative">
-              <div className="text-center mb-6">
-                <div className="w-16 h-16 bg-gradient-funky rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-glow-yellow">
-                  <Target className="w-8 h-8 text-white" />
-                </div>
-                <h3 className="text-xl font-heading font-bold text-brand-gray-900 mb-2">Premium Plan</h3>
-                <div className="mb-2">
-                  <span className="text-4xl font-heading font-bold gradient-text">₹299</span>
-                  <span className="text-brand-gray-500">/month</span>
-                </div>
-                <p className="text-sm text-brand-gray-600">For businesses and heavy users</p>
-              </div>
-
-              <div className="space-y-4 mb-6">
-                <div className="flex items-center space-x-3">
-                  <CheckCircle className="w-5 h-5 text-brand-green-500" />
-                  <span className="text-sm text-brand-gray-700">Unlimited statements</span>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <CheckCircle className="w-5 h-5 text-brand-green-500" />
-                  <span className="text-sm text-brand-gray-700">Up to 100 pages per statement</span>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <CheckCircle className="w-5 h-5 text-brand-green-500" />
-                  <span className="text-sm text-brand-gray-700">Full analytics suite</span>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <CheckCircle className="w-5 h-5 text-brand-green-500" />
-                  <span className="text-sm text-brand-gray-700">Priority processing</span>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <CheckCircle className="w-5 h-5 text-brand-green-500" />
-                  <span className="text-sm text-brand-gray-700">Early access to features</span>
-                </div>
-              </div>
-
-              <button className="btn-accent w-full">
-                Start Premium Trial
-              </button>
-            </div>
+              );
+            })}
           </div>
         </div>
       </section>

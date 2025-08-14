@@ -2,6 +2,10 @@ package com.expensetracker.service;
 
 import com.expensetracker.repository.RawStatementRepository;
 import com.expensetracker.repository.TransactionRepository;
+import com.expensetracker.repository.BankRepository;
+import com.expensetracker.repository.CategoryRepository;
+import com.expensetracker.model.Bank;
+import com.expensetracker.model.Category;
 import com.expensetracker.repository.UserRepository;
 import com.expensetracker.model.RawStatement;
 import com.expensetracker.model.Transaction;
@@ -24,13 +28,17 @@ import java.util.*;
 public class StatementService {
     private final RawStatementRepository rawStatementRepository;
     private final TransactionRepository transactionRepository;
+    private final BankRepository bankRepository;
+    private final CategoryRepository categoryRepository;
     private final UserRepository userRepository;
 
     @Autowired
-    public StatementService(RawStatementRepository rawStatementRepository, TransactionRepository transactionRepository, UserRepository userRepository) {
+    public StatementService(RawStatementRepository rawStatementRepository, TransactionRepository transactionRepository, UserRepository userRepository, BankRepository bankRepository, CategoryRepository categoryRepository) {
         this.rawStatementRepository = rawStatementRepository;
         this.transactionRepository = transactionRepository;
         this.userRepository = userRepository;
+        this.bankRepository = bankRepository;
+        this.categoryRepository = categoryRepository;
     }
 
     // Backwards compatible existing signature – delegates with no password
@@ -80,6 +88,8 @@ public class StatementService {
             RawStatement rawStatement = storeRawStatement(user, file.getOriginalFilename(), output, numPages);
             List<Transaction> transactions = parseTransactions(output, user, rawStatement.getBankName());
             transactionRepository.saveAll(transactions);
+            // Aggregate and upsert banks & categories counts
+            upsertBanksAndCategories(user, transactions);
             tempFile.delete();
             return new StatementUploadResponseDto(true, AppConstants.MSG_STATEMENT_SUCCESS);
         } catch (IOException | InterruptedException e) {
@@ -243,5 +253,48 @@ private RawStatement storeRawStatement(User user, String filename, String rawJso
             transactions.add(txn);
         }
         return transactions;
+    }
+
+    private void upsertBanksAndCategories(User user, List<Transaction> transactions) {
+        Map<String, Long> bankCounts = new HashMap<>();
+        Map<String, Long> categoryCounts = new HashMap<>();
+        for (Transaction t : transactions) {
+            String bank = t.getBankName() != null ? t.getBankName().trim() : AppConstants.UNKNOWN;
+            String cat = t.getCategory() != null ? t.getCategory().trim() : AppConstants.UNKNOWN;
+            if (bank.isEmpty()) bank = AppConstants.UNKNOWN;
+            if (cat.isEmpty()) cat = AppConstants.UNKNOWN;
+            bankCounts.put(bank, bankCounts.getOrDefault(bank, 0L) + 1);
+            categoryCounts.put(cat, categoryCounts.getOrDefault(cat, 0L) + 1);
+        }
+        // Upsert banks
+        for (var entry : bankCounts.entrySet()) {
+            String name = entry.getKey();
+            Long count = entry.getValue();
+            Bank bank = bankRepository.findByUserAndNameIgnoreCase(user, name).orElse(null);
+            if (bank == null) {
+                bank = new Bank();
+                bank.setName(name);
+                bank.setUser(user);
+                bank.setTransactionCount(count);
+            } else {
+                bank.increment(count);
+            }
+            bankRepository.save(bank);
+        }
+        // Upsert categories
+        for (var entry : categoryCounts.entrySet()) {
+            String name = entry.getKey();
+            Long count = entry.getValue();
+            Category cat = categoryRepository.findByUserAndNameIgnoreCase(user, name).orElse(null);
+            if (cat == null) {
+                cat = new Category();
+                cat.setName(name);
+                cat.setUser(user);
+                cat.setTransactionCount(count);
+            } else {
+                cat.increment(count);
+            }
+            categoryRepository.save(cat);
+        }
     }
 }

@@ -436,7 +436,7 @@ export const Billing: React.FC = () => {
               <div className="text-center mb-6">
                 <h3 className="text-xl font-bold text-gray-900 mb-2">{plan.name}</h3>
                 <div className="mb-2">
-                  <span className="text-3xl font-bold text-gray-900">{currencySymbol(plan.currency)}{plan.price}</span>
+                  <span className="text-3xl font-bold text-gray-900">{currencySymbol(plan.currency)}{(plan.price / 100).toFixed(0)}</span>
                   {Number(plan.price) > 0 && <span className="text-gray-500">/{plan.period}</span>}
                 </div>
                 <p className="text-sm text-gray-600">{plan.description}</p>

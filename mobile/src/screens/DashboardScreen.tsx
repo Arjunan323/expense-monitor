@@ -35,6 +35,8 @@ export const DashboardScreen: React.FC = () => {
   const [tempDateRange, setTempDateRange] = useState({ start: '', end: '' });
   const [activeDatePicker, setActiveDatePicker] = useState<'start' | 'end' | null>(null);
   const [showPerBank, setShowPerBank] = useState(false);
+  const [hasAnyTransactions, setHasAnyTransactions] = useState<boolean | null>(null);
+  const [lastFilterAlertKey, setLastFilterAlertKey] = useState<string | null>(null);
   const navigation = useNavigation();
 
   useEffect(() => {
@@ -57,6 +59,13 @@ export const DashboardScreen: React.FC = () => {
       
       const data = await apiCall<DashboardStats>('GET', `/dashboard/summary?${params.toString()}`);
       setStats(data);
+      // Capture whether user has any transactions overall (only when no filters applied)
+      if (!dateRange.start && !dateRange.end && selectedBanks.length === 0 && hasAnyTransactions === null) {
+        setHasAnyTransactions(data.transactionCount > 0);
+      } else if (hasAnyTransactions === null) {
+        // If first load happened with implicit bank auto-selection later, still infer
+        setHasAnyTransactions(data.transactionCount > 0);
+      }
       
       // Initialize selected banks if not set
       if (selectedBanks.length === 0 && data.bankSources.length > 0) {
@@ -162,12 +171,43 @@ export const DashboardScreen: React.FC = () => {
   const getFilteredStats = () => {
     return stats;
   };
+  // Compute filtersActive early so alert effect can run before any early return
+  const filtersActive = (
+    (stats && selectedBanks.length > 0 && selectedBanks.length < stats.bankSources.length) ||
+    !!dateRange.start || !!dateRange.end
+  );
+
+  // Alert about filtered empty results (must be declared before any conditional return to keep hook order stable)
+  useEffect(() => {
+    if (loading) return; // wait until data loaded
+    if (!stats || !hasAnyTransactions) return;
+    if (stats.transactionCount === 0 && filtersActive) {
+      const key = `${selectedBanks.sort().join(',')}|${dateRange.start}|${dateRange.end}`;
+      if (key !== lastFilterAlertKey) {
+        const buttons: any[] = [
+          { text: 'Reset', onPress: clearFilters, style: 'destructive' as const },
+          { text: 'Dates', onPress: openDateRangePicker },
+        ];
+        if (stats.isMultiBank) {
+          buttons.push({ text: 'Banks', onPress: () => setShowBankSelector(true) });
+        }
+        buttons.push({ text: 'Close', style: 'cancel' as const });
+        Alert.alert(
+          'No results for your filters',
+          'Try adjusting your date range or bank selection to see results.',
+          buttons
+        );
+        setLastFilterAlertKey(key);
+      }
+    }
+  }, [loading, stats, hasAnyTransactions, selectedBanks, dateRange, filtersActive, lastFilterAlertKey]);
 
   if (loading) {
     return <LoadingSpinner />;
   }
 
-  if (!stats || stats.transactionCount === 0) {
+  if ((!stats || stats.transactionCount === 0) && !hasAnyTransactions && !filtersActive) {
+    // True no data state
     return (
       <View style={styles.container}>
         <View style={styles.emptyHeader}>
@@ -176,8 +216,8 @@ export const DashboardScreen: React.FC = () => {
               <Text style={styles.logoEmoji}>✂️</Text>
             </View>
           </View>
-          <Text style={styles.brandName}>CutTheSpend</Text>
-          <Text style={styles.tagline}>See it. Cut it. Save more.</Text>
+          <Text style={styles.emptyBrandName}>CutTheSpend</Text>
+          <Text style={styles.emptyTagline}>See it. Cut it. Save more.</Text>
           <Text style={styles.welcomeTitle}>Welcome to your financial freedom!</Text>
           <Text style={styles.welcomeSubtitle}>Get started by uploading your first bank statement</Text>
         </View>
@@ -204,11 +244,9 @@ export const DashboardScreen: React.FC = () => {
   })) || [];
 
   return (
-    <ScrollView 
+    <ScrollView
       style={styles.container}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
       {/* Funky Header */}
       <View style={styles.header}>
@@ -233,22 +271,22 @@ export const DashboardScreen: React.FC = () => {
         </View>
 
         <Text style={styles.headerTitle}>💰 Financial Overview</Text>
-        {stats.lastUpdateTime && (
+  {stats?.lastUpdateTime && (
           <Text style={styles.lastUpdate}>
-            Last updated: {formatDate(stats.lastUpdateTime)}
+            Last updated: {formatDate(stats!.lastUpdateTime)}
           </Text>
         )}
         
         {/* Funky Filters */}
         <View style={styles.filtersContainer}>
-          {stats.isMultiBank && (
+          {stats?.isMultiBank && (
             <TouchableOpacity 
               style={[styles.filterButton, styles.bankFilterButton]}
               onPress={() => setShowBankSelector(true)}
             >
               <Ionicons name="business" size={16} color="#FFFFFF" />
               <Text style={styles.filterButtonText}>
-                {selectedBanks.length === stats.bankSources.length 
+                {selectedBanks.length === stats!.bankSources.length
                   ? 'All Banks' 
                   : selectedBanks.length === 1 
                   ? selectedBanks[0] 
@@ -271,7 +309,7 @@ export const DashboardScreen: React.FC = () => {
             </Text>
           </TouchableOpacity>
           
-          {(selectedBanks.length < stats.bankSources.length || dateRange.start || dateRange.end) && (
+          {(stats && (selectedBanks.length < stats.bankSources.length || dateRange.start || dateRange.end)) && (
             <TouchableOpacity 
               style={styles.clearFiltersButton}
               onPress={clearFilters}
@@ -341,7 +379,7 @@ export const DashboardScreen: React.FC = () => {
       </View>
 
       {/* Per-Bank Toggle */}
-      {stats.isMultiBank && (
+  {stats?.isMultiBank && (
         <View style={styles.toggleContainer}>
           <TouchableOpacity
             style={styles.toggleButton}
@@ -544,8 +582,7 @@ export const DashboardScreen: React.FC = () => {
                   <Ionicons name="close-circle" size={28} color="#EF4444" />
                 </TouchableOpacity>
               </View>
-              
-              <View style={styles.dateRangeContent}>
+              <ScrollView style={styles.dateRangeContent}>
                 {/* Start Date Section */}
                 <View style={styles.dateSection}>
                   <Text style={styles.dateSectionTitle}>From Date</Text>
@@ -562,7 +599,6 @@ export const DashboardScreen: React.FC = () => {
                     </View>
                   </TouchableOpacity>
                 </View>
-
                 {/* End Date Section */}
                 <View style={styles.dateSection}>
                   <Text style={styles.dateSectionTitle}>To Date</Text>
@@ -593,12 +629,6 @@ export const DashboardScreen: React.FC = () => {
                     <Text style={styles.dateHint}>Please select start date first</Text>
                   )}
                 </View>
-        </Modal>
-      )}
-    </ScrollView>
-  );
-};
-
                 {/* Quick Date Range Options */}
                 <View style={styles.quickRangeSection}>
                   <Text style={styles.quickRangeTitle}>Quick Select</Text>
@@ -639,6 +669,32 @@ export const DashboardScreen: React.FC = () => {
                           start: last90Days.toISOString().split('T')[0],
                           end: today.toISOString().split('T')[0]
                         });
+                      }}
+                    >
+                      <Text style={styles.quickRangeButtonText}>Last 90 Days</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </ScrollView>
+              {/* Native Date Picker (iOS/Android) */}
+              {activeDatePicker && (
+                <DateTimePicker
+                  value={
+                    activeDatePicker === 'start' 
+                      ? (tempDateRange.start ? new Date(tempDateRange.start) : new Date())
+                      : (tempDateRange.end ? new Date(tempDateRange.end) : new Date())
+                  }
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={handleDatePickerChange}
+                  maximumDate={new Date()}
+                  minimumDate={
+                    activeDatePicker === 'end' && tempDateRange.start 
+                      ? new Date(tempDateRange.start) 
+                      : undefined
+                  }
+                />
+              )}
               {/* Action Buttons */}
               <View style={styles.dateRangeActions}>
                 <TouchableOpacity
@@ -665,36 +721,11 @@ export const DashboardScreen: React.FC = () => {
               </View>
             </View>
           </View>
-                      }}
-                    >
-                      <Text style={styles.quickRangeButtonText}>Last 90 Days</Text>
-      {/* Native Date Picker (iOS/Android) */}
-      {activeDatePicker && (
-        <DateTimePicker
-          value={
-            activeDatePicker === 'start' 
-              ? (tempDateRange.start ? new Date(tempDateRange.start) : new Date())
-              : (tempDateRange.end ? new Date(tempDateRange.end) : new Date())
-          }
-          mode="date"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={handleDatePickerChange}
-          maximumDate={
-            activeDatePicker === 'end' && tempDateRange.start 
-              ? new Date() 
-              : new Date()
-          }
-          minimumDate={
-            activeDatePicker === 'end' && tempDateRange.start 
-              ? new Date(tempDateRange.start) 
-              : undefined
-          }
-        />
+        </Modal>
       )}
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
+    </ScrollView>
+  );
+};
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -721,14 +752,15 @@ const styles = StyleSheet.create({
     shadowRadius: 15,
     elevation: 10,
   },
-  brandName: {
+  // Styles for empty state brand heading
+  emptyBrandName: {
     fontSize: 28,
     fontWeight: 'bold',
     color: '#00B77D',
     marginBottom: 4,
     textAlign: 'center',
   },
-  tagline: {
+  emptyTagline: {
     fontSize: 14,
     color: '#6B7280',
     fontWeight: '600',
@@ -963,6 +995,7 @@ const styles = StyleSheet.create({
   categorySection: {
     paddingHorizontal: 24,
     marginTop: 24,
+    
   },
   categoryContainer: {
     backgroundColor: '#FFFFFF',
@@ -973,6 +1006,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 12,
     elevation: 8,
+    marginTop: 14,
   },
   categoryItem: {
     flexDirection: 'row',
@@ -1109,6 +1143,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    marginBottom: 8,
+    backgroundColor: '#F9FAFB',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  bankList: {
+    maxHeight: 300,
+  },
+  bankOption: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -1164,11 +1213,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
+  // (single modalOverlay definition kept earlier)
   dateRangeModal: {
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 30,
@@ -1308,7 +1353,7 @@ const styles = StyleSheet.create({
   },
   applyButtonText: {
     fontSize: 16,
-    fontSize: 16,
     fontWeight: 'bold',
+    color: '#FFFFFF',
   },
 });

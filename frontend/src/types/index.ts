@@ -113,6 +113,19 @@ export interface PaginatedResponse<T> {
   number: number;
 }
 
+// Bank & Category master records (aggregated counts)
+export interface BankRecord {
+  id: number;
+  name: string;
+  transactionCount: number;
+}
+
+export interface CategoryRecord {
+  id: number;
+  name: string;
+  transactionCount: number;
+}
+
 export interface TransactionFilters {
   banks: string[];
   dateRange: {

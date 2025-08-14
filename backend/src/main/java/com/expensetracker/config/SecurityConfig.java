@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.lang.NonNull;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -17,7 +18,7 @@ public class SecurityConfig {
     public org.springframework.web.servlet.config.annotation.WebMvcConfigurer corsConfigurer() {
         return new org.springframework.web.servlet.config.annotation.WebMvcConfigurer() {
             @Override
-            public void addCorsMappings(org.springframework.web.servlet.config.annotation.CorsRegistry registry) {
+            public void addCorsMappings(@NonNull org.springframework.web.servlet.config.annotation.CorsRegistry registry) {
                 registry.addMapping("/**")
                     .allowedOrigins("http://localhost:3000") // Update to your frontend URL if needed
                     .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
@@ -32,7 +33,7 @@ public class SecurityConfig {
         http
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/auth/**", "/payment/webhook").permitAll()
+                .requestMatchers("/auth/**", "/payment/webhook", "/public/plans/**").permitAll()
                 .anyRequest().authenticated()
             )
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

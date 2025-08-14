@@ -209,37 +209,38 @@ export const StatementsScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Uploaded Statements</Text>
-        <Text style={styles.headerSubtitle}>
-          Manage your uploaded bank statements and re-process if needed
-        </Text>
-      </View>
-
       <FlatList
+        style={styles.list}
         data={statements}
         renderItem={renderStatement}
         keyExtractor={(item) => item.id.toString()}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        contentContainerStyle={styles.listContainerExpanded}
+        ListHeaderComponent={
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>Uploaded Statements</Text>
+            <Text style={styles.headerSubtitle}>
+              Manage your uploaded bank statements and re-process if needed
+            </Text>
+          </View>
         }
-        contentContainerStyle={styles.listContainer}
+        ListFooterComponent={
+          <View style={styles.helpCard}>
+            <Text style={styles.helpTitle}>Statement Management</Text>
+            <View style={styles.helpContent}>
+              <Text style={styles.helpText}>
+                <Text style={styles.helpBold}>Re-parse:</Text> Use this if we've improved our parsing algorithms and you want to re-process an old statement.
+              </Text>
+              <Text style={styles.helpText}>
+                <Text style={styles.helpBold}>Delete:</Text> Permanently removes the statement and all associated transactions from your account.
+              </Text>
+              <Text style={styles.helpText}>
+                <Text style={styles.helpBold}>Warnings:</Text> Indicate potential issues during parsing - the data may still be accurate but should be reviewed.
+              </Text>
+            </View>
+          </View>
+        }
       />
-
-      <View style={styles.helpCard}>
-        <Text style={styles.helpTitle}>Statement Management</Text>
-        <View style={styles.helpContent}>
-          <Text style={styles.helpText}>
-            <Text style={styles.helpBold}>Re-parse:</Text> Use this if we've improved our parsing algorithms and you want to re-process an old statement.
-          </Text>
-          <Text style={styles.helpText}>
-            <Text style={styles.helpBold}>Delete:</Text> Permanently removes the statement and all associated transactions from your account.
-          </Text>
-          <Text style={styles.helpText}>
-            <Text style={styles.helpBold}>Warnings:</Text> Indicate potential issues during parsing - the data may still be accurate but should be reviewed.
-          </Text>
-        </View>
-      </View>
     </View>
   );
 };
@@ -252,16 +253,17 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#0077B6',
-    borderBottomLeftRadius: 25,
-    borderBottomRightRadius: 25,
-    paddingTop: 60,
-    paddingBottom: 24,
-    paddingHorizontal: 24,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    paddingTop: 56,
+    paddingBottom: 20,
+    paddingHorizontal: 16,
     shadowColor: '#0077B6',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 15,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
+    marginBottom: 8,
   },
   headerTitle: {
     fontSize: 28,
@@ -278,19 +280,23 @@ const styles = StyleSheet.create({
   listContainer: {
     paddingHorizontal: 24,
   },
+  list: {
+    flex: 1,
+  },
+  listContainerExpanded: {
+    paddingHorizontal: 12,
+    paddingBottom: 110,
+  },
   statementItem: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 10,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
   },
   statementHeader: {
     flexDirection: 'row',
@@ -365,9 +371,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#dbeafe',
     borderColor: '#93c5fd',
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 16,
-    margin: 24,
+    borderRadius: 10,
+    padding: 14,
+    marginHorizontal: 12,
+    marginTop: 8,
+    marginBottom: 24,
   },
   helpTitle: {
     fontSize: 18,

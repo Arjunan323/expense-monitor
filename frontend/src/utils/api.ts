@@ -9,6 +9,7 @@ interface ImportMeta {
 
 import axios, { AxiosResponse } from 'axios';
 import { ApiResponse, PaginatedResponse } from '../types';
+import { BankRecord, CategoryRecord } from '../types';
 import toast from 'react-hot-toast';
 import { AnalyticsSummary, AnalyticsFeedbackPayload, FeedbackResponse } from '../types';
 
@@ -111,4 +112,13 @@ export const submitAnalyticsFeedback = async (payload: AnalyticsFeedbackPayload)
     type: 'ANALYTICS',
     meta: JSON.stringify({ features: payload.features })
   });
+};
+
+// Banks & Categories master data
+export const fetchBanks = async (): Promise<BankRecord[]> => {
+  return apiCall<BankRecord[]>('GET', '/banks');
+};
+
+export const fetchCategories = async (): Promise<CategoryRecord[]> => {
+  return apiCall<CategoryRecord[]>('GET', '/categories');
 };

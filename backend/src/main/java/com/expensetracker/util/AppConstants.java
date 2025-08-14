@@ -16,7 +16,7 @@ public class AppConstants {
 
     public static final String RAZORPAY_KEY = "rzp_test_wQbGBqfYJDdZZZ";
     public static final String RAZORPAY_SECRET = "9yXz8n7l96ILXc5cMDgguv6A";
-    public static final String REGION_DEFAULT = "IN";
+    public static final String REGION_DEFAULT = "USD";
     public static final String EVENT_PAYMENT_CAPTURED = "payment.captured";
     public static final String EVENT_ORDER_PAID = "order.paid";
     public static final String EVENT_PAYMENT_FAILED = "payment.failed";

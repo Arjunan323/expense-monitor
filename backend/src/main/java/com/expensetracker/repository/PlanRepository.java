@@ -6,6 +6,6 @@ import java.util.Optional;
 
 public interface PlanRepository extends JpaRepository<Plan, Long> {
     Optional<Plan> findByPlanType(String planType);
-    Optional<Plan> findByPlanTypeAndRegion(String planType, String region);
+    Optional<Plan> findByPlanTypeAndCurrency(String planType, String currency);
     java.util.List<Plan> findByRegion(String region);
 }
