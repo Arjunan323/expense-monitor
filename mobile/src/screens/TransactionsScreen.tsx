@@ -188,6 +188,9 @@ export const TransactionsScreen: React.FC = () => {
     }
   };
 
+  const openDateRangePicker = () => {
+    setShowDatePicker('start'); // Start with start date picker
+  };
   const getActiveFiltersCount = () => {
     let count = 0;
     if (filters.banks.length > 0) count++;
@@ -443,35 +446,37 @@ export const TransactionsScreen: React.FC = () => {
                 <View style={styles.dateRangeContainer}>
                   <TouchableOpacity
                     style={styles.dateButton}
-                    onPress={() => setShowDatePicker('start')}
+                    onPress={openDateRangePicker}
                     activeOpacity={0.7}
                   >
                     <Text style={styles.dateButtonText}>
-                      {pendingFilters.dateRange.start || 'Start Date'}
-                    </Text>
-                    <Ionicons name="calendar-outline" size={16} color="#6b7280" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.dateButton}
-                    onPress={() => setShowDatePicker('end')}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.dateButtonText}>
-                      {pendingFilters.dateRange.end || 'End Date'}
+                      {pendingFilters.dateRange.start && pendingFilters.dateRange.end
+                        ? `${pendingFilters.dateRange.start} - ${pendingFilters.dateRange.end}`
+                        : 'Select Date Range'
+                      }
                     </Text>
                     <Ionicons name="calendar-outline" size={16} color="#6b7280" />
                   </TouchableOpacity>
                 </View>
-                {/* Render DateTimePicker inside Modal for iOS compatibility */}
+                
+                {/* Enhanced Date Picker Modal */}
                 {showDatePicker && (
                   <Modal
                     transparent={true}
                     visible={!!showDatePicker}
-                    animationType="fade"
+                    animationType="slide"
                     onRequestClose={() => setShowDatePicker(null)}
                   >
-                    <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.2)' }}>
-                      <View style={{ backgroundColor: '#fff', padding: 16, borderTopLeftRadius: 16, borderTopRightRadius: 16 }}>
+                    <View style={styles.datePickerModalOverlay}>
+                      <View style={styles.datePickerModalContent}>
+                        <View style={styles.datePickerModalHeader}>
+                          <Text style={styles.datePickerModalTitle}>
+                            📅 Select {showDatePicker === 'start' ? 'Start' : 'End'} Date
+                          </Text>
+                          <TouchableOpacity onPress={() => setShowDatePicker(null)}>
+                            <Ionicons name="close-circle" size={24} color="#EF4444" />
+                          </TouchableOpacity>
+                        </View>
                         <DateTimePicker
                           value={showDatePicker ? (pendingFilters.dateRange[showDatePicker] ? new Date(pendingFilters.dateRange[showDatePicker]) : new Date()) : new Date()}
                           mode="date"
@@ -480,8 +485,35 @@ export const TransactionsScreen: React.FC = () => {
                           maximumDate={showDatePicker === 'end' && pendingFilters.dateRange.start ? new Date() : undefined}
                           minimumDate={showDatePicker === 'end' && pendingFilters.dateRange.start ? new Date(pendingFilters.dateRange.start) : undefined}
                         />
-                        <TouchableOpacity style={{ marginTop: 12, alignItems: 'center' }} onPress={() => setShowDatePicker(null)}>
-                          <Text style={{ color: '#0ea5e9', fontWeight: 'bold', fontSize: 16 }}>Done</Text>
+                        <View style={styles.datePickerActions}>
+                          {showDatePicker === 'start' && (
+                            <TouchableOpacity 
+                              style={styles.nextDateButton}
+                              onPress={() => {
+                                if (pendingFilters.dateRange.start) {
+                                  setShowDatePicker('end');
+                                } else {
+                                  Alert.alert('Please select start date first');
+                                }
+                              }}
+                            >
+                              <Text style={styles.nextDateButtonText}>Next: End Date →</Text>
+                            </TouchableOpacity>
+                          )}
+                          <TouchableOpacity 
+                            style={styles.datePickerDone} 
+                            onPress={() => setShowDatePicker(null)}
+                          >
+                            <Text style={styles.datePickerDoneText}>
+                              {showDatePicker === 'end' ? 'Done ✨' : 'Skip End Date'}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  </Modal>
+                )}
+              </View>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -871,14 +903,72 @@ const styles = StyleSheet.create({
     backgroundColor: '#f9fafb',
     borderWidth: 1,
     borderColor: '#d1d5db',
-    borderRadius: 8,
+    borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
     zIndex: 3,
   },
   dateButtonText: {
     fontSize: 16,
     color: '#374151',
+    fontWeight: '500',
+  },
+  datePickerModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  datePickerModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 25,
+    borderTopRightRadius: 25,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+  },
+  datePickerModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  datePickerModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  datePickerActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    gap: 12,
+  },
+  nextDateButton: {
+    backgroundColor: '#0077B6',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 16,
+    flex: 1,
+  },
+  nextDateButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  datePickerDone: {
+    backgroundColor: '#00B77D',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 16,
+    flex: 1,
+  },
+  datePickerDoneText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
   amountRangeContainer: {
     flexDirection: 'row',
