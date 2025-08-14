@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Eye, EyeOff, Mail, Lock, User, ArrowRight } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, ArrowRight, Scissors, Sparkles } from 'lucide-react';
 import { LoadingSpinner } from './ui/LoadingSpinner';
 import toast from 'react-hot-toast';
 
@@ -47,25 +47,44 @@ export const Auth: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
+    <div className="min-h-screen bg-gradient-to-br from-brand-green-50 via-white to-secondary-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+      {/* Background Decorations */}
+      <div className="absolute top-20 left-10 w-32 h-32 bg-brand-green-200 rounded-full opacity-20 animate-float"></div>
+      <div className="absolute bottom-20 right-10 w-24 h-24 bg-accent-200 rounded-full opacity-20 animate-float" style={{ animationDelay: '1s' }}></div>
+      <div className="absolute top-1/2 left-1/4 w-16 h-16 bg-secondary-200 rounded-full opacity-20 animate-bounce-gentle" style={{ animationDelay: '2s' }}></div>
+
+      <div className="max-w-md w-full space-y-8 relative z-10">
         <div className="text-center">
-          <div className="mx-auto h-16 w-16 bg-primary-600 rounded-xl flex items-center justify-center mb-4">
-            <span className="text-2xl font-bold text-white">EM</span>
+          <div className="mx-auto w-20 h-20 bg-gradient-green rounded-3xl flex items-center justify-center mb-6 shadow-glow-green animate-bounce-gentle">
+            <img 
+              src="/logo.png" 
+              alt="CutTheSpend" 
+              className="w-12 h-12"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+                target.nextElementSibling?.classList.remove('hidden');
+              }}
+            />
+            <Scissors className="w-10 h-10 text-white hidden" />
           </div>
-          <h2 className="text-3xl font-bold text-gray-900">
-            {isLogin ? 'Welcome back' : 'Create your account'}
+          <h1 className="text-3xl font-heading font-bold gradient-text mb-2">
+            CutTheSpend
+          </h1>
+          <p className="text-sm text-brand-gray-500 font-medium mb-4">See it. Cut it. Save more.</p>
+          <h2 className="text-2xl font-heading font-bold text-brand-gray-900 mb-2">
+            {isLogin ? 'Welcome back! 👋' : 'Start saving today! 🚀'}
           </h2>
-          <p className="mt-2 text-sm text-gray-600">
+          <p className="text-brand-gray-600">
             {isLogin 
-              ? 'Sign in to your account to continue' 
-              : 'Start tracking your expenses with AI-powered insights'
+              ? 'Sign in to continue your financial journey' 
+              : 'Join thousands who are already saving more money'
             }
           </p>
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="space-y-4">
+        <div className="card-funky">
+          <form className="space-y-6" onSubmit={handleSubmit}>
             {!isLogin && (
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -73,14 +92,14 @@ export const Auth: React.FC = () => {
                     First Name
                   </label>
                   <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <User className="h-5 w-5 text-gray-400" />
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <User className="h-5 w-5 text-brand-gray-400" />
                     </div>
                     <input
                       id="firstName"
                       name="firstName"
                       type="text"
-                      className="input-field pl-10"
+                      className="input-field pl-12"
                       placeholder="First name"
                       value={formData.firstName}
                       onChange={handleInputChange}
@@ -109,8 +128,8 @@ export const Auth: React.FC = () => {
                 Email address
               </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-gray-400" />
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <Mail className="h-5 w-5 text-brand-gray-400" />
                 </div>
                 <input
                   id="email"
@@ -118,7 +137,7 @@ export const Auth: React.FC = () => {
                   type="email"
                   autoComplete="email"
                   required
-                  className="input-field pl-10"
+                  className="input-field pl-12"
                   placeholder="Email address"
                   value={formData.email}
                   onChange={handleInputChange}
@@ -131,8 +150,8 @@ export const Auth: React.FC = () => {
                 Password
               </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-gray-400" />
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <Lock className="h-5 w-5 text-brand-gray-400" />
                 </div>
                 <input
                   id="password"
@@ -140,56 +159,75 @@ export const Auth: React.FC = () => {
                   type={showPassword ? 'text' : 'password'}
                   autoComplete={isLogin ? 'current-password' : 'new-password'}
                   required
-                  className="input-field pl-10 pr-10"
+                  className="input-field pl-12 pr-12"
                   placeholder="Password"
                   value={formData.password}
                   onChange={handleInputChange}
                 />
                 <button
                   type="button"
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  className="absolute inset-y-0 right-0 pr-4 flex items-center hover:text-brand-green-600 transition-colors duration-200"
                   onClick={() => setShowPassword(!showPassword)}
                 >
                   {showPassword ? (
-                    <EyeOff className="h-5 w-5 text-gray-400" />
+                    <EyeOff className="h-5 w-5 text-brand-gray-400" />
                   ) : (
-                    <Eye className="h-5 w-5 text-gray-400" />
+                    <Eye className="h-5 w-5 text-brand-gray-400" />
                   )}
                 </button>
               </div>
             </div>
-          </div>
 
-          <div>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
-            >
-              {isSubmitting ? (
-                <LoadingSpinner size="sm" className="text-white" />
-              ) : (
-                <>
-                  {isLogin ? 'Sign in' : 'Create account'}
-                  <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform duration-200" />
-                </>
-              )}
-            </button>
-          </div>
+            <div>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="group relative w-full btn-primary flex justify-center items-center space-x-2"
+              >
+                {isSubmitting ? (
+                  <LoadingSpinner size="sm" className="text-white" />
+                ) : (
+                  <>
+                    <Sparkles className="w-5 h-5" />
+                    <span className="font-bold">{isLogin ? 'Sign in' : 'Create account'}</span>
+                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-300" />
+                  </>
+                )}
+              </button>
+            </div>
 
-          <div className="text-center">
-            <button
-              type="button"
-              className="text-sm text-primary-600 hover:text-primary-500 font-medium"
-              onClick={() => setIsLogin(!isLogin)}
-            >
-              {isLogin 
-                ? "Don't have an account? Sign up" 
-                : 'Already have an account? Sign in'
-              }
-            </button>
+            <div className="text-center">
+              <button
+                type="button"
+                className="text-sm text-secondary-600 hover:text-secondary-500 font-semibold transition-colors duration-200"
+                onClick={() => setIsLogin(!isLogin)}
+              >
+                {isLogin 
+                  ? "Don't have an account? Sign up 🎉" 
+                  : 'Already have an account? Sign in 💫'
+                }
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* Trust Indicators */}
+        <div className="text-center">
+          <div className="flex items-center justify-center space-x-6 text-xs text-brand-gray-500">
+            <div className="flex items-center space-x-1">
+              <div className="w-2 h-2 bg-brand-green-500 rounded-full"></div>
+              <span>Bank-level security</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <div className="w-2 h-2 bg-secondary-500 rounded-full"></div>
+              <span>Free forever plan</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <div className="w-2 h-2 bg-accent-500 rounded-full"></div>
+              <span>No credit card required</span>
+            </div>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );
