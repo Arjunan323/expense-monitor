@@ -47,6 +47,16 @@ export const DashboardScreen: React.FC = () => {
   const [lastFilterAlertKey, setLastFilterAlertKey] = useState<string | null>(null);
   const navigation = useNavigation();
 
+  // Only PRO & PREMIUM should see per-bank breakdown controls
+  const isPerBankEligible = ['PRO', 'PREMIUM'].includes(usage?.planType || '');
+
+  // If user not eligible, ensure breakdown is hidden
+  useEffect(() => {
+    if (!isPerBankEligible && showPerBank) {
+      setShowPerBank(false);
+    }
+  }, [isPerBankEligible]);
+
   useEffect(() => {
     fetchDashboardData();
   }, []);
@@ -466,7 +476,7 @@ export const DashboardScreen: React.FC = () => {
       </View>
 
       {/* Per-Bank Toggle */}
-    {stats?.multiBank && (
+  {stats?.multiBank && isPerBankEligible && (
         <View style={styles.toggleContainer}>
           <TouchableOpacity
             style={styles.toggleButton}
@@ -512,7 +522,7 @@ export const DashboardScreen: React.FC = () => {
       )}
 
       {/* Per-Bank Breakdown Section */}
-      {stats?.multiBank && showPerBank && (
+  {stats?.multiBank && isPerBankEligible && showPerBank && (
         <View style={styles.perBankSection}>
           <Text style={styles.sectionTitle}>🏦 Per-Bank Breakdown</Text>
           <View style={styles.perBankCardsContainer}>

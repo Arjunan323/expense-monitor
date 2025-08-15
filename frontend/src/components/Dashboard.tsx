@@ -50,6 +50,12 @@ export const Dashboard: React.FC = () => {
     })();
   }, []);
 
+  // Only PRO & PREMIUM plans can view per-bank breakdown
+  const isPerBankEligible = ['PRO','PREMIUM'].includes(usage?.planType || '');
+  useEffect(() => {
+    if (!isPerBankEligible && showPerBank) setShowPerBank(false);
+  }, [isPerBankEligible, showPerBank]);
+
   // Fetch only on mount and when date range changes; bank selection is client-side
   useEffect(() => {
     fetchDashboardData();
@@ -282,7 +288,7 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* Balance Discrepancy Warning */}
-      {stats.hasBalanceDiscrepancy && selectedBanks.length > 1 && (
+      {/* {stats.hasBalanceDiscrepancy && selectedBanks.length > 1 && (
         <div className="card bg-yellow-50 border-yellow-200">
           <div className="flex items-start space-x-3">
             <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5" />
@@ -294,7 +300,7 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
+      )} */}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -336,8 +342,8 @@ export const Dashboard: React.FC = () => {
         />
       </div>
 
-      {/* Per-Bank Toggle */}
-      {stats.multiBank && (
+  {/* Per-Bank Toggle (Eligible plans only) */}
+  {stats.multiBank && isPerBankEligible && (
         <div className="flex justify-end">
           <button
             onClick={() => setShowPerBank(!showPerBank)}
@@ -420,7 +426,7 @@ export const Dashboard: React.FC = () => {
             ))}
           </div>
           
-          {showPerBank && stats.multiBank && stats.topCategoriesByBank && (
+          {showPerBank && stats.multiBank && isPerBankEligible && stats.topCategoriesByBank && (
             <div className="mt-6 pt-6 border-t border-gray-200">
               <h4 className="text-sm font-semibold text-gray-900 mb-4">Per-Bank Breakdown</h4>
               {selectedBanks.map(bank => (

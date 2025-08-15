@@ -68,15 +68,8 @@ public class DashboardService {
         boolean hasBalanceDiscrepancy = isMultiBank;
         String lastUpdateTime = txns.stream().map(Transaction::getDate).max(java.util.Comparator.naturalOrder()).map(java.time.LocalDate::toString).orElse("");
 
-        double totalBalance = txns.stream()
-            .sorted((a, b) -> {
-                int cmp = b.getDate().compareTo(a.getDate());
-                if (cmp == 0) return Long.compare(b.getId(), a.getId());
-                return cmp;
-            })
-            .map(Transaction::getBalance)
-            .findFirst()
-            .orElse(0.0);
+    // We'll compute totalBalance after per-bank balances are derived; init here
+    double totalBalance = 0.0;
         double monthlyIncome = txns.stream().filter(t -> t.getAmount() > 0).mapToDouble(Transaction::getAmount).sum();
         double monthlyExpenses = txns.stream().filter(t -> t.getAmount() < 0).mapToDouble(Transaction::getAmount).sum();
         int transactionCount = txns.size();
@@ -120,6 +113,18 @@ public class DashboardService {
                 .limit(6)
                 .collect(Collectors.toList());
             topCategoriesByBank.put(bank, perBankCats);
+        }
+
+        // Total balance logic:
+        // If only one bank, preserve legacy behavior: latest balance transaction overall.
+        // If multiple banks, sum latest balance per bank to reflect combined holdings.
+        if (!bankGroups.isEmpty()) {
+            if (bankGroups.size() == 1) {
+                // Single bank: take that bank's latest balance (already in map)
+                totalBalance = balanceByBank.values().stream().findFirst().orElse(0.0);
+            } else {
+                totalBalance = balanceByBank.values().stream().mapToDouble(Double::doubleValue).sum();
+            }
         }
 
         Map<String, List<Transaction>> categoryGroups = txns.stream().collect(Collectors.groupingBy(Transaction::getCategory));
