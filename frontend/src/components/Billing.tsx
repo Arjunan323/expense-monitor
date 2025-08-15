@@ -194,7 +194,9 @@ export const Billing: React.FC = () => {
             featuresUi: parseFeatures(plan.features)
         };
       });
-      setPlans(merged);
+  const rank: Record<string, number> = { FREE: 0, PRO: 1, PREMIUM: 2 };
+  merged.sort((a,b)=> (rank[a.planType] ?? 99) - (rank[b.planType] ?? 99));
+  setPlans(merged);
     } catch (error) {
       toast.error('Failed to load plans');
     }
@@ -231,7 +233,7 @@ export const Billing: React.FC = () => {
   };
   const currentPlan = getCurrentPlan();
   const statementsPercentage = usage ? getUsagePercentage(usage.statementsThisMonth, usage.statementLimit) : 0;
-  const pagesPercentage = usage ? getUsagePercentage(usage.pagesThisMonth, usage.pageLimit) : 0;
+  const pagesPercentage = usage ? getUsagePercentage(usage.pagesThisMonth, usage.statementLimit * usage.pageLimit) : 0;
 
   // Helper: handleUpgrade
   const handleUpgrade = async (planId: string) => {
@@ -326,9 +328,9 @@ export const Billing: React.FC = () => {
               </div>
             </div>
             <div className="text-right">
-              <div className="text-sm font-medium text-gray-900">{currentPlan.name}</div>
+              <div className="text-sm font-medium text-gray-900">{currentPlan?.name}</div>
               <div className="text-xs text-gray-500">
-                {Number(currentPlan.price) > 0 ? `${currencySymbol(currentPlan.currency)}${(currentPlan.price/100).toFixed(0)}/${currentPlan.period}` : 'Free'}
+                {Number(currentPlan?.price) > 0 ? `${currencySymbol(currentPlan?.currency)}${(currentPlan?.price/100).toFixed(0)}/${currentPlan?.period}` : 'Free'}
               </div>
             </div>
           </div>
@@ -362,7 +364,7 @@ export const Billing: React.FC = () => {
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-gray-700">Pages Processed</span>
                 <span className="text-sm font-semibold text-gray-900">
-                  {usage.pagesThisMonth} / {usage.pageLimit === -1 ? '∞' : usage.pageLimit}
+                  {usage.pagesThisMonth} / {usage.pageLimit === -1 ? '∞' : usage.statementLimit * usage.pageLimit}
                 </span>
               </div>
               {usage.pageLimit !== -1 && (
@@ -405,11 +407,11 @@ export const Billing: React.FC = () => {
           <p className="text-gray-600">Select the plan that best fits your needs</p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
           {plans.map((plan) => (
             <div
               key={plan.id}
-              className={`relative rounded-2xl border-2 p-6 ${
+      className={`relative rounded-2xl border-2 p-6 flex flex-col ${
                 plan.popular
                   ? 'border-primary-500 bg-primary-50'
                   : currentPlan.planType === plan.planType
@@ -466,10 +468,19 @@ export const Billing: React.FC = () => {
                     {plan.pagesPerStatementUi === 'unlimited' ? '∞' : `up to ${plan.pagesPerStatementUi}`}
                   </span>
                 </div>
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center space-x-2">
+                    <Shield className="w-4 h-4 text-gray-500" />
+                    <span className="text-sm font-medium text-gray-700">Combine bank accounts</span>
+                  </div>
+                  <span className="text-sm font-bold text-gray-900">
+                    up to {plan.planType === 'FREE' ? 2 : plan.planType === 'PRO' ? 3 : 5}
+                  </span>
+                </div>
               </div>
 
               {/* Features List */}
-              <div className="mb-6">
+              <div className="mb-6 flex-1">
                 <ul className="space-y-2">
                   {plan.featuresUi.map((feature, index) => (
                     <li key={index} className="flex items-start space-x-2">
@@ -495,7 +506,7 @@ export const Billing: React.FC = () => {
               <button
                 onClick={() => handleUpgrade(plan.planType)}
                 disabled={isExpired ? plan.planType === 'FREE' || upgrading === plan.planType : currentPlan.planType === plan.planType || upgrading === plan.planType}
-                className={`w-full py-3 px-4 rounded-lg font-medium transition-colors duration-200 flex items-center justify-center space-x-2 ${
+                className={`mt-auto w-full py-3 px-4 rounded-lg font-medium transition-colors duration-200 flex items-center justify-center space-x-2 ${
                   plan.buttonVariant === 'primary'
                     ? 'bg-primary-600 hover:bg-primary-700 text-white'
                     : plan.buttonVariant === 'premium'

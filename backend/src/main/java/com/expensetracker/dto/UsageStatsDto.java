@@ -7,16 +7,18 @@ public class UsageStatsDto {
     private int pagesThisMonth;
     private int pageLimit;
     private boolean canUpload;
+    private Integer combinedBankLimit;
 
     public UsageStatsDto() {}
 
-    public UsageStatsDto(int statementsThisMonth, int statementLimit, String planType, int pagesThisMonth, int pageLimit, boolean canUpload) {
+    public UsageStatsDto(int statementsThisMonth, int statementLimit, String planType, int pagesThisMonth, int pageLimit, boolean canUpload, Integer combinedBankLimit) {
         this.statementsThisMonth = statementsThisMonth;
         this.statementLimit = statementLimit;
         this.planType = planType;
         this.pagesThisMonth = pagesThisMonth;
         this.pageLimit = pageLimit;
         this.canUpload = canUpload;
+        this.combinedBankLimit = combinedBankLimit;
     }
 
     public int getStatementsThisMonth() { return statementsThisMonth; }
@@ -31,4 +33,6 @@ public class UsageStatsDto {
     public void setPageLimit(int pageLimit) { this.pageLimit = pageLimit; }
     public boolean isCanUpload() { return canUpload; }
     public void setCanUpload(boolean canUpload) { this.canUpload = canUpload; }
+    public Integer getCombinedBankLimit() { return combinedBankLimit; }
+    public void setCombinedBankLimit(Integer combinedBankLimit) { this.combinedBankLimit = combinedBankLimit; }
 }

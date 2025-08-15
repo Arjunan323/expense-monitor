@@ -47,7 +47,7 @@ export interface DashboardStats {
   recentTransactions: Transaction[];
   lastUpdateTime: string;
   bankSources: string[];
-  isMultiBank: boolean;
+  multiBank: boolean;
   hasBalanceDiscrepancy?: boolean;
   // 3-tier plan feature lock fields
   advancedAnalyticsLocked?: boolean;
@@ -70,6 +70,7 @@ export interface UsageStats {
   pageLimit: number;
   canUpload: boolean;
   status?: string; // e.g. 'ACTIVE', 'EXPIRED', etc.
+  combinedBankLimit?: number;
 }
 
 export interface ParseResult {

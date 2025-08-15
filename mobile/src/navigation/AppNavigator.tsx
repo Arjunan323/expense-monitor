@@ -14,6 +14,7 @@ import { TransactionsScreen } from '../screens/TransactionsScreen';
 import { AnalyticsScreen } from '../screens/AnalyticsScreen';
 import { StatementsScreen } from '../screens/StatementsScreen';
 import { BillingScreen } from '../screens/BillingScreen';
+import { AnalyticsFeedbackScreen } from '../screens/AnalyticsFeedbackScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { UploadScreen } from '../screens/UploadScreen';
 
@@ -231,6 +232,17 @@ const MainNavigator = () => {
           headerTintColor: '#00B77D',
         }}
       />
+      <Stack.Screen
+        name="AnalyticsFeedback"
+        component={AnalyticsFeedbackScreen}
+        options={{
+          headerShown: true,
+          title: 'Analytics Feedback',
+          headerStyle: { backgroundColor: '#FFFFFF' },
+          headerTitleStyle: { color: '#00B77D', fontWeight: 'bold' },
+          headerTintColor: '#00B77D',
+        }}
+      />
     </Stack.Navigator>
   );
 };
@@ -257,14 +269,11 @@ export const AppNavigator: React.FC = () => {
 
 const styles = StyleSheet.create({
   tabBarContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'transparent',
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
-    paddingTop: 10,
-    paddingHorizontal: 20,
+  // Removed absolute positioning to prevent overlay hiding screen bottom content
+  backgroundColor: 'transparent',
+  paddingBottom: Platform.OS === 'ios' ? 12 : 8,
+  paddingTop: 8,
+  paddingHorizontal: 20,
   },
   tabBar: {
     flexDirection: 'row',

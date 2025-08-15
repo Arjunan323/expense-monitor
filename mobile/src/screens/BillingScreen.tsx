@@ -181,6 +181,8 @@ export const BillingScreen: React.FC = () => {
         buttonVariant: p.planType === 'FREE' ? 'secondary' : (p.planType === 'PRO' ? 'primary' : 'premium')
       }));
       if (mapped.length) {
+        const rank: Record<string, number> = { FREE: 0, PRO: 1, PREMIUM: 2 };
+        mapped.sort((a,b)=> (rank[a.id] ?? 99) - (rank[b.id] ?? 99));
         setPlans(mapped);
       } else {
         setPlans(FALLBACK_PLANS); // fallback without altering for preference
@@ -191,6 +193,14 @@ export const BillingScreen: React.FC = () => {
       setPlansLoading(false);
     }
   };
+    const getBankLimit = (planType: string, combinedBank?: number) => {
+      if (combinedBank && combinedBank > 0) return combinedBank;
+      switch (planType) {
+        case 'PRO': return 3;
+        case 'PREMIUM': return 5;
+        default: return 2;
+      }
+    };
 
   const getUsagePercentage = (used: number, limit: number | string) => {
     if (limit === 'unlimited' || limit === -1) return 0;
@@ -421,6 +431,11 @@ export const BillingScreen: React.FC = () => {
                 <Text style={styles.planLimitLabel}>Pages per statement</Text>
                 <Text style={styles.planLimitValue}>up to {plan.pagesPerStatement}</Text>
               </View>
+                <View style={styles.planLimit}>
+                  <Ionicons name="business-outline" size={16} color="#6b7280" />
+                  <Text style={styles.planLimitLabel}>Combine bank accounts</Text>
+                  <Text style={styles.planLimitValue}>up to {getBankLimit(plan.id, (plans as any).find?.((p:any)=>p.id===plan.id)?.combinedBank || (plan as any).combinedBank)}</Text>
+                </View>
             </View>
 
             <View style={styles.planFeatures}>

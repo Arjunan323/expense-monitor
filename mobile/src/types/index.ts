@@ -36,7 +36,7 @@ export interface DashboardStats {
   recentTransactions: Transaction[];
   lastUpdateTime: string;
   bankSources: string[];
-  isMultiBank: boolean;
+  multiBank: boolean;
   hasBalanceDiscrepancy?: boolean;
   advancedAnalyticsLocked?: boolean;
   upgradePrompt?: string;
@@ -58,6 +58,7 @@ export interface UsageStats {
   pageLimit: number;
   canUpload: boolean;
   status?: string;
+  combinedBankLimit?: number;
 }
 
 export interface AuthContextType {
@@ -67,6 +68,10 @@ export interface AuthContextType {
   register: (email: string, password: string, firstName?: string, lastName?: string) => Promise<void>;
   logout: () => void;
   loading: boolean;
+  // Global usage / plan info
+  usage?: UsageStats | null;
+  usageLoading?: boolean;
+  refreshUsage?: () => Promise<void>;
 }
 
 export interface ApiResponse<T> {

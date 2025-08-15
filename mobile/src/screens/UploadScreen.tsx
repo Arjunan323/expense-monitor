@@ -131,6 +131,14 @@ export const UploadScreen: React.FC = () => {
     return '#0ea5e9';
   };
 
+  const getBankLimit = () => {
+    switch (usage?.planType) {
+      case 'PRO': return 3;
+      case 'PREMIUM': return 5;
+      default: return 2;
+    }
+  };
+
   if (loading) {
     return <LoadingSpinner />;
   }
@@ -201,10 +209,10 @@ export const UploadScreen: React.FC = () => {
                 <Text 
                   style={[
                     styles.usageStatValue,
-                    { color: getUsageColor(usage.pagesThisMonth, usage.pageLimit) }
+                    { color: getUsageColor(usage.pagesThisMonth,  usage.statementLimit * usage.pageLimit) }
                   ]}
                 >
-                  {usage.pagesThisMonth} / {usage.pageLimit === -1 ? '∞' : usage.pageLimit}
+                  {usage.pagesThisMonth} / {usage.pageLimit === -1 ? '∞' : usage.statementLimit * usage.pageLimit}
                 </Text>
               </View>
               {usage.pageLimit !== -1 && (
@@ -213,13 +221,19 @@ export const UploadScreen: React.FC = () => {
                     style={[
                       styles.progressFill,
                       { 
-                        width: `${Math.min((usage.pagesThisMonth / usage.pageLimit) * 100, 100)}%`,
-                        backgroundColor: getUsageColor(usage.pagesThisMonth, usage.pageLimit)
+                        width: `${Math.min((usage.pagesThisMonth / (usage.statementLimit * usage.pageLimit)) * 100, 100)}%`,
+                        backgroundColor: getUsageColor(usage.pagesThisMonth, usage.statementLimit * usage.pageLimit)
                       }
                     ]} 
                   />
                 </View>
               )}
+            </View>
+            <View style={styles.usageStat}>
+              <View style={styles.usageStatHeader}>
+                <Text style={styles.usageStatLabel}>Combined Banks Limit</Text>
+                <Text style={styles.usageStatValue}>{getBankLimit()}</Text>
+              </View>
             </View>
           </View>
 

@@ -25,6 +25,8 @@ public class Plan {
     private int statementsPerMonth;
     private int pagesPerStatement;
     private String features; // comma-separated or JSON string
+    // Maximum number of bank accounts that can be combined for analytics
+    private Integer combinedBank; // nullable => fallback to legacy defaults
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -42,4 +44,6 @@ public class Plan {
     public void setPagesPerStatement(int pagesPerStatement) { this.pagesPerStatement = pagesPerStatement; }
     public String getFeatures() { return features; }
     public void setFeatures(String features) { this.features = features; }
+    public Integer getCombinedBank() { return combinedBank; }
+    public void setCombinedBank(Integer combinedBank) { this.combinedBank = combinedBank; }
 }

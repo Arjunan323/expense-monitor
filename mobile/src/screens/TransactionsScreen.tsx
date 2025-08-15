@@ -54,7 +54,11 @@ export const TransactionsScreen: React.FC = () => {
   const [availableCategories, setAvailableCategories] = useState<string[]>([]);
   const [bankCounts, setBankCounts] = useState<Record<string, number>>({});
   const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
-  const [showDatePicker, setShowDatePicker] = useState<'start' | 'end' | null>(null);
+  // Dashboard-style date range modal state (replaces simple picker)
+  const [showDateRangePicker, setShowDateRangePicker] = useState(false);
+  const [tempDateRange, setTempDateRange] = useState({ start: '', end: '' });
+  const [activeDatePicker, setActiveDatePicker] = useState<'start' | 'end' | null>(null);
+  // Legacy single-step picker removed (showDatePicker)
   const filtersJustApplied = useRef(false);
 
   // Sync pendingFilters with filters when opening modal
@@ -254,22 +258,56 @@ export const TransactionsScreen: React.FC = () => {
     }));
   };
 
-  const handleDateChange = (event: any, selectedDate?: Date, type?: 'start' | 'end') => {
-    setShowDatePicker(null);
-    if (selectedDate && type) {
-      const dateString = selectedDate.toISOString().split('T')[0];
-      setPendingFilters(prev => ({
-        ...prev,
-        dateRange: {
-          ...prev.dateRange,
-          [type]: dateString
-        }
-      }));
-    }
+  // Date range helpers adapted from Dashboard
+  const formatDateForDisplay = (date: string) => {
+    if (!date) return '';
+    return new Date(date).toLocaleDateString('en-IN', {
+      day: '2-digit', month: 'short', year: 'numeric'
+    });
   };
 
   const openDateRangePicker = () => {
-    setShowDatePicker('start'); // Start with start date picker
+    setTempDateRange(pendingFilters.dateRange);
+    setShowDateRangePicker(true);
+  // Removed auto-open of start date picker per user request; user must tap a date field
+  };
+
+  const openDatePicker = (type: 'start' | 'end') => {
+    setActiveDatePicker(type);
+  };
+
+  const handleDatePickerChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setActiveDatePicker(null);
+    }
+    if (selectedDate && activeDatePicker) {
+      const dateString = selectedDate.toISOString().split('T')[0];
+      setTempDateRange(prev => ({ ...prev, [activeDatePicker]: dateString }));
+      if (Platform.OS === 'android') setActiveDatePicker(null);
+    }
+  };
+
+  const applyDateRange = () => {
+    // Validate order
+    if (tempDateRange.start && tempDateRange.end) {
+      if (new Date(tempDateRange.start) > new Date(tempDateRange.end)) {
+        Alert.alert('Invalid Date Range', 'End date cannot be before start date');
+        return;
+      }
+    }
+    setPendingFilters(prev => ({ ...prev, dateRange: tempDateRange }));
+  setShowDateRangePicker(false);
+  setActiveDatePicker(null); // ensure iOS spinner closes
+  };
+
+  const cancelDateRange = () => {
+    setTempDateRange(pendingFilters.dateRange);
+  setShowDateRangePicker(false);
+  setActiveDatePicker(null); // ensure picker closes on iOS
+  };
+
+  const clearDateRange = () => {
+    setTempDateRange({ start: '', end: '' });
   };
   const getActiveFiltersCount = () => {
     let count = 0;
@@ -426,38 +464,41 @@ export const TransactionsScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      {loading && transactions.length === 0 ? (
-        <LoadingSpinner />
-      ) : transactions.length === 0 && !loading ? (
-        <EmptyState
-          icon="receipt-outline"
-          title="No transactions found"
-          description="Upload your bank statements to see your transactions here"
-          action={{
-            label: 'Upload Statement',
-            onPress: () => {/* Navigate to upload */},
-          }}
-        />
-      ) : (
-        <FlatList
-          data={transactions}
-          renderItem={renderTransaction}
-          keyExtractor={(item, index) => `${item.id}-${index}`}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-          onEndReached={loadMore}
-          onEndReachedThreshold={0.1}
-          ListFooterComponent={
-            loading && transactions.length > 0 ? (
-              <View style={styles.loadingFooter}>
-                <LoadingSpinner size="small" />
-              </View>
-            ) : null
-          }
-          contentContainerStyle={styles.listContainer}
-        />
-      )}
+      <View style={styles.listWrapper}>
+        {loading && transactions.length === 0 ? (
+          <LoadingSpinner />
+        ) : transactions.length === 0 && !loading ? (
+          <EmptyState
+            icon="receipt-outline"
+            title="No transactions found"
+            description="Upload your bank statements to see your transactions here"
+            action={{
+              label: 'Upload Statement',
+              onPress: () => {/* Navigate to upload */},
+            }}
+          />
+        ) : (
+          <FlatList
+            data={transactions}
+            renderItem={renderTransaction}
+            keyExtractor={(item, index) => `${item.id}-${index}`}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+            onEndReached={loadMore}
+            onEndReachedThreshold={0.1}
+            ListFooterComponent={
+              loading && transactions.length > 0 ? (
+                <View style={styles.loadingFooter}>
+                  <LoadingSpinner size="small" />
+                </View>
+              ) : <View style={{height:8}} />
+            }
+            contentContainerStyle={styles.listContainer}
+            style={{flex:1}}
+          />
+        )}
+      </View>
 
       {/* Advanced Filters Modal */}
       <Modal
@@ -523,76 +564,19 @@ export const TransactionsScreen: React.FC = () => {
               {/* Date Range */}
               <View style={styles.filterSection}>
                 <Text style={styles.filterSectionTitle}>Date Range</Text>
-                <View style={styles.dateRangeContainer}>
-                  <TouchableOpacity
-                    style={styles.dateButton}
-                    onPress={openDateRangePicker}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.dateButtonText}>
-                      {pendingFilters.dateRange.start && pendingFilters.dateRange.end
-                        ? `${pendingFilters.dateRange.start} - ${pendingFilters.dateRange.end}`
-                        : 'Select Date Range'
-                      }
-                    </Text>
-                    <Ionicons name="calendar-outline" size={16} color="#6b7280" />
-                  </TouchableOpacity>
-                </View>
-                
-                {/* Enhanced Date Picker Modal */}
-                {showDatePicker && (
-                  <Modal
-                    transparent={true}
-                    visible={!!showDatePicker}
-                    animationType="slide"
-                    onRequestClose={() => setShowDatePicker(null)}
-                  >
-                    <View style={styles.datePickerModalOverlay}>
-                      <View style={styles.datePickerModalContent}>
-                        <View style={styles.datePickerModalHeader}>
-                          <Text style={styles.datePickerModalTitle}>
-                            📅 Select {showDatePicker === 'start' ? 'Start' : 'End'} Date
-                          </Text>
-                          <TouchableOpacity onPress={() => setShowDatePicker(null)}>
-                            <Ionicons name="close-circle" size={24} color="#EF4444" />
-                          </TouchableOpacity>
-                        </View>
-                        <DateTimePicker
-                          value={showDatePicker ? (pendingFilters.dateRange[showDatePicker] ? new Date(pendingFilters.dateRange[showDatePicker]) : new Date()) : new Date()}
-                          mode="date"
-                          display="default"
-                          onChange={(event, selectedDate) => handleDateChange(event, selectedDate, showDatePicker ?? undefined)}
-                          maximumDate={showDatePicker === 'end' && pendingFilters.dateRange.start ? new Date() : undefined}
-                          minimumDate={showDatePicker === 'end' && pendingFilters.dateRange.start ? new Date(pendingFilters.dateRange.start) : undefined}
-                        />
-                        <View style={styles.datePickerActions}>
-                          {showDatePicker === 'start' && (
-                            <TouchableOpacity 
-                              style={styles.nextDateButton}
-                              onPress={() => {
-                                if (pendingFilters.dateRange.start) {
-                                  setShowDatePicker('end');
-                                } else {
-                                  Alert.alert('Please select start date first');
-                                }
-                              }}
-                            >
-                              <Text style={styles.nextDateButtonText}>Next: End Date →</Text>
-                            </TouchableOpacity>
-                          )}
-                          <TouchableOpacity 
-                            style={styles.datePickerDone} 
-                            onPress={() => setShowDatePicker(null)}
-                          >
-                            <Text style={styles.datePickerDoneText}>
-                              {showDatePicker === 'end' ? 'Done ✨' : 'Skip End Date'}
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    </View>
-                  </Modal>
-                )}
+                <TouchableOpacity
+                  style={styles.dateButton}
+                  onPress={openDateRangePicker}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.dateButtonText}>
+                    {pendingFilters.dateRange.start && pendingFilters.dateRange.end
+                      ? `${formatDateForDisplay(pendingFilters.dateRange.start)} - ${formatDateForDisplay(pendingFilters.dateRange.end)}`
+                      : 'Select Date Range'
+                    }
+                  </Text>
+                  <Ionicons name="calendar-outline" size={16} color="#6b7280" />
+                </TouchableOpacity>
               </View>
 
               {/* Amount Range */}
@@ -644,6 +628,128 @@ export const TransactionsScreen: React.FC = () => {
               </View>
             </ScrollView>
 
+            {showDateRangePicker && (
+              <View style={styles.inlineDateRangeOverlay}>
+                <View style={styles.dateRangeModal}>
+                  <View style={styles.dateRangeHeader}>
+                    <Text style={styles.dateRangeTitle}>📅 Select Date Range</Text>
+                    <TouchableOpacity onPress={cancelDateRange}>
+                      <Ionicons name="close-circle" size={28} color="#EF4444" />
+                    </TouchableOpacity>
+                  </View>
+                  <ScrollView style={styles.dateRangeContent}>
+                    <View style={styles.dateSection}>
+                      <Text style={styles.dateSectionTitle}>From Date</Text>
+                      <TouchableOpacity
+                        style={styles.dateButton}
+                        onPress={() => openDatePicker('start')}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.dateButtonContent}>
+                          <Ionicons name="calendar-outline" size={20} color="#00B77D" />
+                          <Text style={styles.dateButtonText}>
+                            {tempDateRange.start ? formatDateForDisplay(tempDateRange.start) : 'Select start date'}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.dateSection}>
+                      <Text style={styles.dateSectionTitle}>To Date</Text>
+                      <TouchableOpacity
+                        style={[styles.dateButton, !tempDateRange.start && styles.dateButtonDisabled]}
+                        onPress={() => openDatePicker('end')}
+                        disabled={!tempDateRange.start}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.dateButtonContent}>
+                          <Ionicons name="calendar-outline" size={20} color={!tempDateRange.start ? '#9CA3AF' : '#0077B6'} />
+                          <Text style={[styles.dateButtonText, !tempDateRange.start && styles.dateButtonTextDisabled]}>
+                            {tempDateRange.end ? formatDateForDisplay(tempDateRange.end) : 'Select end date'}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                      {!tempDateRange.start && (
+                        <Text style={styles.dateHint}>Please select start date first</Text>
+                      )}
+                    </View>
+                    <View style={styles.quickRangeSection}>
+                      <Text style={styles.quickRangeTitle}>Quick Select</Text>
+                      <View style={styles.quickRangeButtons}>
+                        <TouchableOpacity
+                          style={styles.quickRangeButton}
+                          onPress={() => {
+                            const today = new Date();
+                            const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+                            const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+                            setTempDateRange({
+                              start: lastMonth.toISOString().split('T')[0],
+                              end: lastMonthEnd.toISOString().split('T')[0]
+                            });
+                          }}
+                        >
+                          <Text style={styles.quickRangeButtonText}>Last Month</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.quickRangeButton}
+                          onPress={() => {
+                            const today = new Date();
+                            const last30 = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+                            setTempDateRange({
+                              start: last30.toISOString().split('T')[0],
+                              end: today.toISOString().split('T')[0]
+                            });
+                          }}
+                        >
+                          <Text style={styles.quickRangeButtonText}>Last 30 Days</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.quickRangeButton}
+                          onPress={() => {
+                            const today = new Date();
+                            const last90 = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
+                            setTempDateRange({
+                              start: last90.toISOString().split('T')[0],
+                              end: today.toISOString().split('T')[0]
+                            });
+                          }}
+                        >
+                          <Text style={styles.quickRangeButtonText}>Last 90 Days</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </ScrollView>
+                  {activeDatePicker && (
+                    <DateTimePicker
+                      value={
+                        activeDatePicker === 'start'
+                          ? (tempDateRange.start ? new Date(tempDateRange.start) : new Date())
+                          : (tempDateRange.end ? new Date(tempDateRange.end) : new Date())
+                      }
+                      mode="date"
+                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                      onChange={handleDatePickerChange}
+                      maximumDate={new Date()}
+                      minimumDate={activeDatePicker === 'end' && tempDateRange.start ? new Date(tempDateRange.start) : undefined}
+                    />
+                  )}
+                  <View style={styles.dateRangeActions}>
+                    <TouchableOpacity style={styles.clearButton} onPress={clearDateRange}>
+                      <Ionicons name="refresh-outline" size={16} color="#6B7280" />
+                      <Text style={styles.clearButtonText}>Clear</Text>
+                    </TouchableOpacity>
+                    <View style={styles.actionButtonsRight}>
+                      <TouchableOpacity style={styles.cancelButton} onPress={cancelDateRange}>
+                        <Text style={styles.cancelButtonText}>Cancel</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.applyButton} onPress={() => { applyDateRange(); setShowDateRangePicker(false); }}>
+                        <Text style={styles.applyButtonText}>Apply ✨</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            )}
+
             <TouchableOpacity
               style={styles.applyFiltersButton}
               onPress={() => {
@@ -664,6 +770,7 @@ export const TransactionsScreen: React.FC = () => {
           Transaction editing and bulk actions coming soon!
         </Text>
       </View>
+
     </View>
   );
 };
@@ -695,7 +802,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8fafc',
-    paddingBottom: Platform.OS === 'ios' ? 120 : 100,
+    // remove global bottom padding; handled in listWrapper
+  },
+  listWrapper: {
+    flex: 1,
+  // Reduced padding so there's only small spacing above the bottom banner
+  // (previous large padding created a big empty gap)
+  paddingBottom: Platform.OS === 'ios' ? 20 : 20,
   },
   header: {
     backgroundColor: '#00B77D',
@@ -914,6 +1027,16 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 20,
     maxHeight: '98%',
     paddingBottom: 20,
+  position: 'relative',
+  },
+  inlineDateRangeOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
   },
   filtersHeader: {
     flexDirection: 'row',
@@ -1087,6 +1210,137 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  // Date range modal styles (mirroring Dashboard for consistency)
+  dateRangeModal: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+  paddingBottom: Platform.OS === 'ios' ? 48 : 20, // extra for safe area
+    maxHeight: '80%',
+  },
+  dateRangeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  dateRangeTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  dateRangeContent: {
+    padding: 24,
+  },
+  dateSection: {
+    marginBottom: 24,
+  },
+  dateSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 12,
+  },
+  dateButtonDisabled: {
+    opacity: 0.5,
+  },
+  dateButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  dateButtonTextDisabled: {
+    color: '#9CA3AF',
+  },
+  dateHint: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  quickRangeSection: {
+    marginTop: 8,
+  },
+  quickRangeTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 12,
+  },
+  quickRangeButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  quickRangeButton: {
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#0077B6',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  quickRangeButtonText: {
+    fontSize: 14,
+    color: '#0077B6',
+    fontWeight: '600',
+  },
+  dateRangeActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  clearButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 16,
+    gap: 6,
+  },
+  clearButtonText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '600',
+  },
+  actionButtonsRight: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  cancelButton: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 16,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    color: '#6B7280',
+    fontWeight: '600',
+  },
+  applyButton: {
+    backgroundColor: '#00B77D',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  applyButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
   },
 });
 

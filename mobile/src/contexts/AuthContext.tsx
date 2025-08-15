@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import * as SecureStore from 'expo-secure-store';
-import { User, AuthContextType } from '../types';
+import { User, AuthContextType, UsageStats } from '../types';
 import { apiCall } from '../utils/api';
 import { usePreferences } from './PreferencesContext';
 import Toast from 'react-native-toast-message';
@@ -23,6 +23,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [usage, setUsage] = useState<UsageStats | null>(null);
+  const [usageLoading, setUsageLoading] = useState(false);
   const { setPreferences } = usePreferences();
 
   useEffect(() => {
@@ -33,19 +35,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       const storedToken = await SecureStore.getItemAsync('token');
       const storedUser = await SecureStore.getItemAsync('user');
+      const storedPrefs = await SecureStore.getItemAsync('user-preferences');
 
       if (storedToken && storedUser) {
         setToken(storedToken);
         const parsed = JSON.parse(storedUser);
         setUser(parsed);
-        if (parsed?.currency || parsed?.locale) {
-          setPreferences({ currency: parsed.currency || (/-IN$/i.test(parsed?.locale || '') ? 'INR' : 'USD'), locale: parsed.locale || 'en-US' });
-        } else {
-          // Detect from device
+        // Only apply defaults from user record if no stored preferences exist
+        if (!storedPrefs) {
+          if (parsed?.currency || parsed?.locale) {
+            setPreferences({ currency: parsed.currency || (/-IN$/i.test(parsed?.locale || '') ? 'INR' : 'USD'), locale: parsed.locale || 'en-US' });
+          } else {
+            // Detect from device
             let cur = 'USD';
             let loc = 'en-US';
             try { loc = (Intl as any)?.DateTimeFormat?.().resolvedOptions?.().locale || 'en-US'; if (/-IN$/i.test(loc)) cur = 'INR'; } catch {}
             setPreferences({ currency: cur, locale: loc });
+          }
         }
       }
     } catch (error) {
@@ -54,6 +60,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setLoading(false);
     }
   };
+
+  const refreshUsage = async () => {
+    if (!token) return;
+    try {
+      setUsageLoading(true);
+      const data = await apiCall<UsageStats>('GET', '/user/usage');
+      setUsage(data);
+    } catch (e) {
+      // ignore
+    } finally {
+      setUsageLoading(false);
+    }
+  };
+
+  // Fetch usage after login token present
+  useEffect(() => {
+    if (token) {
+      refreshUsage();
+    } else {
+      setUsage(null);
+    }
+  }, [token]);
 
   const login = async (username: string, password: string): Promise<void> => {
     try {
@@ -69,9 +97,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setUser(userData);
       await SecureStore.setItemAsync('token', newToken);
       await SecureStore.setItemAsync('user', JSON.stringify(userData));
+  // trigger usage fetch
+  refreshUsage();
       
       Toast.show({ type: 'success', text1: 'Welcome back!' });
-      if (userData?.currency || userData?.locale) {
+      // On login, only set preferences if user provides currency/locale AND no stored prefs yet
+      const existingPrefs = await SecureStore.getItemAsync('user-preferences');
+      if (!existingPrefs && (userData?.currency || userData?.locale)) {
         setPreferences({ currency: userData.currency || 'USD', locale: userData.locale || 'en-US' });
       }
     } catch (error: any) {
@@ -114,13 +146,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setUser(userData);
       await SecureStore.setItemAsync('token', newToken);
       await SecureStore.setItemAsync('user', JSON.stringify(userData));
+  refreshUsage();
       
       Toast.show({ type: 'success', text1: 'Account created successfully!' });
-      if (userData?.currency || userData?.locale) {
-        setPreferences({ currency: userData.currency || 'USD', locale: userData.locale || 'en-US' });
-      } else {
-        // fallback detection already done when sending registration, reuse detectedCurrency
-        setPreferences({ currency: detectedCurrency, locale: 'en-US' });
+      const existingPrefsReg = await SecureStore.getItemAsync('user-preferences');
+      if (!existingPrefsReg) {
+        if (userData?.currency || userData?.locale) {
+          setPreferences({ currency: userData.currency || 'USD', locale: userData.locale || 'en-US' });
+        } else {
+          // fallback detection already done when sending registration, reuse detectedCurrency
+          setPreferences({ currency: detectedCurrency, locale: 'en-US' });
+        }
       }
     } catch (error: any) {
       Toast.show({
@@ -137,6 +173,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = async (): Promise<void> => {
     setUser(null);
     setToken(null);
+  setUsage(null);
     await SecureStore.deleteItemAsync('token');
     await SecureStore.deleteItemAsync('user');
     Toast.show({
@@ -152,6 +189,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     register,
     logout,
     loading,
+  usage,
+  usageLoading,
+  refreshUsage,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

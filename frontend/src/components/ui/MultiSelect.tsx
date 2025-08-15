@@ -42,6 +42,7 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
     } else {
       onChange([...selected, value]);
     }
+    // Keep dropdown open (remove auto-close behavior)
   };
 
   const removeOption = (value: string, e: React.MouseEvent) => {

@@ -1,6 +1,7 @@
 package com.expensetracker.dto;
 
 import java.util.List;
+import java.util.Map;
 
 public class DashboardStatsDto {
     private double totalBalance;
@@ -16,8 +17,30 @@ public class DashboardStatsDto {
     // Feature gating fields
     private boolean advancedAnalyticsLocked;
     private String upgradePrompt;
+    // Added per-bank granular data for mobile/web dashboard
+    private Map<String, Integer> transactionCountByBank;
+    private Map<String, Double> balanceByBank;
+    private Map<String, Double> incomeByBank;
+    private Map<String, Double> expensesByBank;
+    private Map<String, List<CategorySummaryDto>> topCategoriesByBank;
 
-    public DashboardStatsDto(double totalBalance, double monthlyIncome, double monthlyExpenses, int transactionCount, List<CategorySummaryDto> topCategories, List<TransactionDto> recentTransactions, List<String> bankSources, boolean isMultiBank, boolean hasBalanceDiscrepancy, String lastUpdateTime, boolean advancedAnalyticsLocked, String upgradePrompt) {
+    public DashboardStatsDto(double totalBalance,
+                             double monthlyIncome,
+                             double monthlyExpenses,
+                             int transactionCount,
+                             List<CategorySummaryDto> topCategories,
+                             List<TransactionDto> recentTransactions,
+                             List<String> bankSources,
+                             boolean isMultiBank,
+                             boolean hasBalanceDiscrepancy,
+                             String lastUpdateTime,
+                             boolean advancedAnalyticsLocked,
+                             String upgradePrompt,
+                             Map<String, Integer> transactionCountByBank,
+                             Map<String, Double> balanceByBank,
+                             Map<String, Double> incomeByBank,
+                             Map<String, Double> expensesByBank,
+                             Map<String, List<CategorySummaryDto>> topCategoriesByBank) {
         this.totalBalance = totalBalance;
         this.monthlyIncome = monthlyIncome;
         this.monthlyExpenses = monthlyExpenses;
@@ -30,6 +53,11 @@ public class DashboardStatsDto {
         this.lastUpdateTime = lastUpdateTime;
         this.advancedAnalyticsLocked = advancedAnalyticsLocked;
         this.upgradePrompt = upgradePrompt;
+        this.transactionCountByBank = transactionCountByBank;
+        this.balanceByBank = balanceByBank;
+        this.incomeByBank = incomeByBank;
+        this.expensesByBank = expensesByBank;
+        this.topCategoriesByBank = topCategoriesByBank;
     }
 
     public double getTotalBalance() { return totalBalance; }
@@ -56,4 +84,14 @@ public class DashboardStatsDto {
     public void setAdvancedAnalyticsLocked(boolean advancedAnalyticsLocked) { this.advancedAnalyticsLocked = advancedAnalyticsLocked; }
     public String getUpgradePrompt() { return upgradePrompt; }
     public void setUpgradePrompt(String upgradePrompt) { this.upgradePrompt = upgradePrompt; }
+    public Map<String, Integer> getTransactionCountByBank() { return transactionCountByBank; }
+    public void setTransactionCountByBank(Map<String, Integer> transactionCountByBank) { this.transactionCountByBank = transactionCountByBank; }
+    public Map<String, Double> getBalanceByBank() { return balanceByBank; }
+    public void setBalanceByBank(Map<String, Double> balanceByBank) { this.balanceByBank = balanceByBank; }
+    public Map<String, Double> getIncomeByBank() { return incomeByBank; }
+    public void setIncomeByBank(Map<String, Double> incomeByBank) { this.incomeByBank = incomeByBank; }
+    public Map<String, Double> getExpensesByBank() { return expensesByBank; }
+    public void setExpensesByBank(Map<String, Double> expensesByBank) { this.expensesByBank = expensesByBank; }
+    public Map<String, List<CategorySummaryDto>> getTopCategoriesByBank() { return topCategoriesByBank; }
+    public void setTopCategoriesByBank(Map<String, List<CategorySummaryDto>> topCategoriesByBank) { this.topCategoriesByBank = topCategoriesByBank; }
 }

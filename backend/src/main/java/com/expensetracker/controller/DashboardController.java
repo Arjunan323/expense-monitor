@@ -20,9 +20,10 @@ public class DashboardController {
     public ResponseEntity<DashboardStatsDto> getSummary(
             @RequestHeader("Authorization") String authHeader,
             @RequestParam(value = "startDate", required = false) String startDate,
-            @RequestParam(value = "endDate", required = false) String endDate) {
+            @RequestParam(value = "endDate", required = false) String endDate,
+            @RequestParam(value = "banks", required = false) String banksCsv) {
         String token = authHeader.replace("Bearer ", "");
-        DashboardStatsDto stats = dashboardService.getSummary(token, startDate, endDate);
+        DashboardStatsDto stats = dashboardService.getSummary(token, startDate, endDate, banksCsv);
         return ResponseEntity.ok(stats);
     }
 

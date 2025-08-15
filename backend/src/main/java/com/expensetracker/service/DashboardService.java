@@ -27,17 +27,25 @@ public class DashboardService {
     }
 
 
-    public DashboardStatsDto getSummary(String token, String startDateStr, String endDateStr) {
+    public DashboardStatsDto getSummary(String token, String startDateStr, String endDateStr, String banksCsv) {
         String username = new com.expensetracker.config.JwtUtil().extractUsername(token);
         User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException(username));
 
     java.time.LocalDate startDate = (startDateStr != null && !startDateStr.isEmpty()) ? java.time.LocalDate.parse(startDateStr) : null;
     java.time.LocalDate endDate = (endDateStr != null && !endDateStr.isEmpty()) ? java.time.LocalDate.parse(endDateStr) : null;
-    // Use Specification for date range filtering
+    List<String> banks = null;
+    if (banksCsv != null && !banksCsv.isBlank()) {
+        banks = Arrays.stream(banksCsv.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .distinct()
+                .toList();
+    }
+    // Specification with banks + date filtering
     List<Transaction> txns = transactionRepository.findAll(
         com.expensetracker.repository.TransactionSpecifications.filter(
             user,
-            null, // banks
+            banks, // banks filter
             null, // categories
             startDate,
             endDate,
@@ -53,9 +61,10 @@ public class DashboardService {
             planType = user.getSubscription().getPlanType().name();
         }
 
-        Map<String, List<Transaction>> bankGroups = txns.stream().collect(Collectors.groupingBy(t -> t.getBankName() != null ? t.getBankName() : AppConstants.UNKNOWN));
+        Map<String, List<Transaction>> bankGroups = txns.stream()
+            .collect(Collectors.groupingBy(t -> t.getBankName() != null ? t.getBankName() : AppConstants.UNKNOWN));
         List<String> bankSources = new ArrayList<>(bankGroups.keySet());
-        boolean isMultiBank = bankSources.size() > 1;
+        boolean isMultiBank = bankSources.size() > 1; // keep semantic for client UI toggles
         boolean hasBalanceDiscrepancy = isMultiBank;
         String lastUpdateTime = txns.stream().map(Transaction::getDate).max(java.util.Comparator.naturalOrder()).map(java.time.LocalDate::toString).orElse("");
 
@@ -71,6 +80,47 @@ public class DashboardService {
         double monthlyIncome = txns.stream().filter(t -> t.getAmount() > 0).mapToDouble(Transaction::getAmount).sum();
         double monthlyExpenses = txns.stream().filter(t -> t.getAmount() < 0).mapToDouble(Transaction::getAmount).sum();
         int transactionCount = txns.size();
+
+        // Per-bank aggregates
+        Map<String, Integer> transactionCountByBank = new HashMap<>();
+        Map<String, Double> balanceByBank = new HashMap<>();
+        Map<String, Double> incomeByBank = new HashMap<>();
+        Map<String, Double> expensesByBank = new HashMap<>();
+        Map<String, List<CategorySummaryDto>> topCategoriesByBank = new HashMap<>();
+        for (Map.Entry<String, List<Transaction>> entry : bankGroups.entrySet()) {
+            String bank = entry.getKey();
+            List<Transaction> list = entry.getValue();
+            transactionCountByBank.put(bank, list.size());
+            // Latest balance for that bank (same logic as total) – assume sorted by date desc
+            double bankBalance = list.stream()
+                .sorted((a,b)-> {
+                    int cmp = b.getDate().compareTo(a.getDate());
+                    if (cmp == 0) return Long.compare(b.getId(), a.getId());
+                    return cmp;
+                })
+                .map(Transaction::getBalance)
+                .findFirst()
+                .orElse(0.0);
+            balanceByBank.put(bank, bankBalance);
+            double inc = list.stream().filter(t -> t.getAmount() > 0).mapToDouble(Transaction::getAmount).sum();
+            double exp = list.stream().filter(t -> t.getAmount() < 0).mapToDouble(Transaction::getAmount).sum();
+            incomeByBank.put(bank, inc);
+            expensesByBank.put(bank, exp);
+            // Top categories per bank
+            Map<String, List<Transaction>> catGroups = list.stream().collect(Collectors.groupingBy(Transaction::getCategory));
+            double bankTotalAbs = list.stream().mapToDouble(t -> Math.abs(t.getAmount())).sum();
+            List<CategorySummaryDto> perBankCats = catGroups.entrySet().stream()
+                .map(e -> {
+                    double amount = e.getValue().stream().mapToDouble(Transaction::getAmount).sum();
+                    int count = e.getValue().size();
+                    double percentage = bankTotalAbs > 0 ? (e.getValue().stream().mapToDouble(t -> Math.abs(t.getAmount())).sum() / bankTotalAbs) * 100 : 0.0;
+                    return new CategorySummaryDto(e.getKey(), amount, count, percentage);
+                })
+                .sorted((a,b)-> Double.compare(Math.abs(b.getAmount()), Math.abs(a.getAmount())))
+                .limit(6)
+                .collect(Collectors.toList());
+            topCategoriesByBank.put(bank, perBankCats);
+        }
 
         Map<String, List<Transaction>> categoryGroups = txns.stream().collect(Collectors.groupingBy(Transaction::getCategory));
         double totalAbs = txns.stream().mapToDouble(t -> Math.abs(t.getAmount())).sum();
@@ -101,13 +151,11 @@ public class DashboardService {
 
         boolean advancedAnalyticsLocked = false;
         String upgradePrompt = null;
-        // if (AppConstants.PLAN_FREE.equals(planType)) {
-        //     topCategories = null;
-        //     isMultiBank = false;
-        //     hasBalanceDiscrepancy = false;
-        //     advancedAnalyticsLocked = true;
-        //     upgradePrompt = AppConstants.UPGRADE_PROMPT;
-        // }
+        if (AppConstants.PLAN_FREE.equals(planType)) {
+            hasBalanceDiscrepancy = false;
+            advancedAnalyticsLocked = true;
+            upgradePrompt = AppConstants.UPGRADE_PROMPT;
+        }
 
         return new DashboardStatsDto(
             totalBalance,
@@ -121,7 +169,12 @@ public class DashboardService {
             hasBalanceDiscrepancy,
             lastUpdateTime,
             advancedAnalyticsLocked,
-            upgradePrompt
+            upgradePrompt,
+            transactionCountByBank,
+            balanceByBank,
+            incomeByBank,
+            expensesByBank,
+            topCategoriesByBank
         );
     }
 

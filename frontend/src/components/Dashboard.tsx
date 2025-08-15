@@ -18,7 +18,7 @@ import { LoadingSpinner } from './ui/LoadingSpinner';
 import { EmptyState } from './ui/EmptyState';
 import { DateRangePicker } from './ui/DateRangePicker';
 import { MultiSelect } from './ui/MultiSelect';
-import { DashboardStats } from '../types';
+import { DashboardStats, UsageStats } from '../types';
 import { apiCall } from '../utils/api';
 import { formatCurrency, formatDate, formatDateTime, getCategoryColor } from '../utils/formatters';
 import { usePreferences } from '../contexts/PreferencesContext';
@@ -31,14 +31,30 @@ export const Dashboard: React.FC = () => {
   const { preferences } = usePreferences();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedBanks, setSelectedBanks] = useState<string[]>([]);
+  // selectedBanks are applied banks used for API calls
+  const [selectedBanks, setSelectedBanks] = useState<string[]>([]); // applied banks
+  // bankDraft holds in-progress selection in the multiselect before Apply
+  const [bankDraft, setBankDraft] = useState<string[]>([]);
+  const [allBanks, setAllBanks] = useState<string[]>([]); // original unfiltered list
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [showPerBank, setShowPerBank] = useState(false);
   const navigate = useNavigate();
+  // Read combined bank limit from usage endpoint via a lightweight fetch (could also use existing context if available)
+  const [usage, setUsage] = useState<UsageStats | null>(null);
+  useEffect(() => {
+    (async () => {
+      try {
+        const resp = await apiCall<UsageStats>('GET', '/user/usage');
+        setUsage(resp);
+      } catch {}
+    })();
+  }, []);
 
+  // Fetch only on mount and when date range changes; bank selection is client-side
   useEffect(() => {
     fetchDashboardData();
-  }, [selectedBanks, dateRange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateRange.start, dateRange.end]);
 
   // Only trigger fetch when user clicks Apply in date picker
   const handleDateRangeApply = (start: string, end: string) => {
@@ -48,20 +64,23 @@ export const Dashboard: React.FC = () => {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams();
-      if (selectedBanks.length > 0) {
-        params.append('banks', selectedBanks.join(','));
-      }
-      // Always send startDate and endDate, even if empty, to ensure backend receives them as null if not set
-      params.append('startDate', dateRange.start || '');
-      params.append('endDate', dateRange.end || '');
+  const params = new URLSearchParams();
+  params.append('startDate', dateRange.start || '');
+  params.append('endDate', dateRange.end || '');
 
       const data = await apiCall<DashboardStats>('GET', `/dashboard/summary?${params.toString()}`);
       setStats(data);
+      if (allBanks.length === 0 && data.bankSources?.length) {
+        setAllBanks(data.bankSources);
+      }
 
       // Initialize selected banks if not set
-      if (selectedBanks.length === 0 && data.bankSources.length > 0) {
-        setSelectedBanks(data.bankSources);
+      if (selectedBanks.length === 0) {
+        const sourceList = allBanks.length ? allBanks : data.bankSources;
+        if (sourceList?.length) {
+          setSelectedBanks(sourceList);
+          setBankDraft(sourceList);
+        }
       }
     } catch (error: any) {
       toast.error('Failed to load dashboard data');
@@ -74,29 +93,31 @@ export const Dashboard: React.FC = () => {
   // Remove handleDateRangeChange, use handleDateRangeApply instead
 
   const getFilteredStats = () => {
-    if (!stats || selectedBanks.length === 0) return stats;
-    
-    // If all banks selected, return original stats
-    if (selectedBanks.length === stats.bankSources.length) return stats;
-    
-    // Calculate filtered stats based on selected banks
-    const filteredBalance = selectedBanks.reduce((sum, bank) => 
-      sum + (stats.balanceByBank?.[bank] || 0), 0);
-    const filteredIncome = selectedBanks.reduce((sum, bank) => 
-      sum + (stats.incomeByBank?.[bank] || 0), 0);
-    const filteredExpenses = selectedBanks.reduce((sum, bank) => 
-      sum + (stats.expensesByBank?.[bank] || 0), 0);
-    const filteredTransactionCount = selectedBanks.reduce((sum, bank) => 
-      sum + (stats.transactionCountByBank?.[bank] || 0), 0);
-
-    return {
-      ...stats,
-      totalBalance: filteredBalance,
-      monthlyIncome: filteredIncome,
-      monthlyExpenses: filteredExpenses,
-      transactionCount: filteredTransactionCount,
-      isMultiBank: selectedBanks.length > 1
-    };
+    if (!stats) return stats;
+    if (!selectedBanks.length) return stats;
+    const sourceAll = allBanks.length ? allBanks : stats.bankSources;
+    if (selectedBanks.length === sourceAll.length) return stats;
+    const totalBalance = selectedBanks.reduce((s,b)=> s + (stats.balanceByBank?.[b]||0),0);
+    const monthlyIncome = selectedBanks.reduce((s,b)=> s + (stats.incomeByBank?.[b]||0),0);
+    const monthlyExpenses = selectedBanks.reduce((s,b)=> s + (stats.expensesByBank?.[b]||0),0);
+    const transactionCount = selectedBanks.reduce((s,b)=> s + (stats.transactionCountByBank?.[b]||0),0);
+    // Aggregate categories
+    const catAgg: Record<string,{amount:number; count:number; abs:number}> = {};
+    selectedBanks.forEach(b => {
+      (stats.topCategoriesByBank?.[b]||[]).forEach(c => {
+        if (!catAgg[c.category]) catAgg[c.category] = {amount:0,count:0,abs:0};
+        catAgg[c.category].amount += c.amount;
+        catAgg[c.category].count += c.count;
+        catAgg[c.category].abs += Math.abs(c.amount);
+      });
+    });
+    const totalAbs = Object.values(catAgg).reduce((s,v)=>s+v.abs,0);
+    const topCategories = Object.entries(catAgg)
+      .map(([category,v])=>({category, amount:v.amount, count:v.count, percentage: totalAbs? (v.abs/totalAbs)*100:0}))
+      .sort((a,b)=> Math.abs(b.amount)-Math.abs(a.amount))
+      .slice(0,6);
+    const recentTransactions = (stats.recentTransactions||[]).filter(t=> !t.bankName || selectedBanks.includes(t.bankName));
+    return { ...stats, totalBalance, monthlyIncome, monthlyExpenses, transactionCount, topCategories, recentTransactions, multiBank: selectedBanks.length>1 };
   };
 
   const filteredStats = getFilteredStats();
@@ -110,7 +131,7 @@ export const Dashboard: React.FC = () => {
   }
 
   // Show onboarding only if there is truly no data and no filters are applied
-  const noFiltersApplied = selectedBanks.length === (stats?.bankSources?.length || 0) && !dateRange.start && !dateRange.end;
+  const noFiltersApplied = selectedBanks.length === ((allBanks.length? allBanks : stats?.bankSources)||[]).length && !dateRange.start && !dateRange.end;
   if (!stats || (stats.transactionCount === 0 && noFiltersApplied)) {
     return (
       <div className="space-y-6">
@@ -156,7 +177,7 @@ export const Dashboard: React.FC = () => {
   // Inline empty state message if filters return no results, but show the rest of the dashboard (with zeroed/empty data)
   const showNoResults = stats && filteredStats && filteredStats.transactionCount === 0;
 
-  const bankOptions = stats.bankSources.map(bank => ({
+  const bankOptions = (allBanks.length ? allBanks : (stats?.bankSources||[])).map(bank => ({
     value: bank,
     label: bank,
     count: stats.transactionCountByBank?.[bank]
@@ -216,15 +237,28 @@ export const Dashboard: React.FC = () => {
         
         <div className="flex flex-col sm:flex-row gap-3">
           {/* Multi-bank Selector */}
-          {stats.isMultiBank && (
-            <div className="relative">
-              <MultiSelect
-                options={bankOptions}
-                selected={selectedBanks}
-                onChange={setSelectedBanks}
-                placeholder="🏦 Select banks"
-                className="min-w-[200px] filter-button"
-              />
+    {( (allBanks.length ? allBanks.length : stats.bankSources.length) > 1) && (
+            <div className="flex items-center space-x-2">
+              <div className="relative">
+                <MultiSelect
+                  options={bankOptions}
+                  selected={bankDraft}
+                  onChange={(next) => {
+                    const limit = usage?.combinedBankLimit || (usage?.planType === 'PREMIUM' ? 5 : usage?.planType === 'PRO' ? 3 : 2);
+                    if (next.length > limit) return; // hard cap
+                    setBankDraft(next);
+                  }}
+      placeholder={`🏦 Banks (${bankDraft.length}/${usage?.combinedBankLimit || (usage?.planType === 'PREMIUM' ? 5 : usage?.planType === 'PRO' ? 3 : 2)})`}
+                  className="min-w-[240px] filter-button"
+                />
+              </div>
+              <button
+                className="btn-secondary h-10 px-3 text-xs"
+                disabled={bankDraft.sort().join(',') === selectedBanks.sort().join(',')}
+                onClick={() => setSelectedBanks(bankDraft)}
+              >
+                Apply ({bankDraft.length}/{usage?.combinedBankLimit || (usage?.planType === 'PREMIUM' ? 5 : usage?.planType === 'PRO' ? 3 : 2)})
+              </button>
             </div>
           )}
           
@@ -236,16 +270,15 @@ export const Dashboard: React.FC = () => {
               onApply={handleDateRangeApply}
               className="min-w-[200px] filter-button"
             />
-          </div>
-          
-          <button
+          </div> 
+        </div>
+         <button
             onClick={() => navigate('/upload')}
             className="btn-primary flex items-center space-x-2 whitespace-nowrap group"
           >
             <Upload className="w-4 h-4 group-hover:animate-bounce-gentle" />
             <span>Upload Statement</span>
           </button>
-        </div>
       </div>
 
       {/* Balance Discrepancy Warning */}
@@ -271,7 +304,7 @@ export const Dashboard: React.FC = () => {
           icon={DollarSign}
           format="currency"
           subtitle={selectedBanks.length > 1 ? "Across selected accounts" : undefined}
-          showPerBank={showPerBank && stats.isMultiBank}
+          showPerBank={showPerBank && stats.multiBank}
           bankData={showPerBank ? stats.balanceByBank : undefined}
         />
         <StatCard
@@ -280,7 +313,7 @@ export const Dashboard: React.FC = () => {
           icon={TrendingUp}
           format="currency"
           subtitle="Credits this month"
-          showPerBank={showPerBank && stats.isMultiBank}
+          showPerBank={showPerBank && stats.multiBank}
           bankData={showPerBank ? stats.incomeByBank : undefined}
         />
         <StatCard
@@ -289,7 +322,7 @@ export const Dashboard: React.FC = () => {
           icon={TrendingDown}
           format="currency"
           subtitle="Debits this month"
-          showPerBank={showPerBank && stats.isMultiBank}
+          showPerBank={showPerBank && stats.multiBank}
           bankData={showPerBank ? stats.expensesByBank : undefined}
         />
         <StatCard
@@ -298,13 +331,13 @@ export const Dashboard: React.FC = () => {
           icon={Receipt}
           format="number"
           subtitle="Selected period"
-          showPerBank={showPerBank && stats.isMultiBank}
+          showPerBank={showPerBank && stats.multiBank}
           bankData={showPerBank ? stats.transactionCountByBank : undefined}
         />
       </div>
 
       {/* Per-Bank Toggle */}
-      {stats.isMultiBank && (
+      {stats.multiBank && (
         <div className="flex justify-end">
           <button
             onClick={() => setShowPerBank(!showPerBank)}
@@ -387,7 +420,7 @@ export const Dashboard: React.FC = () => {
             ))}
           </div>
           
-          {showPerBank && stats.isMultiBank && stats.topCategoriesByBank && (
+          {showPerBank && stats.multiBank && stats.topCategoriesByBank && (
             <div className="mt-6 pt-6 border-t border-gray-200">
               <h4 className="text-sm font-semibold text-gray-900 mb-4">Per-Bank Breakdown</h4>
               {selectedBanks.map(bank => (

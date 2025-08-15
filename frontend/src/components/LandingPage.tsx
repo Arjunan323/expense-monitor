@@ -64,8 +64,10 @@ export const LandingPage: React.FC = () => {
         if (!region) region = 'IN';
         const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/public/plans?region=${region}`);
         if (!res.ok) throw new Error('Failed to load plans');
-        const data = await res.json();
-        setPlans(data);
+  const data = await res.json();
+  const rank: Record<string, number> = { FREE: 0, PRO: 1, PREMIUM: 2 };
+  data.sort((a: any, b: any) => (rank[a.planType] ?? 99) - (rank[b.planType] ?? 99));
+  setPlans(data);
       } catch (e: any) {
         setPlansError(e.message || 'Unable to load plans');
       } finally {
@@ -541,6 +543,7 @@ export const LandingPage: React.FC = () => {
                   <ul className="space-y-2 mb-6 flex-1">
                     <li className="text-sm text-gray-700">{statements} statements / month</li>
                     <li className="text-sm text-gray-700">{pages} pages / statement</li>
+                    <li className="text-sm text-gray-700">Combine up to {p.combinedBank ?? (p.planType === 'FREE' ? 2 : p.planType === 'PRO' ? 3 : 5)} bank accounts</li>
                     {featureList.map((f: string, idx: number) => (
                       <li key={idx} className="text-sm text-gray-600 flex items-start"><span className="text-primary-500 mr-2">✔</span>{f}</li>
                     ))}

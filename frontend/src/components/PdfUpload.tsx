@@ -282,18 +282,18 @@ export const PdfUpload: React.FC = () => {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-gray-700">Pages</span>
-                <span className={`text-sm font-bold ${getUsageColor(usage.pagesThisMonth, usage.pageLimit)}`}>
-                  {usage.pagesThisMonth} / {usage.pageLimit === -1 ? '∞' : usage.pageLimit}
+                <span className={`text-sm font-bold ${getUsageColor(usage.pagesThisMonth, usage.statementLimit * usage.pageLimit)}`}>
+                  {usage.pagesThisMonth} / {usage.pageLimit === -1 ? '∞' : usage.statementLimit * usage.pageLimit}
                 </span>
               </div>
               {usage.pageLimit !== -1 && (
                 <div className="w-full bg-gray-200 rounded-full h-2">
                   <div
                     className={`h-2 rounded-full transition-all duration-300 ${
-                      usage.pagesThisMonth >= usage.pageLimit ? 'bg-danger-600' :
-                      usage.pagesThisMonth / usage.pageLimit >= 0.8 ? 'bg-warning-500' : 'bg-primary-600'
+                      usage.pagesThisMonth >= (usage.statementLimit * usage.pageLimit) ? 'bg-danger-600' :
+                      usage.pagesThisMonth / (usage.statementLimit * usage.pageLimit) >= 0.8 ? 'bg-warning-500' : 'bg-primary-600'
                     }`}
-                    style={{ width: `${Math.min((usage.pagesThisMonth / usage.pageLimit) * 100, 100)}%` }}
+                    style={{ width: `${Math.min((usage.pagesThisMonth / (usage.statementLimit * usage.pageLimit)) * 100, 100)}%` }}
                   />
                 </div>
               )}

@@ -28,15 +28,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
+    const storedPrefsRaw = localStorage.getItem('user-preferences');
 
     if (storedToken && storedUser) {
       setToken(storedToken);
       const parsed = JSON.parse(storedUser);
       setUser(parsed);
-      // If user object carries preference hints
-      if (parsed?.currency || parsed?.locale) {
-        setPreferences({ currency: parsed.currency || 'USD', locale: parsed.locale || 'en-US' });
+      // Only set preferences if none stored already (avoid overwriting user choice)
+      if (!storedPrefsRaw) {
+        if (parsed?.currency || parsed?.locale) {
+          setPreferences({ currency: parsed.currency || 'USD', locale: parsed.locale || 'en-US' });
+        } else {
+          const detected = getDefaultCurrency();
+          setPreferences({ currency: detected.currency, locale: detected.locale });
+        }
       }
+    } else if (!storedPrefsRaw) {
+      // No auth, no stored prefs -> initialize defaults once
+      const detected = getDefaultCurrency();
+      setPreferences({ currency: detected.currency, locale: detected.locale });
     }
     setLoading(false);
   }, []);

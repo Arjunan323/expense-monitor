@@ -8,8 +8,11 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 
 export const AnalyticsScreen: React.FC = () => {
+  const navigation = useNavigation<any>();
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
@@ -57,46 +60,9 @@ export const AnalyticsScreen: React.FC = () => {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.feedbackButton}>
+  <TouchableOpacity style={styles.feedbackButton} onPress={() => navigation.navigate('AnalyticsFeedback')}>
           <Ionicons name="chatbubble-outline" size={20} color="#ffffff" />
           <Text style={styles.feedbackButtonText}>Tell us what analytics you need</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Feedback Form */}
-      <View style={styles.feedbackCard}>
-        <Text style={styles.feedbackTitle}>
-          What analytics features would be most valuable to you?
-        </Text>
-        <View style={styles.checkboxList}>
-          <View style={styles.checkboxItem}>
-            <Ionicons name="square-outline" size={20} color="#6b7280" />
-            <Text style={styles.checkboxText}>Monthly spending trends and comparisons</Text>
-          </View>
-          <View style={styles.checkboxItem}>
-            <Ionicons name="square-outline" size={20} color="#6b7280" />
-            <Text style={styles.checkboxText}>Budget setting and tracking by category</Text>
-          </View>
-          <View style={styles.checkboxItem}>
-            <Ionicons name="square-outline" size={20} color="#6b7280" />
-            <Text style={styles.checkboxText}>Unusual spending pattern alerts</Text>
-          </View>
-          <View style={styles.checkboxItem}>
-            <Ionicons name="square-outline" size={20} color="#6b7280" />
-            <Text style={styles.checkboxText}>Cash flow forecasting</Text>
-          </View>
-          <View style={styles.checkboxItem}>
-            <Ionicons name="square-outline" size={20} color="#6b7280" />
-            <Text style={styles.checkboxText}>Goal tracking (savings, debt reduction)</Text>
-          </View>
-          <View style={styles.checkboxItem}>
-            <Ionicons name="square-outline" size={20} color="#6b7280" />
-            <Text style={styles.checkboxText}>Tax-related expense categorization</Text>
-          </View>
-        </View>
-        
-        <TouchableOpacity style={styles.submitButton}>
-          <Text style={styles.submitButtonText}>Submit Feedback</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -218,52 +184,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  feedbackCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 24,
-    marginHorizontal: 24,
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  feedbackTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 16,
-  },
-  checkboxList: {
-    marginBottom: 24,
-  },
-  checkboxItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    gap: 12,
-  },
-  checkboxText: {
-    flex: 1,
-    fontSize: 14,
-    color: '#374151',
-    lineHeight: 20,
-  },
-  submitButton: {
-    backgroundColor: '#0ea5e9',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  submitButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  // removed inline feedback form styles (moved to AnalyticsFeedbackScreen)
 });

@@ -40,13 +40,14 @@ public class UserController {
         String username = jwtUtil.extractUsername(token);
         User user = userRepository.findByUsername(username).orElse(null);
         if (user == null) {
-            return new UsageStatsDto(0, 3, "FREE", 0, 30, true);
+            return new UsageStatsDto(0, 3, "FREE", 0, 30, true, 2);
         }
 
         Subscription sub = user.getSubscription();
         String planType = "FREE";
         int statementLimit = 3;
         int pageLimit = 10;
+        Integer combinedBankLimit = 2; // default for FREE
         if (sub != null && sub.getPlanType() != null && "ACTIVE".equals(sub.getStatus())) {
             planType = sub.getPlanType().name();
             // Lookup plan limits from Plan entity
@@ -55,7 +56,17 @@ public class UserController {
             if (plan != null) {
                 statementLimit = plan.getStatementsPerMonth();
                 pageLimit = plan.getPagesPerStatement();
+                if (plan.getCombinedBank() != null) {
+                    combinedBankLimit = plan.getCombinedBank();
+                } else {
+                    // Fallback legacy defaults if column not populated
+                    if ("PRO".equalsIgnoreCase(planType)) combinedBankLimit = 3;
+                    else if ("PREMIUM".equalsIgnoreCase(planType)) combinedBankLimit = 5;
+                }
             }
+        } else {
+            // Free plan fallback already set
+            combinedBankLimit = 2;
         }
 
         // Count statements/pages for current month
@@ -71,7 +82,7 @@ public class UserController {
         }
 
         boolean canUpload = statementLimit == -1 || statementsThisMonth < statementLimit;
-        return new UsageStatsDto(statementsThisMonth, statementLimit, planType, pagesThisMonth, pageLimit, canUpload);
+    return new UsageStatsDto(statementsThisMonth, statementLimit, planType, pagesThisMonth, pageLimit, canUpload, combinedBankLimit);
     }
 
     @GetMapping("/status")

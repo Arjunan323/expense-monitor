@@ -21,16 +21,22 @@ import { DashboardStats, Transaction } from '../types';
 import { apiCall } from '../utils/api';
 import { formatCurrency, formatDate, getCategoryColor } from '../utils/formatters';
 import { usePreferences } from '../contexts/PreferencesContext';
+import { useAuth } from '../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 
 const screenWidth = Dimensions.get('window').width;
 
 export const DashboardScreen: React.FC = () => {
   const { preferences } = usePreferences();
+  const { usage } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  // selectedBanks = applied banks used for API queries
   const [selectedBanks, setSelectedBanks] = useState<string[]>([]);
+  // bankDraft = in-modal working selection (no fetch until applied)
+  const [bankDraft, setBankDraft] = useState<string[]>([]);
+  const [allBanks, setAllBanks] = useState<string[]>([]); // original full bank list
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [showBankSelector, setShowBankSelector] = useState(false);
   const [showDateRangePicker, setShowDateRangePicker] = useState(false);
@@ -45,22 +51,36 @@ export const DashboardScreen: React.FC = () => {
     fetchDashboardData();
   }, []);
 
+  const getBankLimit = () => {
+    if (usage?.combinedBankLimit && usage.combinedBankLimit > 0) return usage.combinedBankLimit;
+    // Fallback for older server versions
+    switch (usage?.planType) {
+      case 'PRO': return 3;
+      case 'PREMIUM': return 5;
+      default: return 2;
+    }
+  };
+
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams();
-      if (selectedBanks.length > 0) {
-        params.append('banks', selectedBanks.join(','));
-      }
-      if (dateRange.start) {
-        params.append('startDate', dateRange.start);
-      }
-      if (dateRange.end) {
-        params.append('endDate', dateRange.end);
-      }
+  const params = new URLSearchParams();
+  params.append('startDate', dateRange.start || '');
+  params.append('endDate', dateRange.end || '');
       
       const data = await apiCall<DashboardStats>('GET', `/dashboard/summary?${params.toString()}`);
-      setStats(data);
+      // Normalize multi-bank flag (backend may send isMultiBank)
+      const normalizedMultiBank = (data as any).multiBank !== undefined
+        ? (data as any).multiBank
+        : (data as any).isMultiBank !== undefined
+          ? (data as any).isMultiBank
+          : Array.isArray(data.bankSources) && data.bankSources.length > 1;
+      if ((data as any).multiBank !== normalizedMultiBank) {
+        // Inject normalized flag while preserving original object shape
+        setStats({ ...data, multiBank: normalizedMultiBank });
+      } else {
+        setStats(data);
+      }
       // Capture whether user has any transactions overall (only when no filters applied)
       if (!dateRange.start && !dateRange.end && selectedBanks.length === 0 && hasAnyTransactions === null) {
         setHasAnyTransactions(data.transactionCount > 0);
@@ -69,9 +89,17 @@ export const DashboardScreen: React.FC = () => {
         setHasAnyTransactions(data.transactionCount > 0);
       }
       
-      // Initialize selected banks if not set
-      if (selectedBanks.length === 0 && data.bankSources.length > 0) {
-        setSelectedBanks(data.bankSources);
+      // Capture full bank list on first load
+      if (allBanks.length === 0 && data.bankSources.length > 0) {
+        setAllBanks(data.bankSources);
+      }
+      // Initialize selected & draft banks if not set
+      if (selectedBanks.length === 0 && (allBanks.length > 0 ? allBanks : data.bankSources).length > 0) {
+        const limit = getBankLimit();
+        const sourceList = allBanks.length > 0 ? allBanks : data.bankSources;
+        const initial = sourceList.length > limit ? sourceList.slice(0, limit) : sourceList;
+        setSelectedBanks(initial);
+        setBankDraft(initial);
       }
     } catch (error: any) {
       console.error('Dashboard error:', error);
@@ -80,11 +108,25 @@ export const DashboardScreen: React.FC = () => {
     }
   };
 
+  // Only refetch when date range changes (bank filtering is client-side now)
   useEffect(() => {
     if (stats) {
       fetchDashboardData();
     }
-  }, [selectedBanks, dateRange]);
+  }, [dateRange]);
+
+  // Keep bankDraft in sync if stats arrive first (only when nothing applied yet)
+  useEffect(() => {
+    if (stats && selectedBanks.length === 0) {
+      const sourceList = allBanks.length > 0 ? allBanks : stats.bankSources;
+      if (sourceList.length > 0) {
+        const limit = getBankLimit();
+        const initial = sourceList.length > limit ? sourceList.slice(0, limit) : sourceList;
+        setSelectedBanks(initial);
+        setBankDraft(initial);
+      }
+    }
+  }, [stats, allBanks]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -92,12 +134,27 @@ export const DashboardScreen: React.FC = () => {
     setRefreshing(false);
   };
 
-  const toggleBank = (bank: string) => {
-    setSelectedBanks(prev => 
-      prev.includes(bank) 
-        ? prev.filter(b => b !== bank)
-        : [...prev, bank]
-    );
+  const toggleDraftBank = (bank: string) => {
+    setBankDraft(prev => {
+      const limit = getBankLimit();
+        if (prev.includes(bank)) {
+          return prev.filter(b => b !== bank);
+        } else {
+          const remaining = Math.max(0, limit - prev.length);
+          if (prev.length >= limit) {
+            Alert.alert(
+              'Bank Selection Limit',
+              `You can combine up to ${limit} bank${limit > 1 ? 's' : ''} on your plan. (${remaining === 0 ? 'Limit reached' : remaining + ' slot' + (remaining > 1 ? 's' : '') + ' left'})`,
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Upgrade', onPress: () => navigation.navigate('Billing' as never) },
+              ]
+            );
+            return prev;
+          }
+          return [...prev, bank];
+      }
+    });
   };
 
   const openDateRangePicker = () => {
@@ -156,7 +213,9 @@ export const DashboardScreen: React.FC = () => {
   };
 
   const clearFilters = () => {
-    setSelectedBanks(stats?.bankSources || []);
+  const all = allBanks.length > 0 ? allBanks : (stats?.bankSources || []);
+    setSelectedBanks(all);
+    setBankDraft(all);
     setDateRange({ start: '', end: '' });
     setTempDateRange({ start: '', end: '' });
   };
@@ -171,7 +230,31 @@ export const DashboardScreen: React.FC = () => {
   };
 
   const getFilteredStats = () => {
-    return stats;
+    if (!stats) return stats;
+    if (!selectedBanks.length) return stats;
+    const sourceAll = allBanks.length ? allBanks : stats.bankSources;
+    if (selectedBanks.length === sourceAll.length) return stats;
+    const totalBalance = selectedBanks.reduce((s,b)=> s + (stats.balanceByBank?.[b]||0),0);
+    const monthlyIncome = selectedBanks.reduce((s,b)=> s + (stats.incomeByBank?.[b]||0),0);
+    const monthlyExpenses = selectedBanks.reduce((s,b)=> s + (stats.expensesByBank?.[b]||0),0);
+    const transactionCount = selectedBanks.reduce((s,b)=> s + (stats.transactionCountByBank?.[b]||0),0);
+    // Aggregate categories across selected banks
+    const catAgg: Record<string,{amount:number; count:number; abs:number}> = {};
+    selectedBanks.forEach(b => {
+      (stats.topCategoriesByBank?.[b]||[]).forEach(c => {
+        if (!catAgg[c.category]) catAgg[c.category] = {amount:0,count:0,abs:0};
+        catAgg[c.category].amount += c.amount;
+        catAgg[c.category].count += c.count;
+        catAgg[c.category].abs += Math.abs(c.amount);
+      });
+    });
+    const totalAbs = Object.values(catAgg).reduce((s,v)=> s+v.abs,0);
+    const topCategories = Object.entries(catAgg)
+      .map(([category,v])=>({category, amount:v.amount, count:v.count, percentage: totalAbs? (v.abs/totalAbs)*100:0}))
+      .sort((a,b)=> Math.abs(b.amount)-Math.abs(a.amount))
+      .slice(0,6);
+    const recentTransactions = (stats.recentTransactions||[]).filter(t=> !t.bankName || selectedBanks.includes(t.bankName));
+    return { ...stats, totalBalance, monthlyIncome, monthlyExpenses, transactionCount, topCategories, recentTransactions, multiBank: selectedBanks.length>1 } as DashboardStats;
   };
   // Compute filtersActive early so alert effect can run before any early return
   const filtersActive = (
@@ -190,7 +273,7 @@ export const DashboardScreen: React.FC = () => {
           { text: 'Reset', onPress: clearFilters, style: 'destructive' as const },
           { text: 'Dates', onPress: openDateRangePicker },
         ];
-        if (stats.isMultiBank) {
+        if (stats.multiBank) {
           buttons.push({ text: 'Banks', onPress: () => setShowBankSelector(true) });
         }
         buttons.push({ text: 'Close', style: 'cancel' as const });
@@ -281,19 +364,21 @@ export const DashboardScreen: React.FC = () => {
         
         {/* Funky Filters */}
         <View style={styles.filtersContainer}>
-          {stats?.isMultiBank && (
+          {(allBanks.length > 1 || stats?.multiBank) && (
             <TouchableOpacity 
               style={[styles.filterButton, styles.bankFilterButton]}
-              onPress={() => setShowBankSelector(true)}
+              onPress={() => {
+                setBankDraft(selectedBanks); // sync draft when opening
+                setShowBankSelector(true);
+              }}
             >
               <Ionicons name="business" size={16} color="#FFFFFF" />
               <Text style={styles.filterButtonText}>
                 {selectedBanks.length === stats!.bankSources.length
-                  ? 'All Banks' 
-                  : selectedBanks.length === 1 
-                  ? selectedBanks[0] 
-                  : `${selectedBanks.length} Banks`
-                }
+                  ? 'All Banks'
+                  : selectedBanks.length === 1
+                  ? selectedBanks[0]
+                  : `${selectedBanks.length} Banks`} ({Math.max(0, selectedBanks.length)})
               </Text>
             </TouchableOpacity>
           )}
@@ -381,7 +466,7 @@ export const DashboardScreen: React.FC = () => {
       </View>
 
       {/* Per-Bank Toggle */}
-  {stats?.isMultiBank && (
+    {stats?.multiBank && (
         <View style={styles.toggleContainer}>
           <TouchableOpacity
             style={styles.toggleButton}
@@ -422,6 +507,50 @@ export const DashboardScreen: React.FC = () => {
               absolute
               hasLegend={false}
             />
+          </View>
+        </View>
+      )}
+
+      {/* Per-Bank Breakdown Section */}
+      {stats?.multiBank && showPerBank && (
+        <View style={styles.perBankSection}>
+          <Text style={styles.sectionTitle}>🏦 Per-Bank Breakdown</Text>
+          <View style={styles.perBankCardsContainer}>
+            {selectedBanks.map(bank => (
+              <View key={bank} style={styles.bankCard}>
+                <View style={styles.bankCardHeader}>
+                  <Ionicons name="business" size={18} color="#0077B6" />
+                  <Text style={styles.bankCardTitle}>{bank}</Text>
+                  <View style={styles.bankChip}>
+                    <Text style={styles.bankChipText}>{stats.transactionCountByBank?.[bank] || 0} tx</Text>
+                  </View>
+                </View>
+                <View style={styles.bankMetricsRow}>
+                  <View style={styles.bankMetric}>
+                    <Text style={styles.bankMetricLabel}>Balance</Text>
+                    <Text style={styles.bankMetricValue}>{formatCurrency(stats.balanceByBank?.[bank] || 0, preferences)}</Text>
+                  </View>
+                  <View style={styles.bankMetric}>
+                    <Text style={styles.bankMetricLabel}>Income</Text>
+                    <Text style={[styles.bankMetricValue, { color: '#22C55E' }]}>{formatCurrency(stats.incomeByBank?.[bank] || 0, preferences)}</Text>
+                  </View>
+                  <View style={styles.bankMetric}>
+                    <Text style={styles.bankMetricLabel}>Expenses</Text>
+                    <Text style={[styles.bankMetricValue, { color: '#EF4444' }]}>{formatCurrency(Math.abs(stats.expensesByBank?.[bank] || 0), preferences)}</Text>
+                  </View>
+                </View>
+                {stats.topCategoriesByBank?.[bank]?.length ? (
+                  <View style={styles.bankCategories}>
+                    {stats.topCategoriesByBank[bank].slice(0,3).map(cat => (
+                      <View key={bank + cat.category} style={styles.bankCategoryPill}>
+                        <Text style={styles.bankCategoryPillText}>{cat.category}</Text>
+                        <Text style={styles.bankCategoryAmount}>{formatCurrency(Math.abs(cat.amount), preferences)}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+            ))}
           </View>
         </View>
       )}
@@ -528,39 +657,59 @@ export const DashboardScreen: React.FC = () => {
                 <Ionicons name="close-circle" size={28} color="#EF4444" />
               </TouchableOpacity>
             </View>
+      <View style={styles.bankLimitNotice}>
+              <Ionicons name="information-circle-outline" size={18} color="#0077B6" />
+              <Text style={styles.bankLimitText}>
+      Banks: {bankDraft.length}/{getBankLimit()} selected{usage?.planType ? ` (${usage.planType} plan)` : ''} • {Math.max(0, getBankLimit() - bankDraft.length)} remaining
+              </Text>
+            </View>
             
             <ScrollView style={styles.bankList}>
-              {stats?.bankSources.map((bank) => (
-                <TouchableOpacity
-                  key={bank}
-                  style={[
-                    styles.bankOption,
-                    selectedBanks.includes(bank) && styles.bankOptionSelected
-                  ]}
-                  onPress={() => toggleBank(bank)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.bankOptionLeft}>
-                    <View style={[
-                      styles.bankCheckbox,
-                      { backgroundColor: selectedBanks.includes(bank) ? '#00B77D' : '#F3F4F6' }
-                    ]}>
-                      {selectedBanks.includes(bank) && (
-                        <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+              {(allBanks.length > 0 ? allBanks : stats?.bankSources || []).map((bank) => {
+                const limit = getBankLimit();
+                const disabled = !bankDraft.includes(bank) && bankDraft.length >= limit;
+                return (
+                  <TouchableOpacity
+                    key={bank}
+                    style={[
+                      styles.bankOption,
+                      bankDraft.includes(bank) && styles.bankOptionSelected,
+                      disabled && styles.bankOptionDisabled
+                    ]}
+                    onPress={() => !disabled && toggleDraftBank(bank)}
+                    activeOpacity={disabled ? 1 : 0.7}
+                    disabled={disabled}
+                  >
+                    <View style={styles.bankOptionLeft}>
+                      <View style={[
+                        styles.bankCheckbox,
+                        { backgroundColor: bankDraft.includes(bank) ? '#00B77D' : '#F3F4F6' }
+                      ]}>
+                        {bankDraft.includes(bank) && (
+                          <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                        )}
+                      </View>
+                      <Text style={[styles.bankOptionText, disabled && styles.bankOptionTextDisabled]}>{bank}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={[styles.bankOptionCount, disabled && styles.bankOptionTextDisabled]}>
+                        {(stats?.transactionCountByBank?.[bank]) || 0} tx
+                      </Text>
+                      {disabled && (
+                        <Ionicons name="lock-closed" size={16} color="#9CA3AF" />
                       )}
                     </View>
-                    <Text style={styles.bankOptionText}>{bank}</Text>
-                  </View>
-                  <Text style={styles.bankOptionCount}>
-                    {stats.transactionCountByBank?.[bank] || 0} transactions
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
             
             <TouchableOpacity
               style={styles.modalApplyButton}
-              onPress={() => setShowBankSelector(false)}
+              onPress={() => {
+                setSelectedBanks(bankDraft); // commit & trigger fetch
+                setShowBankSelector(false);
+              }}
             >
               <Text style={styles.modalApplyButtonText}>Apply Selection ✨</Text>
             </TouchableOpacity>
@@ -1156,6 +1305,23 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1F2937',
   },
+  bankLimitNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#EEF6FF',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    marginBottom: 12,
+    marginTop: 4,
+  },
+  bankLimitText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#1E3A8A',
+    fontWeight: '500',
+  },
   bankList: {
     maxHeight: 300,
   },
@@ -1174,6 +1340,9 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#00B77D',
   },
+  bankOptionDisabled: {
+    opacity: 0.5,
+  },
   bankOptionLeft: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1191,6 +1360,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#1F2937',
     fontWeight: '600',
+  },
+  bankOptionTextDisabled: {
+    color: '#9CA3AF',
   },
   bankOptionCount: {
     fontSize: 14,
@@ -1357,5 +1529,87 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#FFFFFF',
+  },
+  perBankSection: {
+    paddingHorizontal: 24,
+    marginTop: 24,
+  },
+  perBankCardsContainer: {
+    marginTop: 14,
+    gap: 14,
+  },
+  bankCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  bankCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 8,
+  },
+  bankCardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1F2937',
+    flex: 1,
+  },
+  bankChip: {
+    backgroundColor: '#0077B6',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  bankChipText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  bankMetricsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  bankMetric: {
+    flex: 1,
+  },
+  bankMetricLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 4,
+    fontWeight: '500',
+  },
+  bankMetricValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1F2937',
+  },
+  bankCategories: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  bankCategoryPill: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  bankCategoryPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  bankCategoryAmount: {
+    fontSize: 10,
+    color: '#6B7280',
+    marginTop: 2,
+    textAlign: 'center',
   },
 });
