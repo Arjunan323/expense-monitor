@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, AuthContextType } from '../types';
 import { apiCall } from '../utils/api';
+import { getDefaultCurrency } from '../utils/formatters';
+import { usePreferences } from './PreferencesContext';
 import toast from 'react-hot-toast';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -21,6 +23,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const { setPreferences } = usePreferences();
 
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
@@ -28,7 +31,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     if (storedToken && storedUser) {
       setToken(storedToken);
-      setUser(JSON.parse(storedUser));
+      const parsed = JSON.parse(storedUser);
+      setUser(parsed);
+      // If user object carries preference hints
+      if (parsed?.currency || parsed?.locale) {
+        setPreferences({ currency: parsed.currency || 'USD', locale: parsed.locale || 'en-US' });
+      }
     }
     setLoading(false);
   }, []);
@@ -41,12 +49,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         password,
       });
 
-      const { token: newToken, user: userData } = response;
+  const { token: newToken, user: userData } = response;
       
       setToken(newToken);
       setUser(userData);
       localStorage.setItem('token', newToken);
       localStorage.setItem('user', JSON.stringify(userData));
+      if (userData?.currency || userData?.locale) {
+        setPreferences({ currency: userData.currency || 'USD', locale: userData.locale || 'en-US' });
+      } else {
+        const detected = getDefaultCurrency();
+        setPreferences({ currency: detected.currency, locale: detected.locale });
+      }
       
       toast.success('Welcome back!');
     } catch (error: any) {
@@ -65,19 +79,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   ): Promise<void> => {
     try {
       setLoading(true);
+      const detected = getDefaultCurrency();
       const response = await apiCall<{ token: string; user: User }>('POST', '/auth/register', {
         email,
         password,
         firstName,
         lastName,
+        currency: detected.currency,
+        locale: detected.locale,
       });
 
-      const { token: newToken, user: userData } = response;
+  const { token: newToken, user: userData } = response;
       
       setToken(newToken);
       setUser(userData);
       localStorage.setItem('token', newToken);
       localStorage.setItem('user', JSON.stringify(userData));
+      if (userData?.currency || userData?.locale) {
+        setPreferences({ currency: userData.currency || 'USD', locale: userData.locale || 'en-US' });
+      } else {
+        const detected = getDefaultCurrency();
+        setPreferences({ currency: detected.currency, locale: detected.locale });
+      }
       
       toast.success('Account created successfully!');
     } catch (error: any) {

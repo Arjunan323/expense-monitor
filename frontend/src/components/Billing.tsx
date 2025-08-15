@@ -1,4 +1,10 @@
 import React, { useState, useEffect } from 'react';
+// Extend window typing for Razorpay injected script
+declare global {
+  interface Window {
+    Razorpay?: any;
+  }
+}
 // Helper to load Razorpay script
 function loadRazorpayScript(): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -32,7 +38,6 @@ import { LoadingSpinner } from './ui/LoadingSpinner';
 import { UsageStats } from '../types';
 import { apiCall } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
-import { usePreferences } from '../contexts/PreferencesContext';
 import toast from 'react-hot-toast';
 
 interface PlanFeature {
@@ -119,7 +124,6 @@ function parseFeatures(features: string): PlanFeature[] {
 
 export const Billing: React.FC = () => {
   const { user } = useAuth();
-  const { preferences } = usePreferences();
   const [usage, setUsage] = useState<UsageStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [upgrading, setUpgrading] = useState<string | null>(null);
@@ -164,30 +168,30 @@ export const Billing: React.FC = () => {
 
   const fetchPlans = async () => {
     try {
-      // 1. Try region from preferences
-      let region = '';
-      if (preferences && preferences.locale && preferences.locale.includes('-')) {
-        region = preferences.locale.split('-')[1].toUpperCase();
-      }
-      // 2. Fallback to browser locale
-      if (!region && typeof navigator !== 'undefined' && navigator.language && navigator.language.includes('-')) {
+      // Determine region ONLY from browser locale (not user preferences)
+      let region = 'IN';
+      if (typeof navigator !== 'undefined' && navigator.language && navigator.language.includes('-')) {
         region = navigator.language.split('-')[1].toUpperCase();
       }
-      // 3. Default to IN
-      if (!region) region = 'IN';
-
-      const data = await apiCall<ApiPlan[]>('GET', `/plans?region=${region}`);
-      // Merge API data with UI labels and parse features
+      const data = await apiCall<ApiPlan[]>(
+        'GET',
+        `/plans?region=${region}`
+      );
+      const normalizeCurrency = (c: string) => {
+        if (c === '₹' || c === 'INR') return 'INR';
+        if (c === '$' || c === 'USD') return 'USD';
+        return c; // leave others unchanged
+      };
       const merged: UiPlan[] = data.map((plan) => {
         const label = PLAN_LABELS[plan.planType] || {};
         return {
           ...plan,
-          ...label,
-          price: plan.amount,
-          currency: plan.currency || '₹',
-          statementsLimit: plan.statementsPerMonth === -1 ? 'unlimited' : String(plan.statementsPerMonth),
-          pagesPerStatementUi: plan.pagesPerStatement === -1 ? 'unlimited' : String(plan.pagesPerStatement),
-          featuresUi: parseFeatures(plan.features),
+            ...label,
+            price: plan.amount, // keep backend smallest unit to preserve current rendering logic (divide later)
+            currency: normalizeCurrency(plan.currency || 'INR'),
+            statementsLimit: plan.statementsPerMonth === -1 ? 'unlimited' : String(plan.statementsPerMonth),
+            pagesPerStatementUi: plan.pagesPerStatement === -1 ? 'unlimited' : String(plan.pagesPerStatement),
+            featuresUi: parseFeatures(plan.features)
         };
       });
       setPlans(merged);
@@ -324,7 +328,7 @@ export const Billing: React.FC = () => {
             <div className="text-right">
               <div className="text-sm font-medium text-gray-900">{currentPlan.name}</div>
               <div className="text-xs text-gray-500">
-                {Number(currentPlan.price) > 0 ? `${currentPlan.currency}${currentPlan.price}/${currentPlan.period}` : 'Free'}
+                {Number(currentPlan.price) > 0 ? `${currencySymbol(currentPlan.currency)}${(currentPlan.price/100).toFixed(0)}/${currentPlan.period}` : 'Free'}
               </div>
             </div>
           </div>

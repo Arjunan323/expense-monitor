@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { formatCurrency } from '../../utils/formatters';
+import { usePreferences } from '../../contexts/PreferencesContext';
 
 interface StatCardProps {
   title: string;
@@ -20,9 +21,10 @@ export const StatCard: React.FC<StatCardProps> = ({
   subtitle,
   color = '#00B77D'
 }) => {
+  const { preferences } = usePreferences();
   const formattedValue = format === 'currency'
-    ? formatCurrency(value)
-    : value.toLocaleString('en-IN');
+    ? formatCurrency(value, preferences)
+    : value.toLocaleString(preferences.locale || 'en-US');
 
   return (
     <View style={[styles.card, { borderLeftColor: color }]}>

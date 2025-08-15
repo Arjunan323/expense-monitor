@@ -1,6 +1,6 @@
 package com.expensetracker.controller;
 
-import com.expensetracker.model.Category;
+import com.expensetracker.dto.CategoryDto;
 import com.expensetracker.model.User;
 import com.expensetracker.repository.CategoryRepository;
 import com.expensetracker.repository.UserRepository;
@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/categories")
@@ -23,9 +24,12 @@ public class CategoryController {
     private UserRepository userRepository;
 
     @GetMapping
-    public ResponseEntity<List<Category>> listCategories(@RequestHeader("Authorization") String authHeader) {
+    public ResponseEntity<List<CategoryDto>> listCategories(@RequestHeader("Authorization") String authHeader) {
         User user = getUser(authHeader);
-        return ResponseEntity.ok(categoryRepository.findByUser(user));
+        List<CategoryDto> dto = categoryRepository.findByUser(user).stream()
+                .map(c -> new CategoryDto(c.getId(), c.getName(), c.getTransactionCount()))
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(dto);
     }
 
     private User getUser(String authHeader) {

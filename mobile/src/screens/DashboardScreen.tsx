@@ -20,11 +20,13 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { DashboardStats, Transaction } from '../types';
 import { apiCall } from '../utils/api';
 import { formatCurrency, formatDate, getCategoryColor } from '../utils/formatters';
+import { usePreferences } from '../contexts/PreferencesContext';
 import { useNavigation } from '@react-navigation/native';
 
 const screenWidth = Dimensions.get('window').width;
 
 export const DashboardScreen: React.FC = () => {
+  const { preferences } = usePreferences();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -446,7 +448,7 @@ export const DashboardScreen: React.FC = () => {
               </View>
               <View style={styles.categoryRight}>
                 <Text style={styles.categoryAmount}>
-                  {formatCurrency(Math.abs(category.amount))}
+                  {formatCurrency(Math.abs(category.amount), preferences)}
                 </Text>
                 <Text style={styles.categoryPercentage}>
                   {category.percentage.toFixed(1)}%
@@ -500,10 +502,10 @@ export const DashboardScreen: React.FC = () => {
                     { color: transaction.amount >= 0 ? '#22C55E' : '#EF4444' }
                   ]}
                 >
-                  {transaction.amount >= 0 ? '+' : ''}{formatCurrency(transaction.amount)}
+                  {transaction.amount >= 0 ? '+' : ''}{formatCurrency(transaction.amount, preferences)}
                 </Text>
                 <Text style={styles.transactionBalance}>
-                  Balance: {formatCurrency(transaction.balance)}
+                  Balance: {formatCurrency(transaction.balance, preferences)}
                 </Text>
               </View>
             </View>

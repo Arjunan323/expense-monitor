@@ -44,7 +44,6 @@ export const Settings: React.FC = () => {
     fetchProfile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const [locale, setLocale] = useState(preferences.locale || 'en-US');
   const [currency, setCurrency] = useState(preferences.currency || 'USD');
   const [feedback, setFeedback] = useState('');
   const [loading, setLoading] = useState(false);
@@ -61,8 +60,8 @@ export const Settings: React.FC = () => {
         email: updated.email || ''
       });
       // Update preferences (locale, currency) in backend and context
-      await apiCall('POST', '/user/preferences', { ...preferences, locale, currency });
-      setPreferences({ ...preferences, locale, currency });
+      await apiCall('POST', '/user/preferences', { ...preferences, locale: "en-US", currency });
+      setPreferences({ ...preferences, locale: "en-US", currency });
       toast.success('Profile and preferences updated successfully');
     } catch (error: any) {
       toast.error('Failed to update profile or preferences');
@@ -161,28 +160,6 @@ export const Settings: React.FC = () => {
                 onChange={(e) => setProfile(prev => ({ ...prev, email: e.target.value }))}
                 placeholder="Enter your email"
               />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Language / Locale
-            </label>
-            <div className="relative">
-              <Globe className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <select
-                className="input-field pl-10"
-                value={locale}
-                onChange={e => setLocale(e.target.value)}
-              >
-                <option value="en-US">English (United States)</option>
-                <option value="en-GB">English (United Kingdom)</option>
-                <option value="en-IN">English (India)</option>
-                <option value="fr-FR">French (France)</option>
-                <option value="de-DE">German (Germany)</option>
-                <option value="ja-JP">Japanese</option>
-                <option value="zh-CN">Chinese (Simplified)</option>
-                {/* Add more as needed */}
-              </select>
             </div>
           </div>
           <div>

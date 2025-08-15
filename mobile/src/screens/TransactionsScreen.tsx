@@ -19,9 +19,11 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { Transaction, PaginatedResponse } from '../types';
 import { apiCall } from '../utils/api';
 import { formatCurrency, formatDate, getCategoryColor } from '../utils/formatters';
+import { usePreferences } from '../contexts/PreferencesContext';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 export const TransactionsScreen: React.FC = () => {
+  const { preferences } = usePreferences();
 
   const navigation = useNavigation<any>(); // Use correct type for navigation
 
@@ -50,6 +52,8 @@ export const TransactionsScreen: React.FC = () => {
   });
   const [availableBanks, setAvailableBanks] = useState<string[]>([]);
   const [availableCategories, setAvailableCategories] = useState<string[]>([]);
+  const [bankCounts, setBankCounts] = useState<Record<string, number>>({});
+  const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
   const [showDatePicker, setShowDatePicker] = useState<'start' | 'end' | null>(null);
   const filtersJustApplied = useRef(false);
 
@@ -74,38 +78,87 @@ export const TransactionsScreen: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, sortOrder]);
 
+  // Fetch master bank & category tables once (or on refresh trigger)
+  useEffect(() => {
+    const loadMeta = async () => {
+      try {
+        const [banksRaw, categoriesRaw] = await Promise.all([
+          apiCall<any[]>('GET', '/banks'),
+          apiCall<any[]>('GET', '/categories')
+        ]);
+        const banksRes: any[] = Array.isArray(banksRaw) ? banksRaw : [];
+        const categoriesRes: any[] = Array.isArray(categoriesRaw) ? categoriesRaw : [];
+        if (!Array.isArray(banksRes) || !Array.isArray(categoriesRes)) {
+          if (__DEV__) console.warn('[Meta] Unexpected banks/categories payload shape', { banksRaw, categoriesRaw });
+        }
+        // Normalize possible field name variants
+        const bankNames = (banksRes || [])
+          .map(b => (b?.name || '').toString().trim())
+          .filter(Boolean)
+          .sort((a,b) => {
+            const bcA = banksRes.find(x=>x.name===a)?.transactionCount || 0;
+            const bcB = banksRes.find(x=>x.name===b)?.transactionCount || 0;
+            if (bcA === bcB) return a.localeCompare(b);
+            return bcB - bcA;
+          });
+        const categoryNames = (categoriesRes || [])
+          .map(c => (c?.name || '').toString().trim())
+          .filter(Boolean)
+          .sort((a,b) => {
+            const ccA = categoriesRes.find(x=>x.name===a)?.transactionCount || 0;
+            const ccB = categoriesRes.find(x=>x.name===b)?.transactionCount || 0;
+            if (ccA === ccB) return a.localeCompare(b);
+            return ccB - ccA;
+          });
+        setAvailableBanks(bankNames);
+        setAvailableCategories(categoryNames);
+        setBankCounts(Object.fromEntries((banksRes||[]).map(b=>[b.name, b.transactionCount||0])));
+        setCategoryCounts(Object.fromEntries((categoriesRes||[]).map(c=>[c.name, c.transactionCount||0])));
+        
+      } catch (e) {
+        // Silent fail; filters will just show none
+        if (__DEV__) console.warn('Failed loading banks/categories', e);
+      }
+    };
+    loadMeta();
+  }, []);
+
+  // Fallback: if meta lists empty but we have transactions, derive names
+  useEffect(() => {
+    if (transactions.length > 0) {
+      if (availableBanks.length === 0) {
+        const derivedBanks = Array.from(new Set(transactions.map(t => t.bankName).filter(Boolean))) as string[];
+        if (derivedBanks.length > 0) setAvailableBanks(derivedBanks);
+      }
+      if (availableCategories.length === 0) {
+        const derivedCats = Array.from(new Set(transactions.map(t => t.category).filter(Boolean))) as string[];
+        if (derivedCats.length > 0) setAvailableCategories(derivedCats);
+      }
+    }
+  }, [transactions, availableBanks.length, availableCategories.length]);
+
   const fetchTransactions = async (reset = false) => {
     setLoading(true);
     try {
-      // Build query params from filters and search
-      const params: any = {
-        page: reset ? 0 : page,
-        size: 50,
-        sort: `date,${sortOrder}`,
-        search: searchQuery,
+      // Build query params aligned with web/backend (description, amountMin/amountMax, sortBy, sortOrder)
+      const params: Record<string, string> = {
+        page: String(reset ? 0 : page),
+        size: '50',
+        sortBy: 'date',
+        sortOrder: sortOrder,
       };
+      if (searchQuery) params.description = searchQuery; // unified search field
       if (filters.banks.length > 0) params.banks = filters.banks.join(',');
       if (filters.categories.length > 0) params.categories = filters.categories.join(',');
       if (filters.dateRange.start) params.startDate = filters.dateRange.start;
       if (filters.dateRange.end) params.endDate = filters.dateRange.end;
-      if (filters.amountRange.min) params.minAmount = filters.amountRange.min;
-      if (filters.amountRange.max) params.maxAmount = filters.amountRange.max;
-      if (filters.transactionType !== 'all') params.type = filters.transactionType;
+      if (filters.amountRange.min) params.amountMin = filters.amountRange.min;
+      if (filters.amountRange.max) params.amountMax = filters.amountRange.max;
+      if (filters.transactionType !== 'all') params.transactionType = filters.transactionType;
 
-      // FIX: Properly serialize params to query string (all values as strings)
-      const queryString = new URLSearchParams(
-        Object.entries(params).reduce((acc, [key, value]) => {
-          if (value !== undefined && value !== null && value !== '') {
-            acc[key] = String(value);
-          }
-          return acc;
-        }, {} as Record<string, string>)
-      ).toString();
+      const queryString = new URLSearchParams(params).toString();
 
-      const response = await apiCall<PaginatedResponse<Transaction>>(
-        'GET',
-        `/transactions?${queryString}`
-      );
+      const response = await apiCall<PaginatedResponse<Transaction>>('GET', `/transactions?${queryString}`);
 
       if (reset) {
         setTransactions(response.content);
@@ -117,13 +170,7 @@ export const TransactionsScreen: React.FC = () => {
 
       setHasMore(response.content.length === 50);
 
-      // Extract available banks and categories for filters
-      if (reset) {
-        const banks = [...new Set(response.content.map(t => t.bankName).filter((b): b is string => !!b))];
-        const categories = [...new Set(response.content.map(t => t.category).filter((c): c is string => !!c))];
-        setAvailableBanks(banks);
-        setAvailableCategories(categories);
-      }
+  // No longer derive banks/categories from transactions; rely on master tables
     } catch (error: any) {
       console.error('Transactions error:', error);
     } finally {
@@ -134,6 +181,39 @@ export const TransactionsScreen: React.FC = () => {
 
   const onRefresh = async () => {
     setRefreshing(true);
+    // Reload master data on manual refresh
+    try {
+      const [banksRaw, categoriesRaw] = await Promise.all([
+        apiCall<any[]>('GET', '/banks'),
+        apiCall<any[]>('GET', '/categories')
+      ]);
+      const banksRes: any[] = Array.isArray(banksRaw) ? banksRaw : [];
+      const categoriesRes: any[] = Array.isArray(categoriesRaw) ? categoriesRaw : [];
+      const bankNames = (banksRes || [])
+        .map(b => (b?.name || '').toString().trim())
+        .filter(Boolean)
+        .sort((a,b) => {
+          const bcA = banksRes.find(x=>x.name===a)?.transactionCount || 0;
+          const bcB = banksRes.find(x=>x.name===b)?.transactionCount || 0;
+          if (bcA === bcB) return a.localeCompare(b);
+          return bcB - bcA;
+        });
+      const categoryNames = (categoriesRes || [])
+        .map(c => (c?.name || '').toString().trim())
+        .filter(Boolean)
+        .sort((a,b) => {
+          const ccA = categoriesRes.find(x=>x.name===a)?.transactionCount || 0;
+          const ccB = categoriesRes.find(x=>x.name===b)?.transactionCount || 0;
+          if (ccA === ccB) return a.localeCompare(b);
+          return ccB - ccA;
+        });
+      setAvailableBanks(bankNames);
+      setAvailableCategories(categoryNames);
+      setBankCounts(Object.fromEntries((banksRes||[]).map(b=>[b.name, b.transactionCount||0])));
+      setCategoryCounts(Object.fromEntries((categoriesRes||[]).map(c=>[c.name, c.transactionCount||0])));
+    } catch (e) {
+      if (__DEV__) console.warn('Refresh meta load failed', e);
+    }
     await fetchTransactions(true);
   };
 
@@ -236,10 +316,10 @@ export const TransactionsScreen: React.FC = () => {
             { color: item.amount >= 0 ? '#22c55e' : '#ef4444' }
           ]}
         >
-          {item.amount >= 0 ? '+' : ''}{formatCurrency(item.amount)}
+          {item.amount >= 0 ? '+' : ''}{formatCurrency(item.amount, preferences)}
         </Text>
         <Text style={styles.transactionBalance}>
-          {formatCurrency(item.balance)}
+          {formatCurrency(item.balance, preferences)}
         </Text>
       </View>
     </View>
@@ -405,7 +485,7 @@ export const TransactionsScreen: React.FC = () => {
               {/* Bank Accounts */}
               <View style={styles.filterSection}>
                 <Text style={styles.filterSectionTitle}>Bank Accounts</Text>
-                {availableBanks.map((bank) => (
+        {availableBanks.map((bank) => (
                   <TouchableOpacity
                     key={bank}
                     style={styles.filterOption}
@@ -416,7 +496,7 @@ export const TransactionsScreen: React.FC = () => {
                       size={20} 
                       color={pendingFilters.banks.includes(bank) ? "#0ea5e9" : "#6b7280"} 
                     />
-                    <Text style={styles.filterOptionText}>{bank}</Text>
+          <Text style={styles.filterOptionText}>{bank}{bankCounts[bank] ? ` (${bankCounts[bank]})` : ''}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -424,7 +504,7 @@ export const TransactionsScreen: React.FC = () => {
               {/* Categories */}
               <View style={styles.filterSection}>
                 <Text style={styles.filterSectionTitle}>Categories</Text>
-                {availableCategories.map((category) => (
+        {availableCategories.map((category) => (
                   <TouchableOpacity
                     key={category}
                     style={styles.filterOption}
@@ -435,7 +515,7 @@ export const TransactionsScreen: React.FC = () => {
                       size={20} 
                       color={pendingFilters.categories.includes(category) ? "#0ea5e9" : "#6b7280"} 
                     />
-                    <Text style={styles.filterOptionText}>{category}</Text>
+          <Text style={styles.filterOptionText}>{category}{categoryCounts[category] ? ` (${categoryCounts[category]})` : ''}</Text>
                   </TouchableOpacity>
                 ))}
               </View>

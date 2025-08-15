@@ -21,9 +21,11 @@ import { Transaction, DashboardStats, TransactionFilters, PaginatedResponse } fr
 import { apiCall, fetchBanks, fetchCategories } from '../utils/api';
 import { BankRecord, CategoryRecord } from '../types';
 import { formatCurrency, formatDate, getCategoryColor } from '../utils/formatters';
+import { usePreferences } from '../contexts/PreferencesContext';
 import toast from 'react-hot-toast';
 
 export const Transactions: React.FC = () => {
+  const { preferences } = usePreferences();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [totalElements, setTotalElements] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -606,11 +608,11 @@ export const Transactions: React.FC = () => {
                       <span className={`font-semibold ${
                         transaction.amount >= 0 ? 'text-success-600' : 'text-danger-600'
                       }`}>
-                        {transaction.amount >= 0 ? '+' : ''}{formatCurrency(transaction.amount)}
+                        {transaction.amount >= 0 ? '+' : ''}{formatCurrency(transaction.amount, undefined, preferences)}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
-                      {formatCurrency(transaction.balance)}
+                      {formatCurrency(transaction.balance, undefined, preferences)}
                     </td>
                   </tr>
                 ))}

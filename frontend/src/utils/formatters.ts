@@ -7,20 +7,10 @@ export interface CurrencyFormatOptions {
 }
 
 export const getDefaultCurrency = (): { currency: string; locale: string } => {
-  // Try to detect from browser, fallback to USD
-  const locale = navigator.language || 'en-US';
-  // Simple mapping, can be extended or replaced with a library
-  const currencyMap: Record<string, string> = {
-    'en-US': 'USD',
-    'en-GB': 'GBP',
-    'en-IN': 'INR',
-    'fr-FR': 'EUR',
-    'de-DE': 'EUR',
-    'ja-JP': 'JPY',
-    'zh-CN': 'CNY',
-    // ...add more as needed
-  };
-  const currency = currencyMap[locale] || 'USD';
+  const locale = (navigator?.language || 'en-US');
+  // Rule: If user locale indicates India (any *-IN), use INR, else USD by default.
+  const isIndia = /-IN$/i.test(locale) || /india/i.test(locale);
+  const currency = isIndia ? 'INR' : 'USD';
   return { currency, locale };
 };
 

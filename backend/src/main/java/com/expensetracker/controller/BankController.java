@@ -1,6 +1,6 @@
 package com.expensetracker.controller;
 
-import com.expensetracker.model.Bank;
+import com.expensetracker.dto.BankDto;
 import com.expensetracker.model.User;
 import com.expensetracker.repository.BankRepository;
 import com.expensetracker.repository.UserRepository;
@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/banks")
@@ -23,9 +24,12 @@ public class BankController {
     private UserRepository userRepository;
 
     @GetMapping
-    public ResponseEntity<List<Bank>> listBanks(@RequestHeader("Authorization") String authHeader) {
+    public ResponseEntity<List<BankDto>> listBanks(@RequestHeader("Authorization") String authHeader) {
         User user = getUser(authHeader);
-        return ResponseEntity.ok(bankRepository.findByUser(user));
+        List<BankDto> dto = bankRepository.findByUser(user).stream()
+                .map(b -> new BankDto(b.getId(), b.getName(), b.getTransactionCount()))
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(dto);
     }
 
     private User getUser(String authHeader) {

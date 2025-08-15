@@ -1,12 +1,25 @@
 import { format, parseISO, isValid } from 'date-fns';
+import { Preferences } from '../contexts/PreferencesContext';
 
-export const formatCurrency = (amount: number, currency = 'INR'): string => {
-  const locale = currency === 'INR' ? 'en-IN' : 'en-US';
-  return new Intl.NumberFormat(locale, {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-  }).format(amount);
+export const formatCurrency = (amount: number, currencyOrPrefs?: string | Preferences): string => {
+  let currency = 'USD';
+  let locale = 'en-US';
+  if (typeof currencyOrPrefs === 'string') {
+    currency = currencyOrPrefs;
+    locale = currency === 'INR' ? 'en-IN' : (currency === 'GBP' ? 'en-GB' : 'en-US');
+  } else if (currencyOrPrefs) {
+    currency = currencyOrPrefs.currency || 'USD';
+    locale = currencyOrPrefs.locale || (currency === 'INR' ? 'en-IN' : 'en-US');
+  }
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 2,
+    }).format(amount);
+  } catch {
+    return `${currency} ${amount.toFixed(2)}`;
+  }
 };
 
 export const formatDate = (date: string | Date): string => {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import DropDownPicker from 'react-native-dropdown-picker';
 import {
   View,
   Text,
@@ -14,9 +15,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { useAuth } from '../contexts/AuthContext';
 import { apiCall } from '../utils/api';
+import { usePreferences } from '../contexts/PreferencesContext';
 
 export const SettingsScreen: React.FC = () => {
   const { user, logout } = useAuth();
+  const { preferences, setPreferences } = usePreferences();
   const [profile, setProfile] = useState({
     firstName: '',
     lastName: '',
@@ -25,10 +28,35 @@ export const SettingsScreen: React.FC = () => {
   const [feedback, setFeedback] = useState('');
   const [loading, setLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [currency, setCurrency] = useState(preferences.currency || 'USD');
+  const [currencyOpen, setCurrencyOpen] = useState(false);
+  const [currencyItems, setCurrencyItems] = useState([
+    { label: 'USD - US Dollar', value: 'USD' },
+    { label: 'EUR - Euro', value: 'EUR' },
+    { label: 'INR - Indian Rupee', value: 'INR' },
+    { label: 'GBP - British Pound', value: 'GBP' },
+    { label: 'JPY - Japanese Yen', value: 'JPY' },
+    { label: 'CNY - Chinese Yuan', value: 'CNY' },
+    // Add more as needed
+  ]);
 
   useEffect(() => {
     fetchProfile();
+  fetchPreferences();
   }, []);
+
+  type PreferencesResponse = { currency?: string };
+  const fetchPreferences = async () => {
+    try {
+      const data = await apiCall('GET', '/user/preferences') as PreferencesResponse;
+      if (data && data.currency) {
+        setCurrency(data.currency);
+        setPreferences({ ...preferences, currency: data.currency });
+      }
+    } catch (e) {
+      // silent
+    }
+  };
 
   const fetchProfile = async () => {
     try {
@@ -39,11 +67,9 @@ export const SettingsScreen: React.FC = () => {
         lastName: data.lastName || '',
         email: data.email || ''
       });
-    } catch (error) {
+    } catch (e) {
       Alert.alert('Error', 'Failed to load profile');
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   const handleProfileUpdate = async () => {
@@ -55,29 +81,24 @@ export const SettingsScreen: React.FC = () => {
         lastName: updated.lastName || '',
         email: updated.email || ''
       });
-      Alert.alert('Success', 'Profile updated successfully');
-    } catch (error: any) {
-      Alert.alert('Error', 'Failed to update profile');
-    } finally {
-      setLoading(false);
-    }
+  const newPrefs = { ...preferences, currency, locale: preferences.locale || 'en-US' };
+  await apiCall('POST', '/user/preferences', newPrefs);
+  setPreferences(newPrefs);
+      Alert.alert('Success', 'Profile and preferences updated successfully');
+    } catch (e) {
+      Alert.alert('Error', 'Failed to update profile or preferences');
+    } finally { setLoading(false); }
   };
 
   const handleFeedbackSubmit = async () => {
-    if (!feedback.trim()) {
-      Alert.alert('Error', 'Please enter your feedback');
-      return;
-    }
+    if (!feedback.trim()) { Alert.alert('Error', 'Please enter your feedback'); return; }
     try {
       setLoading(true);
       await apiCall('POST', '/feedback', { email: profile.email, message: feedback });
       Alert.alert('Success', 'Thank you for your feedback!');
       setFeedback('');
-    } catch (error: any) {
-      Alert.alert('Error', 'Failed to submit feedback');
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { Alert.alert('Error', 'Failed to submit feedback'); }
+    finally { setLoading(false); }
   };
 
   const handleDeleteAccount = async () => {
@@ -86,35 +107,23 @@ export const SettingsScreen: React.FC = () => {
       await apiCall('DELETE', '/user/account');
       Alert.alert('Success', 'Account deleted successfully');
       logout();
-    } catch (error: any) {
-      Alert.alert('Error', 'Failed to delete account');
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { Alert.alert('Error', 'Failed to delete account'); }
+    finally { setLoading(false); }
   };
 
-  const handleEmailSupport = () => {
-    Linking.openURL('mailto:support@expensemonitor.com');
-  };
-
+  const handleEmailSupport = () => Linking.openURL('mailto:support@expensemonitor.com');
   const handleLogout = () => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Sign Out', style: 'destructive', onPress: logout },
-      ]
-    );
+    Alert.alert('Sign Out','Are you sure you want to sign out?',[
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign Out', style: 'destructive', onPress: logout }
+    ]);
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: Platform.OS === 'ios' ? 120 : 100 }}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Settings</Text>
-        <Text style={styles.headerSubtitle}>
-          Manage your account settings and preferences
-        </Text>
+        <Text style={styles.headerSubtitle}>Manage your account settings and preferences</Text>
       </View>
 
       {/* Profile Settings */}
@@ -125,57 +134,47 @@ export const SettingsScreen: React.FC = () => {
           </View>
           <Text style={styles.sectionTitle}>Profile Settings</Text>
         </View>
-
         <View style={styles.form}>
           <View style={styles.inputRow}>
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>First Name</Text>
-              <TextInput
-                style={styles.input}
-                value={profile.firstName}
-                onChangeText={(text) => setProfile(prev => ({ ...prev, firstName: text }))}
-                placeholder="Enter your first name"
-              />
+              <TextInput style={styles.input} value={profile.firstName} onChangeText={(text) => setProfile(p => ({ ...p, firstName: text }))} placeholder="Enter your first name" />
             </View>
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Last Name</Text>
-              <TextInput
-                style={styles.input}
-                value={profile.lastName}
-                onChangeText={(text) => setProfile(prev => ({ ...prev, lastName: text }))}
-                placeholder="Enter your last name"
-              />
+              <TextInput style={styles.input} value={profile.lastName} onChangeText={(text) => setProfile(p => ({ ...p, lastName: text }))} placeholder="Enter your last name" />
             </View>
           </View>
-          
           <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>Email Address</Text>
             <View style={styles.inputWithIcon}>
               <Ionicons name="mail-outline" size={20} color="#9ca3af" style={styles.inputIcon} />
-              <TextInput
-                style={[styles.input, styles.inputWithIconText]}
-                value={profile.email}
-                onChangeText={(text) => setProfile(prev => ({ ...prev, email: text }))}
-                placeholder="Enter your email"
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
+              <TextInput style={[styles.input, styles.inputWithIconText]} value={profile.email} onChangeText={(text) => setProfile(p => ({ ...p, email: text }))} placeholder="Enter your email" keyboardType="email-address" autoCapitalize="none" />
             </View>
           </View>
-
-          <TouchableOpacity
-            style={styles.updateButton}
-            onPress={handleProfileUpdate}
-            disabled={loading}
-          >
-            {loading ? (
-              <LoadingSpinner size="small" color="#ffffff" />
-            ) : (
-              <Ionicons name="person-outline" size={16} color="#ffffff" />
-            )}
-            <Text style={styles.updateButtonText}>
-              {loading ? 'Updating...' : 'Update Profile'}
-            </Text>
+      <View style={[styles.inputContainer, { zIndex: 2000 }]}> 
+            <Text style={styles.inputLabel}>Currency</Text>
+            <DropDownPicker
+              open={currencyOpen}
+              value={currency}
+              items={currencyItems}
+              setOpen={setCurrencyOpen}
+              setValue={setCurrency}
+              setItems={setCurrencyItems}
+              listMode="MODAL"
+              modalTitle="Select Currency"
+              modalAnimationType="slide"
+              containerStyle={{ marginTop: 4, marginBottom: 8 }}
+              style={{ borderColor: '#d1d5db', borderRadius: 8, backgroundColor: '#fff' }}
+              dropDownContainerStyle={{ borderColor: '#d1d5db', borderRadius: 8 }}
+              textStyle={{ color: '#111827', fontSize: 16 }}
+              placeholder="Select currency"
+              onChangeValue={(val) => { if (val) setCurrency(val); }}
+            />
+          </View>
+          <TouchableOpacity style={styles.updateButton} onPress={handleProfileUpdate} disabled={loading}>
+            {loading ? <LoadingSpinner size="small" color="#ffffff" /> : <Ionicons name="person-outline" size={16} color="#ffffff" />}
+            <Text style={styles.updateButtonText}>{loading ? 'Updating...' : 'Update Profile'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -188,42 +187,18 @@ export const SettingsScreen: React.FC = () => {
           </View>
           <Text style={styles.sectionTitle}>Support & Feedback</Text>
         </View>
-
         <View style={styles.feedbackSection}>
           <Text style={styles.feedbackTitle}>Send us feedback</Text>
-          <Text style={styles.feedbackDescription}>
-            Help us improve by sharing your thoughts, reporting bugs, or suggesting new features.
-          </Text>
-          <TextInput
-            style={styles.feedbackInput}
-            multiline
-            numberOfLines={4}
-            placeholder="Tell us what's working well, what could be better, or what features you'd like to see..."
-            value={feedback}
-            onChangeText={setFeedback}
-            textAlignVertical="top"
-          />
-          <TouchableOpacity
-            style={styles.feedbackButton}
-            onPress={handleFeedbackSubmit}
-            disabled={loading || !feedback.trim()}
-          >
-            {loading ? (
-              <LoadingSpinner size="small" color="#ffffff" />
-            ) : (
-              <Ionicons name="chatbubble-outline" size={16} color="#ffffff" />
-            )}
-            <Text style={styles.feedbackButtonText}>
-              {loading ? 'Sending...' : 'Send Feedback'}
-            </Text>
+          <Text style={styles.feedbackDescription}>Help us improve by sharing your thoughts, reporting bugs, or suggesting new features.</Text>
+          <TextInput style={styles.feedbackInput} multiline numberOfLines={4} placeholder="Tell us what's working well, what could be better, or what features you'd like to see..." value={feedback} onChangeText={setFeedback} textAlignVertical="top" />
+          <TouchableOpacity style={styles.feedbackButton} onPress={handleFeedbackSubmit} disabled={loading || !feedback.trim()}>
+            {loading ? <LoadingSpinner size="small" color="#ffffff" /> : <Ionicons name="chatbubble-outline" size={16} color="#ffffff" />}
+            <Text style={styles.feedbackButtonText}>{loading ? 'Sending...' : 'Send Feedback'}</Text>
           </TouchableOpacity>
         </View>
-
         <View style={styles.supportSection}>
           <Text style={styles.supportTitle}>Contact Support</Text>
-          <Text style={styles.supportDescription}>
-            Need help? Have questions? We're here to assist you.
-          </Text>
+          <Text style={styles.supportDescription}>Need help? Have questions? We're here to assist you.</Text>
           <TouchableOpacity style={styles.supportButton} onPress={handleEmailSupport}>
             <Ionicons name="mail-outline" size={16} color="#3b82f6" />
             <Text style={styles.supportButtonText}>Email Support</Text>
@@ -240,7 +215,6 @@ export const SettingsScreen: React.FC = () => {
           </View>
           <Text style={styles.sectionTitle}>Account</Text>
         </View>
-
         <TouchableOpacity style={styles.actionButton} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={20} color="#6b7280" />
           <Text style={styles.actionButtonText}>Sign Out</Text>
@@ -254,48 +228,27 @@ export const SettingsScreen: React.FC = () => {
           <View style={[styles.sectionIcon, styles.dangerIcon]}>
             <Ionicons name="warning-outline" size={20} color="#ef4444" />
           </View>
-          <Text style={[styles.sectionTitle, styles.dangerTitle]}>Danger Zone</Text>
+            <Text style={[styles.sectionTitle, styles.dangerTitle]}>Danger Zone</Text>
         </View>
-
         <View style={styles.dangerContent}>
           <Text style={styles.dangerSubtitle}>Delete Account</Text>
-          <Text style={styles.dangerDescription}>
-            Permanently delete your account and all associated data. This action cannot be undone.
-          </Text>
+          <Text style={styles.dangerDescription}>Permanently delete your account and all associated data. This action cannot be undone.</Text>
           {!showDeleteConfirm ? (
-            <TouchableOpacity
-              style={styles.dangerButton}
-              onPress={() => setShowDeleteConfirm(true)}
-            >
+            <TouchableOpacity style={styles.dangerButton} onPress={() => setShowDeleteConfirm(true)}>
               <Ionicons name="trash-outline" size={16} color="#ffffff" />
               <Text style={styles.dangerButtonText}>Delete Account</Text>
             </TouchableOpacity>
           ) : (
             <View style={styles.deleteConfirm}>
               <View style={styles.deleteWarning}>
-                <Text style={styles.deleteWarningText}>
-                  Are you absolutely sure? This will permanently delete your account and all data.
-                </Text>
+                <Text style={styles.deleteWarningText}>Are you absolutely sure? This will permanently delete your account and all data.</Text>
               </View>
               <View style={styles.deleteActions}>
-                <TouchableOpacity
-                  style={styles.dangerButton}
-                  onPress={handleDeleteAccount}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <LoadingSpinner size="small" color="#ffffff" />
-                  ) : (
-                    <Ionicons name="trash-outline" size={16} color="#ffffff" />
-                  )}
-                  <Text style={styles.dangerButtonText}>
-                    {loading ? 'Deleting...' : 'Yes, Delete My Account'}
-                  </Text>
+                <TouchableOpacity style={styles.dangerButton} onPress={handleDeleteAccount} disabled={loading}>
+                  {loading ? <LoadingSpinner size="small" color="#ffffff" /> : <Ionicons name="trash-outline" size={16} color="#ffffff" />}
+                  <Text style={styles.dangerButtonText}>{loading ? 'Deleting...' : 'Yes, Delete My Account'}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.cancelButton}
-                  onPress={() => setShowDeleteConfirm(false)}
-                >
+                <TouchableOpacity style={styles.cancelButton} onPress={() => setShowDeleteConfirm(false)}>
                   <Text style={styles.cancelButtonText}>Cancel</Text>
                 </TouchableOpacity>
               </View>
@@ -382,6 +335,7 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     flex: 1,
+
   },
   inputLabel: {
     fontSize: 14,
@@ -414,6 +368,20 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 0,
     marginLeft: 8,
+  },
+  pickerContainer: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    marginTop: 4,
+    marginBottom: 8,
+    overflow: 'hidden',
+  },
+  picker: {
+    height: 48,
+    width: '100%',
+    color: '#111827',
   },
   updateButton: {
     backgroundColor: '#0ea5e9',

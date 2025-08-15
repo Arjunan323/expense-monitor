@@ -7,7 +7,7 @@ export interface User {
   isPremium?: boolean;
   isSubscribed?: boolean;
   locale?: string; // e.g. 'en-US', 'en-IN'
-  currency?: string; // e.g. '$', '₹'
+  currency?: string; // e.g. 'USD', 'INR'
 }
 
 export interface Transaction {

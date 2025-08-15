@@ -38,7 +38,7 @@ public class AuthService {
     user.setEmail(body.getEmail());
     user.setFirstName(body.getFirstName() != null ? body.getFirstName() : "");
     user.setLastName(body.getLastName() != null ? body.getLastName() : "");
-    user.setCurrency(body.getCurrency() != null ? body.getCurrency() : "INR");
+    user.setCurrency(body.getCurrency() != null ? body.getCurrency() : "USD");
     user.setLocale(body.getLocale() != null ? body.getLocale() : "en-US");
     user.setSubscribed(false);
     userRepository.save(user);
@@ -53,7 +53,7 @@ public class AuthService {
         User user = userOpt.get();
         if (passwordEncoder.matches(password, user.getPassword())) {
             String token = jwtUtil.generateToken(username);
-            UserDto userDto = new UserDto(user.getId(), user.getUsername(), user.getEmail());
+            UserDto userDto = new UserDto(user.getId(), user.getUsername(), user.getEmail(), user.getLocale(), user.getCurrency());
             return new AuthResponseDto(token, userDto);
         }
         return new AuthResponseDto(null, null, "Invalid credentials");

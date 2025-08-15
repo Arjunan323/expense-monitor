@@ -21,11 +21,14 @@ import { MultiSelect } from './ui/MultiSelect';
 import { DashboardStats } from '../types';
 import { apiCall } from '../utils/api';
 import { formatCurrency, formatDate, formatDateTime, getCategoryColor } from '../utils/formatters';
+import { usePreferences } from '../contexts/PreferencesContext';
 import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 export const Dashboard: React.FC = () => {
+  // Pull user currency/locale preferences
+  const { preferences } = usePreferences();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedBanks, setSelectedBanks] = useState<string[]>([]);
@@ -343,7 +346,7 @@ export const Dashboard: React.FC = () => {
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                  <Tooltip formatter={(value: number) => formatCurrency(value, undefined, preferences)} />
                 </RechartsPieChart>
               </ResponsiveContainer>
             </div>
@@ -374,7 +377,7 @@ export const Dashboard: React.FC = () => {
                 </div>
                 <div className="text-right">
                   <div className="text-sm font-semibold text-gray-900">
-                    {formatCurrency(Math.abs(category.amount))}
+                    {formatCurrency(Math.abs(category.amount), undefined, preferences)}
                   </div>
                   <div className="text-xs text-gray-500">
                     {typeof category.percentage === 'number' ? category.percentage.toFixed(1) + '%' : 'N/A'}
@@ -394,7 +397,7 @@ export const Dashboard: React.FC = () => {
                     {stats.topCategoriesByBank[bank]?.slice(0, 3).map(cat => (
                       <div key={`${bank}-${cat.category}`} className="flex justify-between text-xs">
                         <span className="text-gray-600">{cat.category}</span>
-                        <span className="font-medium">{formatCurrency(Math.abs(cat.amount))}</span>
+                        <span className="font-medium">{formatCurrency(Math.abs(cat.amount), undefined, preferences)}</span>
                       </div>
                     ))}
                   </div>
@@ -449,10 +452,10 @@ export const Dashboard: React.FC = () => {
                   <p className={`text-sm font-semibold ${
                     transaction.amount >= 0 ? 'text-success-600' : 'text-danger-600'
                   }`}>
-                    {transaction.amount >= 0 ? '+' : ''}{formatCurrency(transaction.amount)}
+                    {transaction.amount >= 0 ? '+' : ''}{formatCurrency(transaction.amount, undefined, preferences)}
                   </p>
                   <p className="text-xs text-gray-500">
-                    Balance: {formatCurrency(transaction.balance)}
+                    Balance: {formatCurrency(transaction.balance, undefined, preferences)}
                   </p>
                 </div>
               </div>

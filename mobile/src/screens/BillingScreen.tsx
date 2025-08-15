@@ -32,8 +32,8 @@ import { useAuth } from '../contexts/AuthContext';
 interface Plan {
   id: string;
   name: string;
-  price: number;
-  currency: string;
+  price: number;          // raw price (already divided by 100 for display)
+  currency: string;       // ISO code (INR | USD)
   period: string;
   description: string;
   statementsLimit: string;
@@ -50,7 +50,7 @@ const FALLBACK_PLANS: Plan[] = [
     id: 'FREE',
     name: 'Free Plan',
     price: 0,
-    currency: '₹',
+  currency: 'INR',
     period: 'forever',
     description: 'Ideal for casual users or those wanting to try out the service',
     statementsLimit: '3',
@@ -67,7 +67,7 @@ const FALLBACK_PLANS: Plan[] = [
     id: 'PRO',
     name: 'Pro Plan',
     price: 129,
-    currency: '₹',
+  currency: 'INR',
     period: 'month',
     description: 'Perfect for power users tracking multiple accounts',
     statementsLimit: '5',
@@ -87,7 +87,7 @@ const FALLBACK_PLANS: Plan[] = [
     id: 'PREMIUM',
     name: 'Premium Plan',
     price: 299,
-    currency: '₹',
+  currency: 'INR',
     period: 'month',
     description: 'Best for business, heavy users, or those who want no limits',
     statementsLimit: 'Unlimited',
@@ -105,6 +105,15 @@ const FALLBACK_PLANS: Plan[] = [
     buttonVariant: 'premium',
   },
 ];
+
+// Map ISO code to symbol
+const currencySymbol = (code: string) => {
+  switch (code) {
+    case 'INR': return '₹';
+    case 'USD': return '$';
+    default: return code;
+  }
+};
 
 export const BillingScreen: React.FC = () => {
   const { user } = useAuth();
@@ -142,19 +151,26 @@ export const BillingScreen: React.FC = () => {
   const fetchPlans = async () => {
     try {
       setPlansLoading(true);
-      // Determine region from device locale
+      // Determine region purely from device locale (not user preference)
       let region = 'IN';
       const locale = (Intl as any)?.DateTimeFormat?.().resolvedOptions?.().locale;
       if (locale && locale.includes('-')) {
         region = locale.split('-')[1].toUpperCase();
       }
-      const data = await apiCall<any[]>('GET', `/plans?region=${region}`);
-      // Map backend Plan to mobile Plan shape
+      const data = await apiCall<any[]>(
+        'GET',
+        `/plans?region=${region}`
+      );
+      const normalizeCurrency = (c: string) => {
+        if (c === '₹' || c === 'INR') return 'INR';
+        if (c === '$' || c === 'USD') return 'USD';
+        return c; // leave others untouched
+      };
       const mapped: Plan[] = data.map(p => ({
         id: p.planType,
         name: p.planType === 'FREE' ? 'Free Plan' : p.planType === 'PRO' ? 'Pro Plan' : 'Premium Plan',
-        price: (p.amount / 100),
-        currency: p.currency === 'INR' ? '₹' : p.currency,
+        price: p.amount / 100,
+        currency: normalizeCurrency(p.currency),
         period: 'month',
         description: p.planType === 'FREE' ? 'Ideal for casual users or those wanting to try out the service' : p.planType === 'PRO' ? 'Perfect for power users tracking multiple accounts' : 'Best for business, heavy users, or those who want no limits',
         statementsLimit: p.statementsPerMonth === -1 ? 'Unlimited' : String(p.statementsPerMonth),
@@ -164,9 +180,13 @@ export const BillingScreen: React.FC = () => {
         buttonText: p.planType === 'FREE' ? 'Current Plan' : (p.planType === 'PRO' ? 'Upgrade to Pro' : 'Upgrade to Premium'),
         buttonVariant: p.planType === 'FREE' ? 'secondary' : (p.planType === 'PRO' ? 'primary' : 'premium')
       }));
-      if (mapped.length) setPlans(mapped);
+      if (mapped.length) {
+        setPlans(mapped);
+      } else {
+        setPlans(FALLBACK_PLANS); // fallback without altering for preference
+      }
     } catch (e) {
-      // Silent fallback to existing static plans
+      setPlans(FALLBACK_PLANS);
     } finally {
       setPlansLoading(false);
     }
@@ -285,7 +305,7 @@ export const BillingScreen: React.FC = () => {
             </View>
             <View style={styles.planBadge}>
               <Text style={styles.planBadgeText}>
-                {Number(currentPlan.price) > 0 ? `${currentPlan.currency}${currentPlan.price}/${currentPlan.period}` : 'Free'}
+                {Number(currentPlan.price) > 0 ? `${currencySymbol(currentPlan.currency)}${currentPlan.price}/${currentPlan.period}` : 'Free'}
               </Text>
             </View>
           </View>
@@ -384,7 +404,7 @@ export const BillingScreen: React.FC = () => {
             <View style={styles.planHeader}>
               <Text style={styles.planName}>{plan.name}</Text>
               <View style={styles.planPrice}>
-                <Text style={styles.planPriceAmount}>{plan.currency}{plan.price}</Text>
+                <Text style={styles.planPriceAmount}>{currencySymbol(plan.currency)}{plan.price}</Text>
                 {Number(plan.price) > 0 && <Text style={styles.planPricePeriod}>/{plan.period}</Text>}
               </View>
               <Text style={styles.planDescription}>{plan.description}</Text>
