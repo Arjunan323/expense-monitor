@@ -215,18 +215,19 @@ export const Dashboard: React.FC = () => {
       )}
 
       {/* Header with Filters */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <div className="space-y-6">
+        {/* Title Section */}
         <div>
-          <h1 className="text-3xl font-heading font-bold gradient-text">Financial Overview</h1>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 mt-1 space-y-1 sm:space-y-0">
+          <h1 className="text-4xl font-heading font-bold gradient-text mb-3">Financial Overview</h1>
+          <div className="flex flex-wrap items-center gap-4 text-sm text-brand-gray-500">
             {stats.lastUpdateTime && (
-              <div className="flex items-center space-x-2 text-sm text-brand-gray-500">
+              <div className="flex items-center space-x-2">
                 <Clock className="w-4 h-4" />
                 <span>Last updated: {formatDateTime(stats.lastUpdateTime)}</span>
               </div>
             )}
             {selectedBanks.length > 0 && (
-              <div className="flex items-center space-x-2 text-sm text-brand-gray-600">
+              <div className="flex items-center space-x-2">
                 <Building2 className="w-4 h-4" />
                 <span>
                   {selectedBanks.length === stats.bankSources.length 
@@ -241,7 +242,160 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
         
-        <div className="flex flex-col sm:flex-row gap-3">
+        {/* Filters and Actions Bar */}
+        <div className="bg-white/80 backdrop-blur-lg rounded-3xl border border-brand-gray-100 p-6 shadow-funky">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+            {/* Left Side - Filters */}
+            <div className="flex flex-col sm:flex-row gap-3 flex-1">
+              {/* Multi-bank Selector */}
+              {( (allBanks.length ? allBanks.length : stats.bankSources.length) > 1) && (
+                <div className="flex items-center space-x-3">
+                  <div className="relative">
+                    <MultiSelect
+                      options={bankOptions}
+                      selected={bankDraft}
+                      onChange={(next) => {
+                        const limit = usage?.combinedBankLimit || (usage?.planType === 'PREMIUM' ? 5 : usage?.planType === 'PRO' ? 3 : 2);
+                        if (next.length > limit) return; // hard cap
+                        setBankDraft(next);
+                      }}
+                      placeholder={`🏦 Select Banks`}
+                      className="min-w-[280px] bg-white border-2 border-brand-gray-200 hover:border-brand-green-400 rounded-2xl px-4 py-3 text-sm font-medium text-brand-gray-700 transition-all duration-300 hover:shadow-funky focus:ring-4 focus:ring-brand-green-200"
+                    />
+                  </div>
+                  <button
+                    className="bg-gradient-green text-white px-6 py-3 rounded-2xl font-semibold text-sm shadow-glow-green hover:scale-105 active:scale-95 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={bankDraft.sort().join(',') === selectedBanks.sort().join(',')}
+                    onClick={() => setSelectedBanks(bankDraft)}
+                  >
+                    Apply ({bankDraft.length}/{usage?.combinedBankLimit || (usage?.planType === 'PREMIUM' ? 5 : usage?.planType === 'PRO' ? 3 : 2)})
+                  </button>
+                </div>
+              )}
+              
+              {/* Date Range Picker */}
+              <div className="relative">
+                <DateRangePicker
+                  startDate={dateRange.start}
+                  endDate={dateRange.end}
+                  onApply={handleDateRangeApply}
+                  className="min-w-[240px] bg-white border-2 border-brand-gray-200 hover:border-brand-blue-400 rounded-2xl px-4 py-3 text-sm font-medium text-brand-gray-700 transition-all duration-300 hover:shadow-funky focus:ring-4 focus:ring-brand-blue-200"
+                />
+              </div>
+            </div>
+            
+            {/* Right Side - Upload Button */}
+            <div className="flex justify-end">
+              <button
+                onClick={() => navigate('/upload')}
+                className="bg-gradient-yellow text-brand-gray-900 font-bold px-8 py-4 rounded-2xl shadow-glow-yellow hover:scale-105 active:scale-95 transition-all duration-300 flex items-center space-x-3 group"
+              >
+                <div className="w-6 h-6 bg-white/20 rounded-lg flex items-center justify-center">
+                  <Upload className="w-4 h-4 group-hover:animate-bounce-gentle" />
+                </div>
+                <span className="text-lg">Upload Statement</span>
+                <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+              </button>
+            </div>
+          </div>
+          
+          {/* Selected Banks Display */}
+          {selectedBanks.length > 0 && selectedBanks.length < (allBanks.length || stats.bankSources.length) && (
+            <div className="mt-4 pt-4 border-t border-brand-gray-100">
+              <div className="flex flex-wrap gap-2">
+                <span className="text-sm font-medium text-brand-gray-600">Selected Banks:</span>
+                {selectedBanks.map(bank => (
+                  <span key={bank} className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-brand-green-100 text-brand-green-800 border border-brand-green-200">
+                    <Building2 className="w-3 h-3 mr-1" />
+                    {bank}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {/* Date Range Display */}
+          {(dateRange.start || dateRange.end) && (
+            <div className="mt-4 pt-4 border-t border-brand-gray-100">
+              <div className="flex items-center space-x-2">
+                <span className="text-sm font-medium text-brand-gray-600">Date Range:</span>
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-brand-blue-100 text-brand-blue-800 border border-brand-blue-200">
+                  <Calendar className="w-3 h-3 mr-1" />
+                  {dateRange.start && dateRange.end 
+                    ? `${formatDate(dateRange.start)} - ${formatDate(dateRange.end)}`
+                    : dateRange.start 
+                    ? `From ${formatDate(dateRange.start)}`
+                    : `Until ${formatDate(dateRange.end)}`
+                  }
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Clear Filters Button */}
+      {(selectedBanks.length < (allBanks.length || stats.bankSources.length) || dateRange.start || dateRange.end) && (
+        <div className="flex justify-center">
+          <button
+            onClick={() => {
+              setDateRange({ start: '', end: '' });
+              const allBanksList = allBanks.length ? allBanks : stats.bankSources;
+              setSelectedBanks(allBanksList);
+              setBankDraft(allBanksList);
+            }}
+            className="bg-white border-2 border-brand-gray-200 hover:border-brand-gray-400 text-brand-gray-700 hover:text-brand-gray-900 px-6 py-2 rounded-2xl font-semibold text-sm transition-all duration-300 hover:shadow-funky flex items-center space-x-2"
+          >
+            <RotateCcw className="w-4 h-4" />
+            <span>Clear All Filters</span>
+          </button>
+        </div>
+      )}
+
+      {/* Multi-bank Selector */}
+      {( (allBanks.length ? allBanks.length : stats.bankSources.length) > 1) && (
+        <div className="flex items-center space-x-2">
+          <div className="relative">
+            <MultiSelect
+              options={bankOptions}
+              selected={bankDraft}
+              onChange={(next) => {
+                const limit = usage?.combinedBankLimit || (usage?.planType === 'PREMIUM' ? 5 : usage?.planType === 'PRO' ? 3 : 2);
+                if (next.length > limit) return; // hard cap
+                setBankDraft(next);
+              }}
+              placeholder={`🏦 Banks (${bankDraft.length}/${usage?.combinedBankLimit || (usage?.planType === 'PREMIUM' ? 5 : usage?.planType === 'PRO' ? 3 : 2)})`}
+              className="min-w-[240px] filter-button"
+            />
+          </div>
+          <button
+            className="btn-secondary h-10 px-3 text-xs"
+            disabled={bankDraft.sort().join(',') === selectedBanks.sort().join(',')}
+            onClick={() => setSelectedBanks(bankDraft)}
+          >
+            Apply ({bankDraft.length}/{usage?.combinedBankLimit || (usage?.planType === 'PREMIUM' ? 5 : usage?.planType === 'PRO' ? 3 : 2)})
+          </button>
+        </div>
+      )}
+      
+      {/* Date Range Picker */}
+      <div className="relative">
+        <DateRangePicker
+          startDate={dateRange.start}
+          endDate={dateRange.end}
+          onApply={handleDateRangeApply}
+          className="min-w-[200px] filter-button"
+        />
+      </div> 
+    </div>
+     <button
+        onClick={() => navigate('/upload')}
+        className="btn-primary flex items-center space-x-2 whitespace-nowrap group"
+      >
+        <Upload className="w-4 h-4 group-hover:animate-bounce-gentle" />
+        <span>Upload Statement</span>
+      </button>
+  </div>
           {/* Multi-bank Selector */}
     {( (allBanks.length ? allBanks.length : stats.bankSources.length) > 1) && (
             <div className="flex items-center space-x-2">
