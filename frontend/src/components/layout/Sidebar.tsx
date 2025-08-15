@@ -11,7 +11,7 @@ import {
   Scissors
 } from 'lucide-react';
 
-const navigation = [
+export const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Transactions', href: '/transactions', icon: Receipt },
   { name: 'Upload Statement', href: '/upload', icon: Upload },

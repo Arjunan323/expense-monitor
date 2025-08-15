@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar, X, ArrowRight } from 'lucide-react';
+import { Calendar, X, ArrowRight, RotateCcw } from 'lucide-react';
 
 interface DateRangePickerProps {
   startDate: string;

@@ -406,6 +406,8 @@ export const Transactions: React.FC = () => {
                 selected={filters.banks}
                 onChange={(banks) => setFilters(prev => ({ ...prev, banks }))}
                 placeholder="Select banks"
+                title='Select Bank Accounts'
+                desc='Choose which bank accounts to include'
               />
             </div>
 
@@ -434,6 +436,8 @@ export const Transactions: React.FC = () => {
                 selected={filters.categories}
                 onChange={(categories) => setFilters(prev => ({ ...prev, categories }))}
                 placeholder="Select categories"
+                title='Select Categories'
+                desc='Choose which categories to include'
               />
             </div>
 

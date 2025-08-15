@@ -13,6 +13,8 @@ interface MultiSelectProps {
   onChange: (selected: string[]) => void;
   placeholder?: string;
   className?: string;
+  title: string;
+  desc: string;
 }
 
 export const MultiSelect: React.FC<MultiSelectProps> = ({
@@ -20,7 +22,9 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
   selected,
   onChange,
   placeholder = 'Select options',
-  className = ''
+  className = '',
+  title,
+  desc
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -144,8 +148,8 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
             <div className="p-4 border-b border-brand-gray-100 bg-brand-gray-50">
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="font-semibold text-brand-gray-900">Select Banks</h4>
-                  <p className="text-xs text-brand-gray-500">Choose which banks to include</p>
+                  <h4 className="font-semibold text-brand-gray-900">{title}</h4>
+                  <p className="text-xs text-brand-gray-500">{desc}</p>
                 </div>
                 <div className="flex items-center space-x-2">
                   <button

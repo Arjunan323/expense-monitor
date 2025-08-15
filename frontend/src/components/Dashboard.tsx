@@ -11,7 +11,8 @@ import {
   Clock,
   Filter,
   Eye,
-  EyeOff
+  EyeOff,
+  RotateCcw
 } from 'lucide-react';
 import { StatCard } from './ui/StatCard';
 import { LoadingSpinner } from './ui/LoadingSpinner';
@@ -246,7 +247,7 @@ export const Dashboard: React.FC = () => {
         <div className="bg-white/80 backdrop-blur-lg rounded-3xl border border-brand-gray-100 p-6 shadow-funky">
           <div className="flex flex-col lg:flex-row lg:items-center gap-4">
             {/* Left Side - Filters */}
-            <div className="flex flex-col sm:flex-row gap-3 flex-1">
+            <div className="flex flex-col sm:flex-row gap-3 flex-1 items-baseline">
               {/* Multi-bank Selector */}
               {( (allBanks.length ? allBanks.length : stats.bankSources.length) > 1) && (
                 <div className="flex items-center space-x-3">
@@ -261,6 +262,8 @@ export const Dashboard: React.FC = () => {
                       }}
                       placeholder={`🏦 Select Banks`}
                       className="min-w-[280px] bg-white border-2 border-brand-gray-200 hover:border-brand-green-400 rounded-2xl px-4 py-3 text-sm font-medium text-brand-gray-700 transition-all duration-300 hover:shadow-funky focus:ring-4 focus:ring-brand-green-200"
+                      title='Select Bank Accounts'
+                      desc='Choose which bank accounts to include'
                     />
                   </div>
                   <button
@@ -283,10 +286,8 @@ export const Dashboard: React.FC = () => {
                 />
               </div>
             </div>
-            
-            {/* Right Side - Upload Button */}
-            <div className="flex justify-end">
-              <button
+             <div className="relative">
+               <button
                 onClick={() => navigate('/upload')}
                 className="bg-gradient-yellow text-brand-gray-900 font-bold px-8 py-4 rounded-2xl shadow-glow-yellow hover:scale-105 active:scale-95 transition-all duration-300 flex items-center space-x-3 group"
               >
@@ -296,7 +297,7 @@ export const Dashboard: React.FC = () => {
                 <span className="text-lg">Upload Statement</span>
                 <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
               </button>
-            </div>
+              </div>
           </div>
           
           {/* Selected Banks Display */}
@@ -352,94 +353,7 @@ export const Dashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Multi-bank Selector */}
-      {( (allBanks.length ? allBanks.length : stats.bankSources.length) > 1) && (
-        <div className="flex items-center space-x-2">
-          <div className="relative">
-            <MultiSelect
-              options={bankOptions}
-              selected={bankDraft}
-              onChange={(next) => {
-                const limit = usage?.combinedBankLimit || (usage?.planType === 'PREMIUM' ? 5 : usage?.planType === 'PRO' ? 3 : 2);
-                if (next.length > limit) return; // hard cap
-                setBankDraft(next);
-              }}
-              placeholder={`🏦 Banks (${bankDraft.length}/${usage?.combinedBankLimit || (usage?.planType === 'PREMIUM' ? 5 : usage?.planType === 'PRO' ? 3 : 2)})`}
-              className="min-w-[240px] filter-button"
-            />
-          </div>
-          <button
-            className="btn-secondary h-10 px-3 text-xs"
-            disabled={bankDraft.sort().join(',') === selectedBanks.sort().join(',')}
-            onClick={() => setSelectedBanks(bankDraft)}
-          >
-            Apply ({bankDraft.length}/{usage?.combinedBankLimit || (usage?.planType === 'PREMIUM' ? 5 : usage?.planType === 'PRO' ? 3 : 2)})
-          </button>
-        </div>
-      )}
-      
-      {/* Date Range Picker */}
-      <div className="relative">
-        <DateRangePicker
-          startDate={dateRange.start}
-          endDate={dateRange.end}
-          onApply={handleDateRangeApply}
-          className="min-w-[200px] filter-button"
-        />
-      </div> 
-    </div>
-     <button
-        onClick={() => navigate('/upload')}
-        className="btn-primary flex items-center space-x-2 whitespace-nowrap group"
-      >
-        <Upload className="w-4 h-4 group-hover:animate-bounce-gentle" />
-        <span>Upload Statement</span>
-      </button>
-  </div>
-          {/* Multi-bank Selector */}
-    {( (allBanks.length ? allBanks.length : stats.bankSources.length) > 1) && (
-            <div className="flex items-center space-x-2">
-              <div className="relative">
-                <MultiSelect
-                  options={bankOptions}
-                  selected={bankDraft}
-                  onChange={(next) => {
-                    const limit = usage?.combinedBankLimit || (usage?.planType === 'PREMIUM' ? 5 : usage?.planType === 'PRO' ? 3 : 2);
-                    if (next.length > limit) return; // hard cap
-                    setBankDraft(next);
-                  }}
-      placeholder={`🏦 Banks (${bankDraft.length}/${usage?.combinedBankLimit || (usage?.planType === 'PREMIUM' ? 5 : usage?.planType === 'PRO' ? 3 : 2)})`}
-                  className="min-w-[240px] filter-button"
-                />
-              </div>
-              <button
-                className="btn-secondary h-10 px-3 text-xs"
-                disabled={bankDraft.sort().join(',') === selectedBanks.sort().join(',')}
-                onClick={() => setSelectedBanks(bankDraft)}
-              >
-                Apply ({bankDraft.length}/{usage?.combinedBankLimit || (usage?.planType === 'PREMIUM' ? 5 : usage?.planType === 'PRO' ? 3 : 2)})
-              </button>
-            </div>
-          )}
-          
-          {/* Date Range Picker */}
-          <div className="relative">
-            <DateRangePicker
-              startDate={dateRange.start}
-              endDate={dateRange.end}
-              onApply={handleDateRangeApply}
-              className="min-w-[200px] filter-button"
-            />
-          </div> 
-        </div>
-         <button
-            onClick={() => navigate('/upload')}
-            className="btn-primary flex items-center space-x-2 whitespace-nowrap group"
-          >
-            <Upload className="w-4 h-4 group-hover:animate-bounce-gentle" />
-            <span>Upload Statement</span>
-          </button>
-      </div>
+  {/* Removed duplicate stray filter/upload blocks */}
 
       {/* Balance Discrepancy Warning */}
       {/* {stats.hasBalanceDiscrepancy && selectedBanks.length > 1 && (
