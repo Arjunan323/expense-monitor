@@ -31,6 +31,14 @@ public class StatementJob {
     private Integer pageCount;
     private Integer progressPercent; // 0-100 approximate
 
+    // --- AWS pipeline fields (nullable for legacy/local processing) ---
+    private Integer totalPages;        // total pages in original PDF
+    private Integer processedPages;    // pages processed so far
+    private Integer totalChunks;       // number of split chunks (SQS messages)
+    private Integer processedChunks;   // chunks completed
+    private Integer errorCount;        // failed chunk attempts
+    private String executionArn;       // Step Functions execution ARN
+
     public enum Status { PENDING, RUNNING, COMPLETED, FAILED }
 
     @PrePersist
@@ -61,4 +69,16 @@ public class StatementJob {
     public void setPageCount(Integer pageCount) { this.pageCount = pageCount; }
     public Integer getProgressPercent() { return progressPercent; }
     public void setProgressPercent(Integer progressPercent) { this.progressPercent = progressPercent; }
+    public Integer getTotalPages() { return totalPages; }
+    public void setTotalPages(Integer totalPages) { this.totalPages = totalPages; }
+    public Integer getProcessedPages() { return processedPages; }
+    public void setProcessedPages(Integer processedPages) { this.processedPages = processedPages; }
+    public Integer getTotalChunks() { return totalChunks; }
+    public void setTotalChunks(Integer totalChunks) { this.totalChunks = totalChunks; }
+    public Integer getProcessedChunks() { return processedChunks; }
+    public void setProcessedChunks(Integer processedChunks) { this.processedChunks = processedChunks; }
+    public Integer getErrorCount() { return errorCount; }
+    public void setErrorCount(Integer errorCount) { this.errorCount = errorCount; }
+    public String getExecutionArn() { return executionArn; }
+    public void setExecutionArn(String executionArn) { this.executionArn = executionArn; }
 }

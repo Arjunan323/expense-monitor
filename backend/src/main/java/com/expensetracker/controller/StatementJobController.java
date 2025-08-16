@@ -47,6 +47,11 @@ public class StatementJobController {
         public java.time.LocalDateTime finishedAt;
         public Integer pageCount;
         public Integer progressPercent;
+    public Integer totalPages;
+    public Integer processedPages;
+    public Integer totalChunks;
+    public Integer processedChunks;
+    public Integer errorCount;
         public static StatementJobDto from(StatementJob j) {
             StatementJobDto d = new StatementJobDto();
             d.id = j.getId();
@@ -58,6 +63,11 @@ public class StatementJobController {
             d.finishedAt = j.getFinishedAt();
             d.pageCount = j.getPageCount();
             d.progressPercent = j.getProgressPercent();
+            d.totalPages = j.getTotalPages();
+            d.processedPages = j.getProcessedPages();
+            d.totalChunks = j.getTotalChunks();
+            d.processedChunks = j.getProcessedChunks();
+            d.errorCount = j.getErrorCount();
             return d;
         }
     }

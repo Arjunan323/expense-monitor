@@ -3,6 +3,7 @@ package com.expensetracker.controller;
 import com.expensetracker.dto.CategoryDto;
 import com.expensetracker.model.User;
 import com.expensetracker.repository.CategoryRepository;
+import com.expensetracker.config.JwtUtil;
 import com.expensetracker.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +23,9 @@ public class CategoryController {
     private CategoryRepository categoryRepository;
     @Autowired
     private UserRepository userRepository;
+    private final JwtUtil jwtUtil;
+
+    public CategoryController(JwtUtil jwtUtil) { this.jwtUtil = jwtUtil; }
 
     @GetMapping
     public ResponseEntity<List<CategoryDto>> listCategories(@RequestHeader("Authorization") String authHeader) {
@@ -33,8 +37,8 @@ public class CategoryController {
     }
 
     private User getUser(String authHeader) {
-        String token = authHeader.replace("Bearer ", "");
-        String username = new com.expensetracker.config.JwtUtil().extractUsername(token);
+    String token = authHeader.replace("Bearer ", "");
+    String username = jwtUtil.extractUsername(token);
         return userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException(username));
     }
 }

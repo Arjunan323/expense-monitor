@@ -16,7 +16,7 @@ import javax.crypto.SecretKey;
 public class JwtUtil {
     private final long EXPIRATION = 86400000; // 1 day
 
-    @Value("${security.jwt.secret:change-me}")
+    @Value("${security.jwt.secret:MySuperSecureJWTKey@1234567890ABCDEF}")
     private String secretValue; // injected from application properties / env
 
     private SecretKey cachedKey;
@@ -24,6 +24,12 @@ public class JwtUtil {
     private SecretKey key() {
         // Lazy build; if secret rotates during runtime you could reset cachedKey via a refresh hook.
         if (cachedKey == null) {
+            if (secretValue == null || secretValue.isBlank()) {
+                throw new IllegalStateException("JWT secret not configured (security.jwt.secret). Set env JWT_SECRET or property.");
+            }
+            if (secretValue.length() < 32) { // HS256 needs enough entropy
+                throw new IllegalStateException("JWT secret too short; must be at least 32 characters for HS256 strength.");
+            }
             cachedKey = Keys.hmacShaKeyFor(secretValue.getBytes(StandardCharsets.UTF_8));
         }
         return cachedKey;

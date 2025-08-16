@@ -17,6 +17,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import com.expensetracker.dto.TransactionDto;
+import com.expensetracker.config.JwtUtil;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import com.expensetracker.repository.UserRepository;
 import com.expensetracker.model.User;
@@ -30,6 +31,12 @@ public class TransactionController {
 
     @Autowired
     private UserRepository userRepository;
+
+    private final JwtUtil jwtUtil;
+
+    public TransactionController(JwtUtil jwtUtil) {
+        this.jwtUtil = jwtUtil;
+    }
 
     @GetMapping
     public ResponseEntity<?> getTransactions(
@@ -47,8 +54,8 @@ public class TransactionController {
             @RequestParam(value = "sortBy", defaultValue = "date") String sortBy,
             @RequestParam(value = "sortOrder", defaultValue = "desc") String sortOrder
     ) {
-        String token = authHeader.replace("Bearer ", "");
-        String username = new com.expensetracker.config.JwtUtil().extractUsername(token);
+    String token = authHeader.replace("Bearer ", "");
+    String username = jwtUtil.extractUsername(token);
         User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException(username));
 
         // Build Pageable
@@ -91,8 +98,8 @@ public class TransactionController {
             @RequestParam(value = "transactionType", required = false) String transactionType,
             @RequestParam(value = "description", required = false) String description
     ) {
-        String token = authHeader.replace("Bearer ", "");
-        String username = new com.expensetracker.config.JwtUtil().extractUsername(token);
+    String token = authHeader.replace("Bearer ", "");
+    String username = jwtUtil.extractUsername(token);
         User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException(username));
 
         List<String> bankList = banks != null && !banks.isEmpty() ? Arrays.asList(banks.split(",")) : null;

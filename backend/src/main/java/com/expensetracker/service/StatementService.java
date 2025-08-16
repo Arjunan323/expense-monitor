@@ -46,13 +46,16 @@ public class StatementService {
     private final BankCategoryUpserter bankCategoryUpserter;
     private final com.expensetracker.service.statement.AsyncStatementProcessor asyncProcessor;
     private final StatementJobRepository statementJobRepository;
+    private final com.expensetracker.service.statement.AwsPipelineLauncher awsPipelineLauncher;
     @Value("${app.statements.async.enabled:false}")
     private boolean asyncEnabled;
+    @Value("${extraction.mode:local_python}")
+    private String extractionMode;
     private final AuthenticationFacade authenticationFacade;
     private final UsagePolicyFactory usagePolicyFactory;
 
     @Autowired
-    public StatementService(RawStatementRepository rawStatementRepository, TransactionRepository transactionRepository, UserRepository userRepository, com.expensetracker.repository.BankRepository bankRepository, com.expensetracker.repository.CategoryRepository categoryRepository, AuthenticationFacade authenticationFacade, UsagePolicyFactory usagePolicyFactory, PdfPageCounter pdfPageCounter, TempFileService tempFileService, ExtractionRunner extractionRunner, RawStatementPersister rawStatementPersister, TransactionParser transactionParser, BankCategoryUpserter bankCategoryUpserter, com.expensetracker.service.statement.AsyncStatementProcessor asyncProcessor, StatementJobRepository statementJobRepository) {
+    public StatementService(RawStatementRepository rawStatementRepository, TransactionRepository transactionRepository, UserRepository userRepository, com.expensetracker.repository.BankRepository bankRepository, com.expensetracker.repository.CategoryRepository categoryRepository, AuthenticationFacade authenticationFacade, UsagePolicyFactory usagePolicyFactory, PdfPageCounter pdfPageCounter, TempFileService tempFileService, ExtractionRunner extractionRunner, RawStatementPersister rawStatementPersister, TransactionParser transactionParser, BankCategoryUpserter bankCategoryUpserter, com.expensetracker.service.statement.AsyncStatementProcessor asyncProcessor, StatementJobRepository statementJobRepository, com.expensetracker.service.statement.AwsPipelineLauncher awsPipelineLauncher) {
         this.rawStatementRepository = rawStatementRepository;
         this.transactionRepository = transactionRepository;
         this.authenticationFacade = authenticationFacade;
@@ -65,6 +68,7 @@ public class StatementService {
         this.bankCategoryUpserter = bankCategoryUpserter;
         this.asyncProcessor = asyncProcessor;
         this.statementJobRepository = statementJobRepository;
+    this.awsPipelineLauncher = awsPipelineLauncher;
     }
 
     // Backwards compatible existing signature – delegates with no password
@@ -93,7 +97,30 @@ public class StatementService {
             if (pageLimit != Integer.MAX_VALUE && numPages > pageLimit) {
                 throw new IllegalArgumentException(String.format(AppConstants.ERROR_PAGE_LIMIT, numPages, pageLimit));
             }
-            if (asyncEnabled) {
+            if ("aws_pipeline".equalsIgnoreCase(extractionMode)) {
+                // Create job with initial AWS pipeline progress snapshot
+                StatementJob job = new StatementJob();
+                job.setUser(user);
+                job.setOriginalFilename(file.getOriginalFilename());
+                job.setStatus(StatementJob.Status.PENDING); // explicit for clarity
+                job.setTotalPages(numPages);      // known now
+                job.setPageCount(numPages);       // legacy field for parity
+                job.setProcessedPages(0);
+                job.setTotalChunks(null);         // unknown until splitter runs
+                job.setProcessedChunks(0);
+                job.setErrorCount(0);
+                job.setProgressPercent(0);
+                statementJobRepository.save(job);
+                try {
+                    awsPipelineLauncher.launch(job, file);
+                } catch (IOException ioe) {
+                    job.setStatus(StatementJob.Status.FAILED);
+                    job.setErrorMessage("S3 upload failed: " + ioe.getMessage());
+                    statementJobRepository.save(job);
+                    throw new IllegalStateException("Failed to initiate AWS pipeline", ioe);
+                }
+                return new StatementUploadResponseDto(true, "Statement accepted for AWS pipeline processing", job.getId());
+            } else if (asyncEnabled) {
                 StatementJob job = new StatementJob();
                 job.setUser(user);
                 job.setOriginalFilename(file.getOriginalFilename());
