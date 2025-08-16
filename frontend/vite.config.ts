@@ -7,12 +7,12 @@ export default defineConfig({
   server: {
      port: 3000,
     proxy: {
-      '/auth': 'http://localhost:8080',
-      '/dashboard': 'http://localhost:8080',
-      '/statements': 'http://localhost:8080',
-      '/payments': 'http://localhost:8080',
-      '/stripe': 'http://localhost:8080',
-      '/user': 'http://localhost:8080'
+      '/auth': 'https://macaw-deciding-hermit.ngrok-free.app',
+      '/dashboard': 'https://macaw-deciding-hermit.ngrok-free.app',
+      '/statements': 'https://macaw-deciding-hermit.ngrok-free.app',
+      '/payments': 'https://macaw-deciding-hermit.ngrok-free.app',
+      '/stripe': 'https://macaw-deciding-hermit.ngrok-free.app',
+      '/user': 'https://macaw-deciding-hermit.ngrok-free.app'
     }
   },
   build: {
