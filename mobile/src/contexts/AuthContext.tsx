@@ -1,9 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { User, AuthContextType, UsageStats } from '../types';
-import { apiCall } from '../utils/api';
+import { apiCall, authApiCall } from '../utils/api';
+import { authEvents } from '../utils/eventBus';
 import { usePreferences } from './PreferencesContext';
 import Toast from 'react-native-toast-message';
+import { setItemSafe } from '../utils/secureStoreSafe';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -29,6 +31,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     loadStoredAuth();
+  }, []);
+
+  // Listen for global 401/403 to force logout
+  useEffect(() => {
+    const handler = () => {
+      // perform logout but avoid toast spam if already logged out
+      forcedLogout();
+    };
+    authEvents.on('auth-expired', handler);
+    return () => {
+      authEvents.off('auth-expired', handler);
+    };
   }, []);
 
   const loadStoredAuth = async () => {
@@ -86,19 +100,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (username: string, password: string): Promise<void> => {
     try {
       setLoading(true);
-      const response = await apiCall<{ token: string; user: User }>('POST', '/auth/login', {
-        username,
-        password,
-      });
+    const response = await authApiCall<{ token: string; user: User }>('/auth/login', { username, password });
 
       const { token: newToken, user: userData } = response;
       
       setToken(newToken);
       setUser(userData);
-      await SecureStore.setItemAsync('token', newToken);
-      await SecureStore.setItemAsync('user', JSON.stringify(userData));
-  // trigger usage fetch
-  refreshUsage();
+      try {
+        await setItemSafe('token', newToken);
+        await setItemSafe('user', userData);
+      } catch (storeErr: any) {
+        console.error('SecureStore login save failed:', storeErr, { tokenPreview: newToken?.slice(0,10) });
+        Toast.show({ type: 'error', text1: 'Storage error', text2: storeErr.message });
+      }
+      // trigger usage fetch
+      refreshUsage();
       
       Toast.show({ type: 'success', text1: 'Welcome back!' });
       // On login, only set preferences if user provides currency/locale AND no stored prefs yet
@@ -132,21 +148,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const loc = (Intl as any)?.DateTimeFormat?.().resolvedOptions?.().locale || '';
         if (/-IN$/i.test(loc)) detectedCurrency = 'INR';
       } catch {}
-      const response = await apiCall<{ token: string; user: User }>('POST', '/auth/register', {
+      const response = await apiCall<any>('POST', '/auth/register', {
         email,
         password,
         firstName,
         lastName,
         currency: detectedCurrency,
       });
-
-      const { token: newToken, user: userData } = response;
+      // Support both legacy and new DTO shapes
+      const newToken: string | null = response.token || null;
+      const userData: User | null = response.user || null;
+      if (!newToken || !userData) {
+        throw new Error(response.message || 'Registration did not return auth data');
+      }
       
       setToken(newToken);
       setUser(userData);
-      await SecureStore.setItemAsync('token', newToken);
-      await SecureStore.setItemAsync('user', JSON.stringify(userData));
-  refreshUsage();
+      try {
+        await setItemSafe('token', newToken);
+        await setItemSafe('user', userData);
+      } catch (storeErr: any) {
+        console.error('SecureStore register save failed:', storeErr, { tokenPreview: newToken?.slice(0,10) });
+        Toast.show({ type: 'error', text1: 'Storage error', text2: storeErr.message });
+      }
+      refreshUsage();
       
       Toast.show({ type: 'success', text1: 'Account created successfully!' });
       const existingPrefsReg = await SecureStore.getItemAsync('user-preferences');
@@ -159,6 +184,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
       }
     } catch (error: any) {
+      console.error('Registration error:', error);
       Toast.show({
         type: 'error',
         text1: 'Registration failed',
@@ -173,13 +199,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = async (): Promise<void> => {
     setUser(null);
     setToken(null);
-  setUsage(null);
+    setUsage(null);
     await SecureStore.deleteItemAsync('token');
     await SecureStore.deleteItemAsync('user');
+    await SecureStore.deleteItemAsync('user-preferences');
     Toast.show({
       type: 'success',
       text1: 'Logged out successfully',
     });
+  };
+
+  // Internal silent variant used for auth expiration
+  const forcedLogout = async () => {
+    setUser(null);
+    setToken(null);
+    setUsage(null);
+    try {
+      await SecureStore.deleteItemAsync('token');
+      await SecureStore.deleteItemAsync('user');
+      await SecureStore.deleteItemAsync('user-preferences');
+    } catch {}
+    Toast.show({ type: 'info', text1: 'Session expired', text2: 'Please log in again.' });
   };
 
   const value: AuthContextType = {

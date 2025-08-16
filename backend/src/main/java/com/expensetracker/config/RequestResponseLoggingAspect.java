@@ -11,6 +11,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -29,13 +31,17 @@ public class RequestResponseLoggingAspect {
 
     private static final Logger log = LoggerFactory.getLogger("HTTP");
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Value("${app.http.logging.enabled:true}")
+    private boolean httpLogging;
     private static final Set<String> SENSITIVE_KEYS = Set.of(
             "password", "pass", "pwd", "token", "accessToken", "refreshToken", "authorization", "auth", "secret", "apiKey", "api_key", "email"
     );
 
     @Around("within(@org.springframework.web.bind.annotation.RestController *)")
     public Object logAround(ProceedingJoinPoint pjp) throws Throwable {
-        Instant start = Instant.now();
+    if (!httpLogging) return pjp.proceed();
+    Instant start = Instant.now();
         MethodSignature signature = (MethodSignature) pjp.getSignature();
         String controller = signature.getDeclaringType().getSimpleName();
         String method = signature.getMethod().getName();
@@ -65,6 +71,14 @@ public class RequestResponseLoggingAspect {
             responseMeta.put("method", method);
             responseMeta.put("durationMs", duration.toMillis());
             responseMeta.put("correlationId", correlationId);
+            // Avoid deep serialization / recursion for streaming responses
+            if (result instanceof SseEmitter) {
+                responseMeta.put("resultType", "SseEmitter");
+                responseMeta.put("body", "<stream>");
+                if (response != null) response.setHeader("X-Correlation-Id", correlationId);
+                log.info("response: {}", toJsonSafe(responseMeta));
+                return result;
+            }
             if (result instanceof ResponseEntity<?> re) {
                 responseMeta.put("status", re.getStatusCode().value());
                 responseMeta.put("body", summarize(re.getBody()));
@@ -135,12 +149,69 @@ public class RequestResponseLoggingAspect {
         if (cls.contains("jakarta.servlet") || cls.contains("org.springframework.http.server")) {
             return cls;
         }
+        // Prevent deep/recursive serialization of JPA entities & large graphs that can cause StackOverflowError
+        try {
+            // JPA Entity detection
+            if (v.getClass().getAnnotation(jakarta.persistence.Entity.class) != null) {
+                return entitySummary(v);
+            }
+            // Collections / arrays / maps: summarize elements
+            if (v instanceof Collection<?> col) {
+                int max = Math.min(col.size(), 10); // cap size
+                java.util.List<Object> list = new java.util.ArrayList<>(max);
+                int i = 0; for (Object o : col) { if (i++ >= max) break; list.add(summarize(o)); }
+                if (col.size() > max) list.add("..." + (col.size() - max) + " more");
+                return list;
+            }
+            if (v instanceof Map<?,?> map) {
+                java.util.Map<Object,Object> out = new java.util.LinkedHashMap<>();
+                int i = 0; int max = 10;
+                for (var e : map.entrySet()) { if (i++ >= max) break; out.put(e.getKey(), summarize(e.getValue())); }
+                if (map.size() > max) out.put("_truncated", (map.size()-max) + " more entries");
+                return out;
+            }
+            if (v.getClass().isArray()) {
+                int len = java.lang.reflect.Array.getLength(v);
+                int max = Math.min(len, 10);
+                java.util.List<Object> list = new java.util.ArrayList<>(max + (len > max ? 1 : 0));
+                for (int i=0;i<max;i++) list.add(summarize(java.lang.reflect.Array.get(v,i)));
+                if (len > max) list.add("..." + (len - max) + " more");
+                return list;
+            }
+        } catch (Throwable ignore) {
+            // Fallback to normal path if any issue summarizing
+        }
         String json = toJsonSafe(v);
         json = maskJson(json);
         if (json.length() > 1000) {
             return json.substring(0, 1000) + "...";
         }
         return json;
+    }
+
+    private Map<String,Object> entitySummary(Object entity) {
+        Map<String,Object> m = new LinkedHashMap<>();
+        m.put("_entity", entity.getClass().getSimpleName());
+        // Try to extract @Id fields or common id naming
+        java.lang.reflect.Field[] fields = entity.getClass().getDeclaredFields();
+        for (java.lang.reflect.Field f : fields) {
+            try {
+                if (f.getAnnotation(jakarta.persistence.Transient.class) != null) continue;
+                boolean idLike = f.getAnnotation(jakarta.persistence.Id.class) != null || f.getName().equalsIgnoreCase("id") || f.getName().endsWith("Id");
+                if (idLike) {
+                    f.setAccessible(true);
+                    Object val = f.get(entity);
+                    m.put(f.getName(), val);
+                }
+                // Include a few timestamp fields for context
+                if (f.getType().getName().equals("java.time.LocalDateTime") && (f.getName().endsWith("At") || f.getName().endsWith("Date"))) {
+                    f.setAccessible(true);
+                    Object val = f.get(entity);
+                    if (val != null) m.put(f.getName(), val.toString());
+                }
+            } catch (Throwable ignored) { }
+        }
+        return m;
     }
 
     private String toJsonSafe(Object obj) {

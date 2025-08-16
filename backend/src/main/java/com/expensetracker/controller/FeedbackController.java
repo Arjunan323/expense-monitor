@@ -9,11 +9,13 @@ import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/feedback")
+@io.swagger.v3.oas.annotations.tags.Tag(name = "Feedback", description = "Collect user feedback & analytics feedback")
 public class FeedbackController {
     @Autowired
     private FeedbackRepository feedbackRepository;
 
     @PostMapping
+    @io.swagger.v3.oas.annotations.Operation(summary = "Submit general feedback")
     public String submitFeedback(@RequestBody FeedbackDto feedbackDto) {
         Feedback feedback = new Feedback();
         feedback.setEmail(feedbackDto.getEmail());
@@ -26,6 +28,7 @@ public class FeedbackController {
     }
 
     @PostMapping("/analytics")
+    @io.swagger.v3.oas.annotations.Operation(summary = "Submit analytics-specific feedback")
     public String submitAnalyticsFeedback(@RequestBody FeedbackDto feedbackDto) {
         if (feedbackDto.getMeta() == null) {
             // meta should capture selected feature flags

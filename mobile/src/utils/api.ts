@@ -1,6 +1,7 @@
 import axios, { AxiosResponse } from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { ApiResponse, PaginatedResponse } from '../types';
+import { authEvents } from './eventBus';
 
 const API_BASE_URL = 'https://macaw-deciding-hermit.ngrok-free.app'; // Update for production
 
@@ -10,6 +11,8 @@ export const api = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+// authEvents imported from custom event bus (simple implementation)
 
 // Request interceptor to add auth token
 api.interceptors.request.use(
@@ -29,10 +32,17 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response: AxiosResponse) => response,
   async (error) => {
-    if (error.response?.status === 401) {
-      await SecureStore.deleteItemAsync('token');
-      await SecureStore.deleteItemAsync('user');
-      // Navigate to login screen
+    const status = error.response?.status;
+    const isAuthAttempt = error?.config?.headers?.['X-Auth-Attempt'] === 'true';
+    if ((status === 401 || status === 403) && !isAuthAttempt) {
+      // Clear secure store items defensively
+      try {
+        await SecureStore.deleteItemAsync('token');
+        await SecureStore.deleteItemAsync('user');
+        await SecureStore.deleteItemAsync('user-preferences');
+      } catch {}
+      // Emit event so AuthContext can perform state reset & navigation
+      authEvents.emit('auth-expired', { status });
     }
     return Promise.reject(error);
   }
@@ -45,31 +55,50 @@ export const apiCall = async <T>(
   config?: any
 ): Promise<T> => {
   try {
-    const response = await api.request({
-      method,
-      url,
-      data,
-      ...config,
-    });
+    const response = await api.request({ method, url, data, ...config });
     return response.data;
   } catch (error: any) {
-    const msg = error.response?.data?.message || error.message || '';
-    if (
-      msg.includes('JWT expired') ||
-      msg.includes('ExpiredJwtException') ||
-      msg.includes('jwt expired')
-    ) {
-      await SecureStore.deleteItemAsync('token');
-      await SecureStore.deleteItemAsync('user');
-      throw new Error('Session expired');
+    const eresp = error?.response?.data;
+    if (eresp && typeof eresp === 'object' && 'code' in eresp && 'status' in eresp) {
+      const err: any = new Error(eresp.message || 'Error');
+      err.code = eresp.code;
+      err.status = eresp.status;
+      err.details = eresp.details;
+      throw err;
     }
-    if (error.response?.status === 403) {
-      await SecureStore.deleteItemAsync('token');
-      await SecureStore.deleteItemAsync('user');
-      throw new Error('Session expired or forbidden');
+    // Fallback for auth responses like { token:null, user:null, error:"Invalid credentials" }
+    if (eresp && eresp.error && !eresp.message) {
+      const authErr: any = new Error(eresp.error);
+      authErr.status = error.response?.status;
+      throw authErr;
     }
-    throw new Error(msg || 'An error occurred');
+    throw error;
   }
+};
+
+export const fetchAnalyticsSummary = async (params?: { startDate?: string; endDate?: string; }) => {
+  const query: string[] = [];
+  if (params?.startDate) query.push(`startDate=${encodeURIComponent(params.startDate)}`);
+  if (params?.endDate) query.push(`endDate=${encodeURIComponent(params.endDate)}`);
+  const data = await apiCall<any>('GET', `/analytics/summary${query.length ? '?' + query.join('&') : ''}`);
+  const nf = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' });
+  if (!data.totalInflowFormatted && typeof data.totalInflow === 'number') {
+    data.totalInflowFormatted = nf.format(data.totalInflow);
+    data.totalOutflowFormatted = nf.format(data.totalOutflow);
+    data.netCashFlowFormatted = nf.format(data.netCashFlow);
+    data.averageDailySpendFormatted = nf.format(data.averageDailySpend);
+    data.topCategories?.forEach((c: any) => {
+      if (!c.amountFormatted && typeof c.amount === 'number') c.amountFormatted = nf.format(c.amount);
+    });
+  }
+  return data;
+};
+
+export const fetchStatementJob = (id: string) => apiCall<any>('GET', `/statement-jobs/${id}`);
+
+// Auth-specific helper to avoid triggering global logout on invalid credentials
+export const authApiCall = async <T>(url: string, body: any): Promise<T> => {
+  return apiCall<T>('POST', url, body, { headers: { 'X-Auth-Attempt': 'true' }});
 };
 
 export default api;

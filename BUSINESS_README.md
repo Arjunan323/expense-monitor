@@ -1,7 +1,7 @@
-# Expense Monitor
+# CutTheSpend
 
 ## Overview
-Expense Monitor is a comprehensive platform designed to help individuals and businesses track, analyze, and manage their financial transactions. It leverages advanced AI and OCR technologies to extract transaction data from bank statements, categorize expenses, and provide actionable insights for better financial decision-making.
+CutTheSpend is a comprehensive platform designed to help individuals and businesses track, analyze, and manage their financial transactions. It leverages advanced AI and OCR technologies to extract transaction data from bank statements, categorize expenses, and provide actionable insights for better financial decision-making.
 
 ## Key Features
 - **Automated Transaction Extraction:** Upload bank statements in PDF format and automatically extract transaction details using OCR and GPT-4-powered parsing.

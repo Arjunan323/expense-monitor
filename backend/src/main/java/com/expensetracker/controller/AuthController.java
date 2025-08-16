@@ -2,7 +2,6 @@ package com.expensetracker.controller;
 
 import org.springframework.web.bind.annotation.*;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import java.util.Map;
@@ -23,27 +22,18 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<RegisterResponseDto> register(@RequestBody RegisterRequestDto body) {
-        RegisterResponseDto response = authService.register(body);
-        if (!response.isSuccess()) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
-        }
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    RegisterResponseDto response = authService.register(body);
+    return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @PostMapping("/login")
     public ResponseEntity<AuthResponseDto> login(@RequestBody Map<String, String> body) {
         String username = body.get("username");
         String password = body.get("password");
-        try {
-            AuthResponseDto response = authService.login(username, password);
-            if (response.getToken() != null) {
-                return ResponseEntity.ok(response);
-            } else {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
-            }
-        } catch (UsernameNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new AuthResponseDto(null, null, e.getMessage()));
+        AuthResponseDto response = authService.login(username, password);
+        if (response.getToken() != null) {
+            return ResponseEntity.ok(response);
         }
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
     }
 }

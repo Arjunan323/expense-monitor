@@ -539,19 +539,7 @@ export const Transactions: React.FC = () => {
         </div>
       )}
 
-      {/* No Results */}
-  {transactions.length === 0 && !loading && (
-        <div className="card text-center py-12">
-          <Tag className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">No transactions found</h3>
-          <p className="text-gray-600 mb-4">
-            Try adjusting your filters or search criteria
-          </p>
-          <button onClick={resetFilters} className="btn-primary">
-            Reset Filters
-          </button>
-        </div>
-      )}
+  {/* (Removed redundant unconditional no-results block that always showed Reset Filters) */}
 
       {/* Transactions Table */}
   {transactions.length > 0 && (

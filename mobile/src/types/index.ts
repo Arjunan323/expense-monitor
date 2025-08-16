@@ -104,3 +104,50 @@ export interface TransactionFilters {
   sortBy: 'date' | 'amount' | 'category' | 'bank';
   sortOrder: 'asc' | 'desc';
 }
+
+// Analytics (aligns with backend BigDecimal + formatted fields)
+export interface AnalyticsCategorySpend {
+  category: string;
+  amount: string | number;
+  amountFormatted?: string;
+  transactions: number;
+}
+
+export interface AnalyticsSummary {
+  topCategories: AnalyticsCategorySpend[];
+  totalInflow: string | number;
+  totalOutflow: string | number;
+  netCashFlow: string | number;
+  monthlyTrend: { [month: string]: string | number };
+  averageDailySpend: string | number;
+  totalInflowFormatted?: string;
+  totalOutflowFormatted?: string;
+  netCashFlowFormatted?: string;
+  averageDailySpendFormatted?: string;
+}
+
+// Statement upload async processing
+export interface StatementUploadResponse {
+  success: boolean;
+  message: string;
+  passwordRequired?: boolean;
+  jobId?: string;
+}
+
+export interface StatementJob {
+  id: string;
+  status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+  progressPercent?: number;
+  errorMessage?: string;
+  originalFilename?: string;
+}
+
+export interface ErrorResponse {
+  timestamp: string;
+  status: number;
+  error: string;
+  message: string;
+  path: string;
+  code: string;
+  details?: string[];
+}

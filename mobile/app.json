@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "CutTheSpend - Expense Monitor",
+    "name": "CutTheSpend",
     "slug": "cutthespend-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.cutthespend.expensemonitor",
+      "bundleIdentifier": "com.cutthespend.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -25,7 +25,7 @@
         "backgroundColor": "#00B77D"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.cutthespend.expensemonitor"
+      "package": "com.cutthespend.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"

@@ -2,6 +2,7 @@ package com.expensetracker.service;
 
 import com.expensetracker.repository.TransactionRepository;
 import com.expensetracker.repository.UserRepository;
+import com.expensetracker.security.AuthenticationFacade;
 import com.expensetracker.model.Transaction;
 import com.expensetracker.model.User;
 import com.expensetracker.dto.DashboardStatsDto;
@@ -9,27 +10,27 @@ import com.expensetracker.dto.CategorySummaryDto;
 import com.expensetracker.dto.TransactionDto;
 import com.expensetracker.util.AppConstants;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
 import java.util.stream.Collectors;
+import java.math.BigDecimal;
 
 @Service
 public class DashboardService {
     private final TransactionRepository transactionRepository;
-    private final UserRepository userRepository;
 
     @Autowired
-    public DashboardService(TransactionRepository transactionRepository, UserRepository userRepository) {
+    private final AuthenticationFacade authenticationFacade;
+
+    public DashboardService(TransactionRepository transactionRepository, UserRepository userRepository, AuthenticationFacade authenticationFacade) {
         this.transactionRepository = transactionRepository;
-        this.userRepository = userRepository;
+        this.authenticationFacade = authenticationFacade;
     }
 
 
     public DashboardStatsDto getSummary(String token, String startDateStr, String endDateStr, String banksCsv) {
-        String username = new com.expensetracker.config.JwtUtil().extractUsername(token);
-        User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException(username));
+    User user = authenticationFacade.currentUser();
 
     java.time.LocalDate startDate = (startDateStr != null && !startDateStr.isEmpty()) ? java.time.LocalDate.parse(startDateStr) : null;
     java.time.LocalDate endDate = (endDateStr != null && !endDateStr.isEmpty()) ? java.time.LocalDate.parse(endDateStr) : null;
@@ -42,7 +43,7 @@ public class DashboardService {
                 .toList();
     }
     // Specification with banks + date filtering
-    List<Transaction> txns = transactionRepository.findAll(
+    List<Transaction> txnsRaw = transactionRepository.findAll(
         com.expensetracker.repository.TransactionSpecifications.filter(
             user,
             banks, // banks filter
@@ -55,6 +56,9 @@ public class DashboardService {
             null  // description
         )
     );
+    // Deduplicate transactions in-memory in case multiple overlapping statements were uploaded.
+    // Primary key: txnHash (if populated). Fallback composite (date|amount|balance|description|bankName).
+    List<Transaction> txns = dedupe(txnsRaw);
 
         String planType = AppConstants.PLAN_FREE;
         if (user.getSubscription() != null && AppConstants.STATUS_ACTIVE.equals(user.getSubscription().getStatus())) {
@@ -70,19 +74,29 @@ public class DashboardService {
 
     // We'll compute totalBalance after per-bank balances are derived; init here
     double totalBalance = 0.0;
-        double monthlyIncome = txns.stream().filter(t -> t.getAmount() > 0).mapToDouble(Transaction::getAmount).sum();
-        double monthlyExpenses = txns.stream().filter(t -> t.getAmount() < 0).mapToDouble(Transaction::getAmount).sum();
+        // Monthly income/expenses: use the already filtered txns (date range provided by caller)
+        BigDecimal monthlyIncomeBD = txns.stream()
+            .filter(t -> t.getAmount() != null && t.getAmount().compareTo(BigDecimal.ZERO) > 0)
+            .map(Transaction::getAmount)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal monthlyExpensesBD = txns.stream()
+            .filter(t -> t.getAmount() != null && t.getAmount().compareTo(BigDecimal.ZERO) < 0)
+            .map(Transaction::getAmount)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        double monthlyIncome = monthlyIncomeBD.doubleValue();
+        double monthlyExpenses = monthlyExpensesBD.doubleValue();
         int transactionCount = txns.size();
 
         // Per-bank aggregates
         Map<String, Integer> transactionCountByBank = new HashMap<>();
-        Map<String, Double> balanceByBank = new HashMap<>();
-        Map<String, Double> incomeByBank = new HashMap<>();
-        Map<String, Double> expensesByBank = new HashMap<>();
+    Map<String, Double> balanceByBank = new HashMap<>();
+    Map<String, Double> incomeByBank = new HashMap<>();
+    Map<String, Double> expensesByBank = new HashMap<>();
         Map<String, List<CategorySummaryDto>> topCategoriesByBank = new HashMap<>();
         for (Map.Entry<String, List<Transaction>> entry : bankGroups.entrySet()) {
             String bank = entry.getKey();
-            List<Transaction> list = entry.getValue();
+            // Deduplicate again per-bank (cheap) to ensure any bank-specific duplicates are removed
+            List<Transaction> list = dedupe(entry.getValue());
             transactionCountByBank.put(bank, list.size());
             // Latest balance for that bank (same logic as total) – assume sorted by date desc
             double bankBalance = list.stream()
@@ -91,22 +105,24 @@ public class DashboardService {
                     if (cmp == 0) return Long.compare(b.getId(), a.getId());
                     return cmp;
                 })
-                .map(Transaction::getBalance)
-                .findFirst()
-                .orElse(0.0);
+                .map(t -> t.getBalance() != null ? t.getBalance().doubleValue() : 0.0)
+                .findFirst().orElse(0.0);
             balanceByBank.put(bank, bankBalance);
-            double inc = list.stream().filter(t -> t.getAmount() > 0).mapToDouble(Transaction::getAmount).sum();
-            double exp = list.stream().filter(t -> t.getAmount() < 0).mapToDouble(Transaction::getAmount).sum();
+            double inc = list.stream().filter(t -> t.getAmount() != null && t.getAmount().compareTo(BigDecimal.ZERO) > 0)
+                .map(Transaction::getAmount).mapToDouble(BigDecimal::doubleValue).sum();
+            double exp = list.stream().filter(t -> t.getAmount() != null && t.getAmount().compareTo(BigDecimal.ZERO) < 0)
+                .map(Transaction::getAmount).mapToDouble(BigDecimal::doubleValue).sum();
             incomeByBank.put(bank, inc);
             expensesByBank.put(bank, exp);
             // Top categories per bank
             Map<String, List<Transaction>> catGroups = list.stream().collect(Collectors.groupingBy(Transaction::getCategory));
-            double bankTotalAbs = list.stream().mapToDouble(t -> Math.abs(t.getAmount())).sum();
+            double bankTotalAbs = list.stream().mapToDouble(t -> t.getAmount() != null ? Math.abs(t.getAmount().doubleValue()) : 0.0).sum();
             List<CategorySummaryDto> perBankCats = catGroups.entrySet().stream()
                 .map(e -> {
-                    double amount = e.getValue().stream().mapToDouble(Transaction::getAmount).sum();
+                    double amount = e.getValue().stream().map(Transaction::getAmount).filter(Objects::nonNull).mapToDouble(BigDecimal::doubleValue).sum();
                     int count = e.getValue().size();
-                    double percentage = bankTotalAbs > 0 ? (e.getValue().stream().mapToDouble(t -> Math.abs(t.getAmount())).sum() / bankTotalAbs) * 100 : 0.0;
+                    double sumAbs = e.getValue().stream().map(Transaction::getAmount).filter(Objects::nonNull).mapToDouble(a -> Math.abs(a.doubleValue())).sum();
+                    double percentage = bankTotalAbs > 0 ? (sumAbs / bankTotalAbs) * 100 : 0.0;
                     return new CategorySummaryDto(e.getKey(), amount, count, percentage);
                 })
                 .sorted((a,b)-> Double.compare(Math.abs(b.getAmount()), Math.abs(a.getAmount())))
@@ -119,39 +135,43 @@ public class DashboardService {
         // If only one bank, preserve legacy behavior: latest balance transaction overall.
         // If multiple banks, sum latest balance per bank to reflect combined holdings.
         if (!bankGroups.isEmpty()) {
-            if (bankGroups.size() == 1) {
-                // Single bank: take that bank's latest balance (already in map)
-                totalBalance = balanceByBank.values().stream().findFirst().orElse(0.0);
+        if (bankGroups.size() == 1) {
+        // Single bank scenario (may include multiple uploaded statements for the SAME bank).
+        // We don't sum balances (would double count). We pick the most recent transaction's balance
+        // across all that bank's transactions (latest date, then highest id as tie‑breaker) so
+        // overlapping / older statements do not distort the current balance.
+        List<Transaction> onlyBankTxns = bankGroups.values().iterator().next();
+        java.util.Comparator<Transaction> latestComparator = java.util.Comparator
+            .comparing(Transaction::getDate)
+            .thenComparing(Transaction::getId);
+        totalBalance = onlyBankTxns.stream()
+            .filter(t -> t.getBalance() != null)
+            .max(latestComparator)
+            .map(t -> t.getBalance().doubleValue())
+            .orElse(0.0);
             } else {
                 totalBalance = balanceByBank.values().stream().mapToDouble(Double::doubleValue).sum();
             }
         }
 
         Map<String, List<Transaction>> categoryGroups = txns.stream().collect(Collectors.groupingBy(Transaction::getCategory));
-        double totalAbs = txns.stream().mapToDouble(t -> Math.abs(t.getAmount())).sum();
-        List<CategorySummaryDto> topCategories = categoryGroups.entrySet().stream()
+    double totalAbs = txns.stream().mapToDouble(t -> t.getAmount() != null ? Math.abs(t.getAmount().doubleValue()) : 0.0).sum();
+    List<CategorySummaryDto> topCategories = categoryGroups.entrySet().stream()
             .map(e -> {
-                double amount = e.getValue().stream().mapToDouble(Transaction::getAmount).sum();
+                double amount = e.getValue().stream().map(Transaction::getAmount).filter(Objects::nonNull).mapToDouble(BigDecimal::doubleValue).sum();
                 int count = e.getValue().size();
-                double percentage = totalAbs > 0 ? (e.getValue().stream().mapToDouble(t -> Math.abs(t.getAmount())).sum() / totalAbs) * 100 : 0.0;
+                double sumAbs = e.getValue().stream().map(Transaction::getAmount).filter(Objects::nonNull).mapToDouble(a -> Math.abs(a.doubleValue())).sum();
+                double percentage = totalAbs > 0 ? (sumAbs / totalAbs) * 100 : 0.0;
                 return new CategorySummaryDto(e.getKey(), amount, count, percentage);
             })
             .sorted((a, b) -> Double.compare(Math.abs(b.getAmount()), Math.abs(a.getAmount())))
             .limit(6)
             .collect(Collectors.toList());
 
-        List<TransactionDto> recentTransactions = txns.stream()
+    List<TransactionDto> recentTransactions = txns.stream()
             .sorted((a, b) -> b.getDate().compareTo(a.getDate()))
             .limit(5)
-            .map(t -> new TransactionDto(
-                t.getId(),
-                t.getDate(),
-                t.getDescription(),
-                t.getAmount(),
-                t.getBalance(),
-                t.getCategory(),
-                t.getBankName()
-            ))
+            .map(TransactionDto::fromEntity)
             .collect(Collectors.toList());
 
         boolean advancedAnalyticsLocked = false;
@@ -184,11 +204,8 @@ public class DashboardService {
     }
 
     public String exportCsv(String token) {
-        String username = new com.expensetracker.config.JwtUtil().extractUsername(token);
-        User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException(username));
-        List<Transaction> txns = transactionRepository.findAll().stream()
-            .filter(t -> t.getUser() != null && t.getUser().getId().equals(user.getId()))
-            .toList();
+        User user = authenticationFacade.currentUser();
+        List<Transaction> txns = transactionRepository.findByUserAndDateRange(user, null, null);
         StringBuilder csv = new StringBuilder(AppConstants.CSV_HEADER);
         for (Transaction t : txns) {
             csv.append(t.getDate()).append(",")
@@ -198,5 +215,35 @@ public class DashboardService {
                .append(t.getCategory()).append("\n");
         }
         return csv.toString();
+    }
+
+    /**
+     * Deduplicate transactions (handles overlapping statement uploads). Prefers txnHash uniqueness when present.
+     */
+    private List<Transaction> dedupe(List<Transaction> input) {
+        if (input == null || input.size() < 2) return input == null ? java.util.Collections.emptyList() : input;
+        Map<String, Transaction> seen = new LinkedHashMap<>();
+        for (Transaction t : input) {
+            if (t == null) continue;
+            String key = null;
+            try {
+                java.lang.reflect.Field f = t.getClass().getDeclaredField("txnHash");
+                f.setAccessible(true);
+                Object hv = f.get(t);
+                if (hv instanceof String s && !s.isBlank()) {
+                    key = "H|" + s;
+                }
+            } catch (Exception ignored) { /* field absent */ }
+            if (key == null) {
+                key = "C|" + (t.getDate() != null ? t.getDate().toString() : "") + "|" +
+                        (t.getAmount() != null ? t.getAmount().toPlainString() : "") + "|" +
+                        (t.getBalance() != null ? t.getBalance().toPlainString() : "") + "|" +
+                        (t.getDescription() != null ? t.getDescription() : "") + "|" +
+                        (t.getBankName() != null ? t.getBankName() : "");
+            }
+            // Keep the first occurrence (earliest in current ordering) – assumes repository order roughly insertion / id asc.
+            seen.putIfAbsent(key, t);
+        }
+        return new ArrayList<>(seen.values());
     }
 }

@@ -252,7 +252,7 @@ export const BillingScreen: React.FC = () => {
                   currency: resp.currency,
                   key: resp.key,
                   amount: resp.amount,
-                  name: 'Expense Monitor',
+                  name: 'CutTheSpend',
                   order_id: resp.orderId,
                   prefill: {
                     email: user?.email,

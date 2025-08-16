@@ -1,8 +1,21 @@
 package com.expensetracker.dto;
 
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
 public class UserProfileDto {
+    @NotBlank
+    @Size(max = 50)
     private String firstName;
+
+    @NotBlank
+    @Size(max = 50)
     private String lastName;
+
+    @Email
+    @NotBlank
+    @Size(max = 120)
     private String email;
 
     public UserProfileDto() {}

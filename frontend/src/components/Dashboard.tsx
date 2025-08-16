@@ -128,6 +128,13 @@ export const Dashboard: React.FC = () => {
   };
 
   const filteredStats = getFilteredStats();
+  // Determine if any filters are applied (subset of banks or date range set)
+  const allBanksList = (allBanks.length ? allBanks : stats?.bankSources) || [];
+  const filtersApplied = (
+    (selectedBanks.length > 0 && selectedBanks.length < allBanksList.length) ||
+    !!dateRange.start ||
+    !!dateRange.end
+  );
 
   if (loading) {
     return (
@@ -143,7 +150,7 @@ export const Dashboard: React.FC = () => {
     return (
       <div className="space-y-6">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Welcome to Expense Monitor</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Welcome to CutTheSpend</h1>
           <p className="text-gray-600">Get started by uploading your first bank statement</p>
         </div>
         <EmptyState
@@ -182,7 +189,8 @@ export const Dashboard: React.FC = () => {
 
 
   // Inline empty state message if filters return no results, but show the rest of the dashboard (with zeroed/empty data)
-  const showNoResults = stats && filteredStats && filteredStats.transactionCount === 0;
+  // Only show filtered empty state when filters are applied
+  const showNoResults = stats && filteredStats && filteredStats.transactionCount === 0 && filtersApplied;
 
   const bankOptions = (allBanks.length ? allBanks : (stats?.bankSources||[])).map(bank => ({
     value: bank,
@@ -336,7 +344,7 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* Clear Filters Button */}
-      {(selectedBanks.length < (allBanks.length || stats.bankSources.length) || dateRange.start || dateRange.end) && (
+  {filtersApplied && (
         <div className="flex justify-center">
           <button
             onClick={() => {

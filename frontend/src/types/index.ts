@@ -80,6 +80,32 @@ export interface ParseResult {
   success: boolean;
 }
 
+// Async statement processing
+export interface StatementUploadResponse {
+  success: boolean;
+  message: string;
+  passwordRequired?: boolean;
+  jobId?: string;
+}
+
+export interface StatementJobUpdate {
+  id: string;
+  status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+  progress: number; // 0-100
+  error?: string;
+}
+
+// Global error response from backend
+export interface ErrorResponse {
+  timestamp: string;
+  status: number;
+  error: string;
+  message: string;
+  path: string;
+  code: string;
+  details?: string[];
+}
+
 export interface AuthContextType {
   user: User | null;
   token: string | null;
@@ -147,15 +173,20 @@ export interface TransactionFilters {
 // Analytics
 export interface AnalyticsCategorySpend {
   category: string;
-  amount: number; // negative = spend, positive = income
+  amount: string | number; // server now returns BigDecimal serialized (number) plus amountFormatted string; keep flexibility
+  amountFormatted?: string; // currency formatted
   transactions: number;
 }
 
 export interface AnalyticsSummary {
   topCategories: AnalyticsCategorySpend[];
-  totalInflow: number;
-  totalOutflow: number; // negative
-  netCashFlow: number;
-  monthlyTrend: { [month: string]: number }; // yyyy-MM -> net
-  averageDailySpend: number;
+  totalInflow: string | number;
+  totalOutflow: string | number; // negative
+  netCashFlow: string | number;
+  monthlyTrend: { [month: string]: string | number }; // yyyy-MM -> net BigDecimal
+  averageDailySpend: string | number;
+  totalInflowFormatted?: string;
+  totalOutflowFormatted?: string;
+  netCashFlowFormatted?: string;
+  averageDailySpendFormatted?: string;
 }

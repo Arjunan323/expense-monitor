@@ -17,8 +17,8 @@ public class TransactionDto {
             t.getId(),
             t.getDate(),
             t.getDescription(),
-            t.getAmount() != null ? t.getAmount() : 0.0,
-            t.getBalance() != null ? t.getBalance() : 0.0,
+            t.getAmount() != null ? t.getAmount().doubleValue() : 0.0,
+            t.getBalance() != null ? t.getBalance().doubleValue() : 0.0,
             t.getCategory(),
             t.getBankName()
         );

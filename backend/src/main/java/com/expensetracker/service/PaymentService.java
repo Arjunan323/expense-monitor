@@ -11,7 +11,7 @@ import com.expensetracker.dto.RazorpayOrderResponseDto;
 import com.expensetracker.dto.RazorpayWebhookDto;
 import com.expensetracker.util.AppConstants;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import com.expensetracker.security.AuthenticationFacade;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpStatus;
 import com.razorpay.RazorpayClient;
@@ -19,25 +19,29 @@ import com.razorpay.RazorpayException;
 import org.json.JSONObject;
 import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import com.expensetracker.service.events.DomainEventPublisher;
 
 @Service
 public class PaymentService {
-    private final UserRepository userRepository;
+    private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
     private final SubscriptionRepository subscriptionRepository;
     private final PlanRepository planRepository;
+    private final AuthenticationFacade authenticationFacade;
+    private final DomainEventPublisher domainEventPublisher;
 
     @Autowired
-    public PaymentService(UserRepository userRepository, SubscriptionRepository subscriptionRepository, PlanRepository planRepository) {
-        this.userRepository = userRepository;
+    public PaymentService(UserRepository userRepository, SubscriptionRepository subscriptionRepository, PlanRepository planRepository, AuthenticationFacade authenticationFacade, DomainEventPublisher domainEventPublisher) {
         this.subscriptionRepository = subscriptionRepository;
         this.planRepository = planRepository;
+        this.authenticationFacade = authenticationFacade;
+        this.domainEventPublisher = domainEventPublisher;
     }
 
     public ResponseEntity<RazorpayOrderResponseDto> createOrder(RazorpayOrderRequestDto req, String authHeader) {
-        String planType = req.getPlanType();
-        String token = authHeader.replace("Bearer ", "");
-        String username = new com.expensetracker.config.JwtUtil().extractUsername(token);
-        User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException(username));
+    String planType = req.getPlanType();
+    User user = authenticationFacade.currentUser();
         Plan plan = planRepository.findByPlanTypeAndCurrency(planType, user.getCurrency()).orElse(null);
         if (plan == null) {
             return ResponseEntity.badRequest().build();
@@ -75,45 +79,34 @@ public class PaymentService {
 
     public ResponseEntity<String> handleWebhook(RazorpayWebhookDto webhook) {
         if (webhook == null || webhook.getEvent() == null) return ResponseEntity.badRequest().body("Invalid webhook");
-        final String[] ids = new String[2];
+        String orderId = null;
+        String paymentId = null;
         if (webhook.getPayload() != null && webhook.getPayload().payment != null) {
-            if (webhook.getPayload().payment.order_id != null) {
-                ids[0] = webhook.getPayload().payment.order_id;
+            var payment = webhook.getPayload().payment;
+            if (payment.order_id != null) orderId = payment.order_id;
+            if (payment.id != null) paymentId = payment.id;
+            if (payment.entity != null) {
+                // Prefer nested entity values if present (authoritative)
+                if (payment.entity.order_id != null) orderId = payment.entity.order_id;
+                if (payment.entity.id != null) paymentId = payment.entity.id;
             }
-            if (webhook.getPayload().payment.id != null) {
-                ids[1] = webhook.getPayload().payment.id;
-            }
-            try {
-                java.lang.reflect.Field entityField = webhook.getPayload().payment.getClass().getDeclaredField("entity");
-                entityField.setAccessible(true);
-                Object entity = entityField.get(webhook.getPayload().payment);
-                if (entity != null) {
-                    java.lang.reflect.Field orderIdField = entity.getClass().getDeclaredField("order_id");
-                    orderIdField.setAccessible(true);
-                    Object nestedOrderId = orderIdField.get(entity);
-                    if (nestedOrderId != null) ids[0] = nestedOrderId.toString();
-                    java.lang.reflect.Field idField = entity.getClass().getDeclaredField("id");
-                    idField.setAccessible(true);
-                    Object nestedPaymentId = idField.get(entity);
-                    if (nestedPaymentId != null) ids[1] = nestedPaymentId.toString();
-                }
-            } catch (Exception ignored) {}
-            if (ids[0] == null) {
-                return ResponseEntity.badRequest().body("No order_id");
-            }
-        } else {
+        }
+        if (orderId == null) {
             return ResponseEntity.badRequest().body("No order_id");
         }
-        final String orderId = ids[0];
-        final String paymentId = ids[1];
-        Subscription sub = subscriptionRepository.findAll().stream()
-            .filter(s -> orderId.equals(s.getRazorpayOrderId()))
-            .findFirst().orElse(null);
+        final String finalOrderId = orderId;
+        final String finalPaymentId = paymentId;
+    Subscription sub = subscriptionRepository.findByRazorpayOrderId(finalOrderId).orElse(null);
 
         if (AppConstants.EVENT_PAYMENT_CAPTURED.equals(webhook.getEvent()) || AppConstants.EVENT_ORDER_PAID.equals(webhook.getEvent())) {
             if (sub != null) {
+                // Idempotency: if already active with payment id set, ignore duplicate webhook
+                if (AppConstants.STATUS_ACTIVE.equals(sub.getStatus()) && sub.getRazorpayPaymentId() != null) {
+                    log.info("Duplicate activation webhook ignored for order {}", finalOrderId);
+                    return ResponseEntity.ok("Already active");
+                }
                 sub.setStatus(AppConstants.STATUS_ACTIVE);
-                sub.setRazorpayPaymentId(paymentId);
+                sub.setRazorpayPaymentId(finalPaymentId);
                 sub.setStartDate(LocalDateTime.now());
                 if (sub.getPlanType() == Subscription.PlanType.PRO) {
                     sub.setEndDate(LocalDateTime.now().plusMonths(1));
@@ -121,12 +114,29 @@ public class PaymentService {
                     sub.setEndDate(LocalDateTime.now().plusMonths(1));
                 }
                 subscriptionRepository.save(sub);
+                try {
+                    String payload = new org.json.JSONObject()
+                        .put("userId", sub.getUser().getId())
+                        .put("planType", sub.getPlanType().name())
+                        .put("startDate", sub.getStartDate())
+                        .put("endDate", sub.getEndDate())
+                        .toString();
+                    domainEventPublisher.publish("SUBSCRIPTION", String.valueOf(sub.getUser().getId()), "SUBSCRIPTION_ACTIVATED", payload);
+                } catch (Exception ignored) {}
                 return ResponseEntity.ok("Subscription activated");
             }
         } else if (AppConstants.EVENT_PAYMENT_FAILED.equals(webhook.getEvent())) {
             if (sub != null) {
                 sub.setStatus(AppConstants.STATUS_FAILED);
                 subscriptionRepository.save(sub);
+                try {
+                    String payload = new org.json.JSONObject()
+                        .put("userId", sub.getUser().getId())
+                        .put("planType", sub.getPlanType().name())
+                        .put("status", "FAILED")
+                        .toString();
+                    domainEventPublisher.publish("SUBSCRIPTION", String.valueOf(sub.getUser().getId()), "SUBSCRIPTION_PAYMENT_FAILED", payload);
+                } catch (Exception ignored) {}
                 return ResponseEntity.ok("Payment failed recorded");
             }
         }

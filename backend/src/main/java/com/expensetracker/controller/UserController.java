@@ -1,91 +1,43 @@
 
 package com.expensetracker.controller;
 import com.expensetracker.dto.UsageStatsDto;
-import com.expensetracker.repository.RawStatementRepository;
-import com.expensetracker.model.Subscription;
-import com.expensetracker.repository.PlanRepository;
-import com.expensetracker.model.Plan;
-import java.time.YearMonth;
-import java.time.LocalDateTime;
+import com.expensetracker.service.UserUsageService;
 
 
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import com.expensetracker.dto.UserStatusDto;
 import com.expensetracker.dto.PreferencesDto;
 import com.expensetracker.dto.UserProfileDto;
 import com.expensetracker.repository.UserRepository;
-import com.expensetracker.util.AppConstants;
 import com.expensetracker.model.User;
 import com.expensetracker.config.JwtUtil;
 
 @RestController
 @RequestMapping("/user")
+@io.swagger.v3.oas.annotations.tags.Tag(name = "User", description = "User profile, usage and preferences APIs")
 public class UserController {
     private final UserRepository userRepository;
     private final JwtUtil jwtUtil;
-    private final RawStatementRepository rawStatementRepository;
-    private final PlanRepository planRepository;
+    private final UserUsageService userUsageService;
 
-    public UserController(UserRepository userRepository, JwtUtil jwtUtil, RawStatementRepository rawStatementRepository, PlanRepository planRepository) {
+    public UserController(UserRepository userRepository, JwtUtil jwtUtil, UserUsageService userUsageService) {
         this.userRepository = userRepository;
         this.jwtUtil = jwtUtil;
-        this.rawStatementRepository = rawStatementRepository;
-        this.planRepository = planRepository;
+        this.userUsageService = userUsageService;
     }
 
     @GetMapping("/usage")
+    @io.swagger.v3.oas.annotations.Operation(summary = "Get usage statistics for current user")
     public UsageStatsDto getUsage(@RequestHeader("Authorization") String authHeader) {
         String token = authHeader.replace("Bearer ", "");
         String username = jwtUtil.extractUsername(token);
-        User user = userRepository.findByUsername(username).orElse(null);
-        if (user == null) {
-            return new UsageStatsDto(0, 3, "FREE", 0, 30, true, 2);
-        }
-
-        Subscription sub = user.getSubscription();
-        String planType = "FREE";
-        int statementLimit = 3;
-        int pageLimit = 10;
-        Integer combinedBankLimit = 2; // default for FREE
-        if (sub != null && sub.getPlanType() != null && "ACTIVE".equals(sub.getStatus())) {
-            planType = sub.getPlanType().name();
-            // Lookup plan limits from Plan entity
-            String currency = user.getCurrency() != null ? user.getCurrency() : AppConstants.REGION_DEFAULT;
-            Plan plan = planRepository.findByPlanTypeAndCurrency(planType, currency).orElse(null);
-            if (plan != null) {
-                statementLimit = plan.getStatementsPerMonth();
-                pageLimit = plan.getPagesPerStatement();
-                if (plan.getCombinedBank() != null) {
-                    combinedBankLimit = plan.getCombinedBank();
-                } else {
-                    // Fallback legacy defaults if column not populated
-                    if ("PRO".equalsIgnoreCase(planType)) combinedBankLimit = 3;
-                    else if ("PREMIUM".equalsIgnoreCase(planType)) combinedBankLimit = 5;
-                }
-            }
-        } else {
-            // Free plan fallback already set
-            combinedBankLimit = 2;
-        }
-
-        // Count statements/pages for current month
-        YearMonth now = YearMonth.now();
-        LocalDateTime start = now.atDay(1).atStartOfDay();
-        LocalDateTime end = now.atEndOfMonth().atTime(23,59,59);
-        int statementsThisMonth = (int) rawStatementRepository.countByUserAndUploadDateBetween(user, start, end);
-        int pagesThisMonth = 0;
-        try {
-            pagesThisMonth = rawStatementRepository.sumPagesByUserAndUploadDateBetween(user, start, end);
-        } catch (Exception e) {
-            pagesThisMonth = 0;
-        }
-
-        boolean canUpload = statementLimit == -1 || statementsThisMonth < statementLimit;
-    return new UsageStatsDto(statementsThisMonth, statementLimit, planType, pagesThisMonth, pageLimit, canUpload, combinedBankLimit);
+        return userUsageService.computeUsage(username);
     }
 
     @GetMapping("/status")
+    @io.swagger.v3.oas.annotations.Operation(summary = "Get subscription status of current user")
     public UserStatusDto getStatus(@RequestHeader("Authorization") String authHeader) {
         String token = authHeader.replace("Bearer ", "");
         String username = jwtUtil.extractUsername(token);
@@ -105,6 +57,7 @@ public class UserController {
     }
 
     @GetMapping("/preferences")
+    @io.swagger.v3.oas.annotations.Operation(summary = "Get saved user preferences")
     public PreferencesDto getPreferences(@RequestHeader("Authorization") String authHeader) {
         String token = authHeader.replace("Bearer ", "");
         String username = jwtUtil.extractUsername(token);
@@ -116,7 +69,8 @@ public class UserController {
     }
 
     @PostMapping("/preferences")
-    public UserStatusDto updatePreferences(@RequestHeader("Authorization") String authHeader, @RequestBody PreferencesDto prefs) {
+    @io.swagger.v3.oas.annotations.Operation(summary = "Update user preferences")
+    public UserStatusDto updatePreferences(@RequestHeader("Authorization") String authHeader, @Valid @RequestBody PreferencesDto prefs) {
         String token = authHeader.replace("Bearer ", "");
         String username = jwtUtil.extractUsername(token);
         User user = userRepository.findByUsername(username).orElse(null);
@@ -129,7 +83,8 @@ public class UserController {
         return new UserStatusDto("User not found");
     }
 
-     @GetMapping("/profile")
+    @GetMapping("/profile")
+    @io.swagger.v3.oas.annotations.Operation(summary = "Get user profile")
     public UserProfileDto getProfile(@RequestHeader("Authorization") String authHeader) {
         String token = authHeader.replace("Bearer ", "");
         String username = jwtUtil.extractUsername(token);
@@ -141,7 +96,8 @@ public class UserController {
     }
 
     @PutMapping("/profile")
-    public UserProfileDto updateProfile(@RequestHeader("Authorization") String authHeader, @RequestBody UserProfileDto profile) {
+    @io.swagger.v3.oas.annotations.Operation(summary = "Update user profile")
+    public UserProfileDto updateProfile(@RequestHeader("Authorization") String authHeader, @Valid @RequestBody UserProfileDto profile) {
         String token = authHeader.replace("Bearer ", "");
         String username = jwtUtil.extractUsername(token);
         User user = userRepository.findByUsername(username).orElse(null);

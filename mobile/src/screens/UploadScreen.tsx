@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -13,7 +14,13 @@ import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { UsageStats } from '../types';
-import { apiCall } from '../utils/api';
+import { apiCall, api } from '../utils/api';
+import { jobStore } from '../utils/jobStore';
+// Dynamic require to avoid TS module resolution issues in React Native bundler
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { streamStatementJob } = require('../utils/sse');
+type RNEventSource = any;
+// @ts-ignore - ensure bundler resolves sse utility (type declaration provided in sse.d.ts)
 import { formatCurrency } from '../utils/formatters';
 
 export const UploadScreen: React.FC = () => {
@@ -21,13 +28,62 @@ export const UploadScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [pendingFile, setPendingFile] = useState<any | null>(null);
+  const [activeJobs, setActiveJobs] = useState<{ id: string; filename: string; status: string; progress: number; error?: string; }[]>(jobStore.get());
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [pdfPassword, setPdfPassword] = useState('');
   const [passwordSubmitting, setPasswordSubmitting] = useState(false);
+  const pollersRef = useRef<{ [jobId: string]: boolean }>({});
 
   useEffect(() => {
     fetchUsage();
   }, []);
+
+  // Rehydrate active (in-progress) jobs whenever screen gains focus
+  useFocusEffect(
+    React.useCallback(() => {
+      let cancelled = false;
+      const loadActiveJobs = async () => {
+        try {
+          const jobs = await apiCall<any[]>('GET', '/statement-jobs');
+          if (cancelled) return;
+          const inProgress = (jobs || []).filter(j => j.status === 'PENDING' || j.status === 'RUNNING');
+          if (inProgress.length === 0) {
+            setActiveJobs([]);
+            jobStore.set([]);
+            return;
+          }
+          // Map server jobs to local shape
+            setActiveJobs(prev => {
+              const nextMap: { [id: string]: { id:string; filename:string; status:string; progress:number; error?:string } } = {};
+              // Include any existing still-running jobs (to preserve error/progress while updating)
+              prev.forEach(j => { if (j.status==='PENDING'||j.status==='RUNNING') nextMap[j.id] = j; });
+              inProgress.forEach(j => {
+                nextMap[j.id] = {
+                  id: j.id,
+                  filename: j.originalFilename || j.filename || 'Statement.pdf',
+                  status: j.status,
+                  progress: j.progressPercent || 0,
+                  error: j.errorMessage || undefined
+                };
+              });
+              const arr = Object.values(nextMap).sort((a,b)=> a.filename.localeCompare(b.filename));
+              jobStore.set(arr);
+              return arr;
+            });
+          // Start polling for any job not already being polled
+          inProgress.forEach(j => {
+            if (!pollersRef.current[j.id]) {
+              startJobStream(j.id, j.originalFilename || j.filename || 'Statement.pdf');
+            }
+          });
+        } catch (e) {
+          // Silent – not critical
+        }
+      };
+      loadActiveJobs();
+      return () => { cancelled = true; };
+    }, [])
+  );
 
   const fetchUsage = async () => {
     try {
@@ -91,26 +147,40 @@ export const UploadScreen: React.FC = () => {
       }
 
       const response = await apiCall<any>('POST', '/statements', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
       if (response?.passwordRequired) {
         // store file and open modal for password input
         setPendingFile(file);
         setShowPasswordModal(true);
       } else {
-        Alert.alert('Success','Statement uploaded and processed successfully!',[{ text: 'OK' }]);
+        if (response?.jobId) {
+          // async job tracking
+            setActiveJobs(prev => {
+              const next = [{ id: response.jobId, filename: file.name, status: 'PENDING', progress: 0 }, ...prev];
+              jobStore.set(next);
+              return next;
+            });
+            startJobStream(response.jobId, file.name);
+            Alert.alert('Accepted', 'Statement accepted for processing.', [{ text: 'OK' }]);
+        } else {
+          Alert.alert('Success','Statement uploaded and processed successfully!',[{ text: 'OK' }]);
+        }
       }
       
       // Refresh usage stats
       fetchUsage();
   } catch (error: any) {
-      Alert.alert(
-        'Upload Failed',
-        error.message || 'Failed to upload statement',
-        [{ text: 'OK' }]
-      );
+      const code = error?.code;
+      const msg = error?.message || 'Failed to upload statement';
+      const raw = error?.raw;
+      const passwordFlag = raw?.details?.some?.((d: string)=> d.includes('passwordRequired=true')) || code === 'PDF_PASSWORD_REQUIRED' || raw?.passwordRequired;
+      if (passwordFlag) {
+        setPendingFile(file);
+        setShowPasswordModal(true);
+      } else {
+        Alert.alert('Upload Failed', msg, [{ text: 'OK' }]);
+      }
     } finally {
       setUploading(false);
     }
@@ -139,20 +209,102 @@ export const UploadScreen: React.FC = () => {
     }
   };
 
-  if (loading) {
-    return <LoadingSpinner />;
-  }
+  // Exponential backoff polling (starts fast, slows down up to maxDelay)
+  const startJobPolling = (jobId: string, filename: string) => {
+    if (pollersRef.current[jobId]) return; // already polling
+    pollersRef.current[jobId] = true;
+    let delay = 2000; // initial 2s
+    const maxDelay = 15000; // cap at 15s
+    let attempts = 0;
+    const maxAttempts = 120; // safety stop (~ >15 min depending on backoff)
+
+    const poll = async () => {
+      if (!pollersRef.current[jobId]) return; // canceled/cleanup
+      attempts++;
+      try {
+        const job = await apiCall<any>('GET', `/statement-jobs/${jobId}`);
+        setActiveJobs(prev => {
+          const next = prev.map(j => j.id === jobId ? { ...j, status: job.status, progress: job.progressPercent || 0, error: job.errorMessage || undefined } : j);
+          jobStore.set(next);
+          return next;
+        });
+        if (job.status === 'COMPLETED' || job.status === 'FAILED') {
+          // stop polling
+          delete pollersRef.current[jobId];
+          if (job.status === 'COMPLETED') fetchUsage();
+          return;
+        }
+      } catch (e: any) {
+        if (e?.status === 404) {
+          delete pollersRef.current[jobId];
+          return;
+        }
+      }
+      if (attempts >= maxAttempts) {
+        delete pollersRef.current[jobId];
+        return;
+      }
+      // Increase delay (1.5x) until max
+      delay = Math.min(Math.round(delay * 1.5), maxDelay);
+      setTimeout(poll, delay);
+    };
+    // Kick off first immediate poll for fast feedback
+    poll();
+  };
+
+  // SSE streaming (preferred). Falls back to polling if stream errors.
+  const startJobStream = (jobId: string, filename: string) => {
+    if (pollersRef.current[jobId]) return;
+    pollersRef.current[jobId] = true;
+    const base = (api as any)?.defaults?.baseURL || '';
+    const es: RNEventSource = streamStatementJob(base, jobId);
+    const onUpdate = (evt: any) => {
+      const { id, status, progress, error } = evt;
+      setActiveJobs(prev => {
+        const next = prev.map(j => j.id === id ? { ...j, status, progress, error } : j);
+        jobStore.set(next);
+        return next;
+      });
+      if (status === 'COMPLETED' || status === 'FAILED') {
+        es.close();
+        delete pollersRef.current[jobId];
+        if (status === 'COMPLETED') fetchUsage();
+      }
+    };
+    const onError = () => {
+      es.close();
+      delete pollersRef.current[jobId];
+      startJobPolling(jobId, filename);
+    };
+    es.on('job-update', onUpdate);
+    es.on('error', onError);
+    es.on('close', () => {});
+    es.connect();
+  };
+
+  // Cleanup all pollers on unmount (must run in first render to keep hook order consistent)
+  useEffect(() => {
+    return () => {
+      Object.keys(pollersRef.current).forEach(k => { pollersRef.current[k] = false; });
+    };
+  }, []);
 
   return (
     <ScrollView style={styles.container}>
+      {loading && (
+        <View style={{ paddingTop: 60 }}>
+          <LoadingSpinner />
+        </View>
+      )}
+      {!loading && (
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Upload Bank Statement</Text>
         <Text style={styles.headerSubtitle}>
           We support most Indian banks. Upload PDF statements to automatically extract and categorize transactions using AI.
         </Text>
       </View>
-
-      {usage && (
+      )}
+      {!loading && usage && (
         <View style={styles.usageCard}>
           <View style={styles.usageHeader}>
             <View style={styles.usageHeaderLeft}>
@@ -248,7 +400,8 @@ export const UploadScreen: React.FC = () => {
         </View>
       )}
 
-      <TouchableOpacity
+  {!loading && (
+  <TouchableOpacity
         style={[
           styles.uploadArea,
           (!usage?.canUpload || uploading) && styles.uploadAreaDisabled
@@ -280,9 +433,11 @@ export const UploadScreen: React.FC = () => {
         <Text style={styles.uploadHint}>
           We support most Indian banks • PDF files only • Max 10MB per file
         </Text>
-      </TouchableOpacity>
+  </TouchableOpacity>
+  )}
 
-      <View style={styles.instructionsCard}>
+  {!loading && (
+  <View style={styles.instructionsCard}>
         <Text style={styles.instructionsTitle}>How it works</Text>
         <View style={styles.instructionsList}>
           <View style={styles.instructionItem}>
@@ -324,7 +479,8 @@ export const UploadScreen: React.FC = () => {
             Supported banks: Most major Indian banks including SBI, HDFC, ICICI, Axis, Kotak, and more.
           </Text>
         </View>
-      </View>
+  </View>
+  )}
       {/* Password Modal */}
       {showPasswordModal && (
         <View style={styles.modalOverlay}>
@@ -370,6 +526,24 @@ export const UploadScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
           </View>
+        </View>
+      )}
+      {/* Active Jobs */}
+      {activeJobs.length > 0 && (
+        <View style={{ marginHorizontal:24, marginBottom:24 }}>
+          <Text style={{ fontSize:16, fontWeight:'600', color:'#1f2937', marginBottom:8 }}>Processing Jobs</Text>
+          {activeJobs.map(job => (
+            <View key={job.id} style={{ backgroundColor:'#fff', borderWidth:1, borderColor:'#e5e7eb', borderRadius:12, padding:12, marginBottom:8 }}>
+              <View style={{ flexDirection:'row', justifyContent:'space-between', marginBottom:4 }}>
+                <Text style={{ fontSize:14, fontWeight:'600', color:'#111827', flex:1 }} numberOfLines={1}>{job.filename}</Text>
+                <Text style={{ fontSize:12, color:'#6b7280', marginLeft:8 }}>{job.status}</Text>
+              </View>
+              <View style={{ height:6, backgroundColor:'#e5e7eb', borderRadius:3, overflow:'hidden', marginBottom:4 }}>
+                <View style={{ width:`${job.progress}%`, backgroundColor: job.status==='FAILED' ? '#ef4444' : '#0ea5e9', height:'100%' }} />
+              </View>
+              {job.error && <Text style={{ fontSize:12, color:'#b91c1c' }}>{job.error}</Text>}
+            </View>
+          ))}
         </View>
       )}
     </ScrollView>

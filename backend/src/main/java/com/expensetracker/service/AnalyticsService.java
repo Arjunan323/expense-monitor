@@ -1,65 +1,55 @@
 package com.expensetracker.service;
 
-import com.expensetracker.config.JwtUtil;
 import com.expensetracker.dto.AnalyticsSummaryDto;
-import com.expensetracker.model.Transaction;
 import com.expensetracker.model.User;
 import com.expensetracker.repository.TransactionRepository;
-import com.expensetracker.repository.TransactionSpecifications;
-import com.expensetracker.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.data.jpa.domain.Specification;
+import org.springframework.cache.annotation.Cacheable;
 
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 @Service
 public class AnalyticsService {
     @Autowired private TransactionRepository transactionRepository;
-    @Autowired private UserRepository userRepository;
-    @Autowired private JwtUtil jwtUtil;
+    @Autowired private com.expensetracker.security.AuthenticationFacade authenticationFacade;
 
     public AnalyticsSummaryDto getSummary(String token, String startDate, String endDate) {
-        String username = jwtUtil.extractUsername(token);
-        User user = userRepository.findByUsername(username).orElseThrow();
+        // token retained for backward compatibility; preferred resolution via SecurityContext
+        User user = authenticationFacade.currentUser();
         LocalDate start = (startDate != null && !startDate.isBlank()) ? LocalDate.parse(startDate) : LocalDate.now().minusMonths(3).withDayOfMonth(1);
         LocalDate end = (endDate != null && !endDate.isBlank()) ? LocalDate.parse(endDate) : LocalDate.now();
 
-        Specification<Transaction> spec = TransactionSpecifications.filter(user, null, null, start, end, null, null, null, null);
-        List<Transaction> txns = transactionRepository.findAll(spec);
+        // Aggregated queries instead of loading all entities
+    BigDecimal totalInflow = Optional.ofNullable(transactionRepository.sumInflow(user, start, end)).orElse(BigDecimal.ZERO);
+    BigDecimal totalOutflow = Optional.ofNullable(transactionRepository.sumOutflow(user, start, end)).orElse(BigDecimal.ZERO);
+    BigDecimal net = totalInflow.add(totalOutflow); // outflow stored negative
 
-        double totalInflow = txns.stream().filter(t -> t.getAmount() != null && t.getAmount() > 0).mapToDouble(Transaction::getAmount).sum();
-        double totalOutflow = txns.stream().filter(t -> t.getAmount() != null && t.getAmount() < 0).mapToDouble(Transaction::getAmount).sum();
-        double net = totalInflow + totalOutflow; // outflow negative
+    Map<String, BigDecimal> monthly = new TreeMap<>();
+    transactionRepository.aggregateMonthly(user, start, end).forEach(p -> monthly.put(p.getYm(), p.getNet() == null ? BigDecimal.ZERO : p.getNet()));
 
-        Map<String, Double> monthly = new TreeMap<>();
-        for (Transaction t : txns) {
-            if (t.getDate() == null || t.getAmount() == null) continue;
-            YearMonth ym = YearMonth.from(t.getDate());
-            monthly.merge(ym.toString(), t.getAmount(), Double::sum);
-        }
+    List<AnalyticsSummaryDto.CategorySpend> topCategories = transactionRepository.aggregateCategory(user, start, end).stream()
+        .sorted((a,b)-> b.getTotalAmount().abs().compareTo(a.getTotalAmount().abs()))
+        .limit(8)
+        .map(p -> new AnalyticsSummaryDto.CategorySpend(p.getCategory() != null ? p.getCategory() : "Uncategorized", p.getTotalAmount(), p.getTxnCount()))
+        .collect(Collectors.toList());
 
-        Map<String, CategoryAgg> catAgg = new HashMap<>();
-        for (Transaction t : txns) {
-            if (t.getAmount() == null) continue;
-            String cat = t.getCategory() != null ? t.getCategory() : "Uncategorized";
-            CategoryAgg agg = catAgg.computeIfAbsent(cat, c -> new CategoryAgg());
-            agg.amount += t.getAmount();
-            agg.count++;
-        }
-        List<AnalyticsSummaryDto.CategorySpend> topCategories = catAgg.entrySet().stream()
-                .map(e -> new AnalyticsSummaryDto.CategorySpend(e.getKey(), e.getValue().amount, e.getValue().count))
-                .sorted((a,b) -> Double.compare(Math.abs(b.getAmount()), Math.abs(a.getAmount())))
-                .limit(8).collect(Collectors.toList());
+    long months = ChronoUnit.MONTHS.between(YearMonth.from(start), YearMonth.from(end)) + 1;
+    BigDecimal avgDailySpend = months > 0 ? totalOutflow.abs().divide(BigDecimal.valueOf(months * 30L), 4, RoundingMode.HALF_UP) : BigDecimal.ZERO;
 
-        long distinctDays = txns.stream().filter(t -> t.getDate() != null).map(Transaction::getDate).distinct().count();
-        double avgDailySpend = distinctDays > 0 ? Math.abs(totalOutflow) / distinctDays : 0.0;
-
-        return new AnalyticsSummaryDto(topCategories, totalInflow, totalOutflow, net, monthly, avgDailySpend);
+    AnalyticsSummaryDto dto = new AnalyticsSummaryDto(topCategories, totalInflow, totalOutflow, net, monthly, avgDailySpend);
+    // Currency formatting will be applied by CurrencyFormatService decorator elsewhere if needed.
+    return dto;
     }
 
-    private static class CategoryAgg { double amount = 0; long count = 0; }
+    @Cacheable(cacheNames = "analytics:summary", key = "#root.methodName + ':' + #token + ':' + #startDate + ':' + #endDate")
+    public AnalyticsSummaryDto cachedSummary(String token, String startDate, String endDate) {
+        return getSummary(token, startDate, endDate);
+    }
 }

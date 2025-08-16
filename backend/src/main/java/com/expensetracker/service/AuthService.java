@@ -7,6 +7,7 @@ import com.expensetracker.dto.UserDto;
 import com.expensetracker.model.User;
 import com.expensetracker.repository.UserRepository;
 import com.expensetracker.config.JwtUtil;
+import com.expensetracker.exception.UserAlreadyExistsException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -30,19 +31,22 @@ public class AuthService {
     public RegisterResponseDto register(RegisterRequestDto body) {
         String username = body.getEmail();
         if (userRepository.findByUsername(username).isPresent()) {
-            return new RegisterResponseDto(false, "User already exists");
+            throw new UserAlreadyExistsException("User already exists");
         }
         User user = new User();
-    user.setUsername(username);
-    user.setPassword(passwordEncoder.encode(body.getPassword()));
-    user.setEmail(body.getEmail());
-    user.setFirstName(body.getFirstName() != null ? body.getFirstName() : "");
-    user.setLastName(body.getLastName() != null ? body.getLastName() : "");
-    user.setCurrency(body.getCurrency() != null ? body.getCurrency() : "USD");
-    user.setLocale(body.getLocale() != null ? body.getLocale() : "en-US");
-    user.setSubscribed(false);
-    userRepository.save(user);
-        return new RegisterResponseDto(true, "User registered successfully");
+        user.setUsername(username);
+        user.setPassword(passwordEncoder.encode(body.getPassword()));
+        user.setEmail(body.getEmail());
+        user.setFirstName(body.getFirstName() != null ? body.getFirstName() : "");
+        user.setLastName(body.getLastName() != null ? body.getLastName() : "");
+        user.setCurrency(body.getCurrency() != null ? body.getCurrency() : "USD");
+        user.setLocale(body.getLocale() != null ? body.getLocale() : "en-US");
+        user.setSubscribed(false);
+        userRepository.save(user);
+        // Auto-login after registration: issue token & return user dto
+        String token = jwtUtil.generateToken(username);
+        UserDto userDto = new UserDto(user.getId(), user.getUsername(), user.getEmail(), user.getLocale(), user.getCurrency());
+        return new RegisterResponseDto(true, "User registered successfully", token, userDto);
     }
 
     public AuthResponseDto login(String username, String password) {

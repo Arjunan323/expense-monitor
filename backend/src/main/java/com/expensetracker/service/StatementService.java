@@ -2,113 +2,152 @@ package com.expensetracker.service;
 
 import com.expensetracker.repository.RawStatementRepository;
 import com.expensetracker.repository.TransactionRepository;
-import com.expensetracker.repository.BankRepository;
-import com.expensetracker.repository.CategoryRepository;
-import com.expensetracker.model.Bank;
-import com.expensetracker.model.Category;
+import com.expensetracker.service.statement.PdfPageCounter;
+import com.expensetracker.service.statement.TempFileService;
+import com.expensetracker.service.statement.ExtractionRunner;
+import com.expensetracker.service.statement.RawStatementPersister;
+import com.expensetracker.service.statement.TransactionParser;
+import com.expensetracker.service.statement.BankCategoryUpserter;
 import com.expensetracker.repository.UserRepository;
+import com.expensetracker.security.AuthenticationFacade;
+import com.expensetracker.service.usage.UsagePolicyFactory;
+import com.expensetracker.service.usage.UsagePolicy;
 import com.expensetracker.model.RawStatement;
 import com.expensetracker.model.Transaction;
 import com.expensetracker.model.User;
+import com.expensetracker.model.StatementJob;
+import com.expensetracker.exception.PdfPasswordRequiredException;
+import com.expensetracker.repository.StatementJobRepository;
 import com.expensetracker.dto.StatementUploadResponseDto;
 import com.expensetracker.dto.RawStatementDto;
 import com.expensetracker.util.AppConstants;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.beans.factory.annotation.Value;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 public class StatementService {
     private final RawStatementRepository rawStatementRepository;
     private final TransactionRepository transactionRepository;
-    private final BankRepository bankRepository;
-    private final CategoryRepository categoryRepository;
-    private final UserRepository userRepository;
+    private final PdfPageCounter pdfPageCounter;
+    private final TempFileService tempFileService;
+    private final ExtractionRunner extractionRunner;
+    private final RawStatementPersister rawStatementPersister;
+    private final TransactionParser transactionParser;
+    private final BankCategoryUpserter bankCategoryUpserter;
+    private final com.expensetracker.service.statement.AsyncStatementProcessor asyncProcessor;
+    private final StatementJobRepository statementJobRepository;
+    @Value("${app.statements.async.enabled:false}")
+    private boolean asyncEnabled;
+    private final AuthenticationFacade authenticationFacade;
+    private final UsagePolicyFactory usagePolicyFactory;
 
     @Autowired
-    public StatementService(RawStatementRepository rawStatementRepository, TransactionRepository transactionRepository, UserRepository userRepository, BankRepository bankRepository, CategoryRepository categoryRepository) {
+    public StatementService(RawStatementRepository rawStatementRepository, TransactionRepository transactionRepository, UserRepository userRepository, com.expensetracker.repository.BankRepository bankRepository, com.expensetracker.repository.CategoryRepository categoryRepository, AuthenticationFacade authenticationFacade, UsagePolicyFactory usagePolicyFactory, PdfPageCounter pdfPageCounter, TempFileService tempFileService, ExtractionRunner extractionRunner, RawStatementPersister rawStatementPersister, TransactionParser transactionParser, BankCategoryUpserter bankCategoryUpserter, com.expensetracker.service.statement.AsyncStatementProcessor asyncProcessor, StatementJobRepository statementJobRepository) {
         this.rawStatementRepository = rawStatementRepository;
         this.transactionRepository = transactionRepository;
-        this.userRepository = userRepository;
-        this.bankRepository = bankRepository;
-        this.categoryRepository = categoryRepository;
+        this.authenticationFacade = authenticationFacade;
+        this.usagePolicyFactory = usagePolicyFactory;
+        this.pdfPageCounter = pdfPageCounter;
+        this.tempFileService = tempFileService;
+        this.extractionRunner = extractionRunner;
+        this.rawStatementPersister = rawStatementPersister;
+        this.transactionParser = transactionParser;
+        this.bankCategoryUpserter = bankCategoryUpserter;
+        this.asyncProcessor = asyncProcessor;
+        this.statementJobRepository = statementJobRepository;
     }
 
     // Backwards compatible existing signature – delegates with no password
     public StatementUploadResponseDto uploadStatement(MultipartFile file, String authHeader) {
-    return uploadStatement(file, authHeader, null);
+        return uploadStatement(file, authHeader, null);
     }
 
     // New method supporting optional password for password-protected PDFs
+    @Transactional
     public StatementUploadResponseDto uploadStatement(MultipartFile file, String authHeader, String pdfPassword) {
     try {
-            User user = getUserFromAuth(authHeader);
-            int statementLimit = AppConstants.FREE_STATEMENT_LIMIT, pageLimit = AppConstants.FREE_PAGE_LIMIT;
-            String planType = AppConstants.PLAN_FREE;
-            if (user.getSubscription() != null) {
-                planType = user.getSubscription().getPlanType().name();
-                switch (planType) {
-                    case AppConstants.PLAN_PRO:
-                        statementLimit = AppConstants.PRO_STATEMENT_LIMIT;
-                        pageLimit = AppConstants.PRO_PAGE_LIMIT;
-                        break;
-                    case AppConstants.PLAN_PREMIUM:
-                        statementLimit = AppConstants.PREMIUM_STATEMENT_LIMIT;
-                        pageLimit = AppConstants.PREMIUM_PAGE_LIMIT;
-                        break;
-                }
+            User user = authenticationFacade.currentUser();
+            UsagePolicy policy = usagePolicyFactory.forUser(user);
+            int statementLimit = policy.unlimitedStatements() ? Integer.MAX_VALUE : policy.statementLimit();
+            int pageLimit = policy.pagesPerStatement();
+            // Determine counting window: subscription start/end if present else current month
+            LocalDateTime windowStart = policy.startDate() != null ? policy.startDate() : LocalDate.now().withDayOfMonth(1).atStartOfDay();
+            LocalDateTime windowEnd = policy.endDate() != null ? policy.endDate() : LocalDate.now().withDayOfMonth(LocalDate.now().lengthOfMonth()).atTime(23,59,59);
+            // NOTE: When a renewal occurs (new subscription row or updated endDate), counters naturally reset because windowStart shifts.
+            long statementsInWindow = rawStatementRepository.countByUserAndUploadDateBetween(user, windowStart, windowEnd);
+            if (statementLimit != Integer.MAX_VALUE && statementsInWindow >= statementLimit) {
+                // User-facing limit breach -> BAD_REQUEST via GlobalExceptionHandler (IllegalArgumentException)
+                throw new IllegalArgumentException(AppConstants.ERROR_STATEMENT_LIMIT);
             }
-            LocalDateTime monthStart = LocalDate.now().withDayOfMonth(1).atStartOfDay();
-            long statementsThisMonth = rawStatementRepository.findAll().stream()
-                .filter(s -> s.getUser() != null && s.getUser().getId().equals(user.getId()))
-                .filter(s -> s.getUploadDate() != null && s.getUploadDate().isAfter(monthStart))
-                .count();
-            if (statementLimit != Integer.MAX_VALUE && statementsThisMonth >= statementLimit) {
-                return new StatementUploadResponseDto(false, AppConstants.ERROR_STATEMENT_LIMIT);
-            }
-            int numPages = getPdfPageCount(file, pdfPassword);
+                int numPages = pdfPageCounter.countPages(file, pdfPassword);
             if (pageLimit != Integer.MAX_VALUE && numPages > pageLimit) {
-                return new StatementUploadResponseDto(false, String.format(AppConstants.ERROR_PAGE_LIMIT, numPages, pageLimit));
+                throw new IllegalArgumentException(String.format(AppConstants.ERROR_PAGE_LIMIT, numPages, pageLimit));
             }
-            File tempFile = saveTempPdf(file);
+            if (asyncEnabled) {
+                StatementJob job = new StatementJob();
+                job.setUser(user);
+                job.setOriginalFilename(file.getOriginalFilename());
+                statementJobRepository.save(job); // id assigned via @PrePersist
+                String jobId = job.getId();
+                // Persist upload to a stable temp file now; async thread cannot rely on original MultipartFile later
+                java.io.File persisted = tempFileService.saveTempPdf(file);
+                // Defer async start until after surrounding transaction commits so job row is visible
+                if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                        @Override public void afterCommit() {
+                            asyncProcessor.process(persisted.getAbsolutePath(), pdfPassword, user.getId(), jobId, file.getOriginalFilename());
+                        }
+                    });
+                } else {
+                    // Fallback (shouldn't normally happen) – start immediately
+                    asyncProcessor.process(persisted.getAbsolutePath(), pdfPassword, user.getId(), jobId, file.getOriginalFilename());
+                }
+                return new StatementUploadResponseDto(true, "Statement accepted for async processing", jobId);
+            }
+            File tempFile = tempFileService.saveTempPdf(file);
             if (!tempFile.exists() || tempFile.length() == 0) {
-                return new StatementUploadResponseDto(false, AppConstants.ERROR_PDF_SAVE);
+                    throw new IllegalStateException(AppConstants.ERROR_PDF_SAVE);
             }
-            String output = runExtractionScript(tempFile, pdfPassword);
+            String output = extractionRunner.run(tempFile, pdfPassword);
             if (output == null) {
-                return new StatementUploadResponseDto(false, AppConstants.ERROR_EXTRACTION_FAILED);
+                    throw new IllegalStateException(AppConstants.ERROR_EXTRACTION_FAILED);
             }
-            RawStatement rawStatement = storeRawStatement(user, file.getOriginalFilename(), output, numPages);
-            List<Transaction> transactions = parseTransactions(output, user, rawStatement.getBankName());
+            RawStatement rawStatement = rawStatementPersister.persist(user, file.getOriginalFilename(), output, numPages);
+            List<Transaction> transactions = transactionParser.parse(output, user, rawStatement.getBankName());
             transactionRepository.saveAll(transactions);
-            // Aggregate and upsert banks & categories counts
-            upsertBanksAndCategories(user, transactions);
+            bankCategoryUpserter.upsert(user, transactions);
             tempFile.delete();
             return new StatementUploadResponseDto(true, AppConstants.MSG_STATEMENT_SUCCESS);
         } catch (IOException | InterruptedException e) {
             String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
             if (msg.contains("password")) {
-                return new StatementUploadResponseDto(false, "PDF password required or incorrect", true);
+                    throw new PdfPasswordRequiredException("PDF password required or incorrect");
             }
-            return new StatementUploadResponseDto(false, AppConstants.ERROR_PROCESSING_STATEMENT, false);
+            throw new IllegalStateException(AppConstants.ERROR_PROCESSING_STATEMENT, e);
+        } catch (PdfPasswordRequiredException | IllegalArgumentException | IllegalStateException e) {
+            // Preserve original message & type for handler
+            throw e;
         } catch (Exception e) {
             String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
             if (msg.contains("password")) {
-                return new StatementUploadResponseDto(false, "PDF password required or incorrect", true);
+                    throw new PdfPasswordRequiredException("PDF password required or incorrect");
             }
-            return new StatementUploadResponseDto(false, AppConstants.ERROR_PARSING_TRANSACTIONS, false);
+            throw new IllegalStateException(AppConstants.ERROR_PARSING_TRANSACTIONS, e);
         }
     }
 
     public List<RawStatementDto> getStatements(String authHeader) {
-        User user = getUserFromAuth(authHeader);
+        User user = authenticationFacade.currentUser();
         List<RawStatement> statements = rawStatementRepository.findAll();
         List<RawStatementDto> dtos = new ArrayList<>();
         for (RawStatement s : statements) {
@@ -151,150 +190,7 @@ public class StatementService {
         return dtos;
     }
 
-    private User getUserFromAuth(String authHeader) {
-        String token = authHeader.replace("Bearer ", "");
-        String username = new com.expensetracker.config.JwtUtil().extractUsername(token);
-        return userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException(username));
-    }
+    // getUserFromAuth removed; AuthenticationFacade handles user resolution
 
-    private int getPdfPageCount(MultipartFile file, String password) throws IOException {
-        org.apache.pdfbox.pdmodel.PDDocument pdfDoc = null;
-        try {
-            if (password != null && !password.isEmpty()) {
-                pdfDoc = org.apache.pdfbox.pdmodel.PDDocument.load(file.getBytes(), password);
-            } else {
-                pdfDoc = org.apache.pdfbox.pdmodel.PDDocument.load(file.getBytes());
-            }
-        } catch (org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException e) {
-            // Signal to caller that password is required
-            throw new IOException("PDF password required or incorrect", e);
-        }
-        int numPages = pdfDoc.getNumberOfPages();
-        pdfDoc.close();
-        return numPages;
-    }
-
-    private File saveTempPdf(MultipartFile file) throws IOException {
-        File tempFile = File.createTempFile(AppConstants.TEMP_FILE_PREFIX, AppConstants.TEMP_FILE_SUFFIX);
-        try (FileOutputStream fos = new FileOutputStream(tempFile)) {
-            fos.write(file.getBytes());
-        }
-        return tempFile;
-    }
-
-    private String runExtractionScript(File tempFile, String password) throws IOException, InterruptedException {
-        List<String> cmd = new ArrayList<>();
-        cmd.add("python");
-        cmd.add(AppConstants.EXTRACTION_SCRIPT_PATH);
-        cmd.add(tempFile.getAbsolutePath());
-        if (password != null && !password.isEmpty()) {
-            cmd.add(password);
-        }
-        ProcessBuilder pb = new ProcessBuilder(cmd);
-        pb.redirectErrorStream(true);
-        // Pass through sensitive env vars (do NOT log values)
-        try {
-            String openAiKey = System.getenv("OPENAI_API_KEY");
-            if (openAiKey != null && !openAiKey.isEmpty()) {
-                pb.environment().put("OPENAI_API_KEY", openAiKey);
-            }
-        } catch (Exception ignored) {
-            // Silently ignore; Python script will raise a clear error if missing
-        }
-        Process process = pb.start();
-        StringBuilder output = new StringBuilder();
-        try (Scanner scanner = new Scanner(process.getInputStream())) {
-            while (scanner.hasNextLine()) {
-                output.append(scanner.nextLine());
-            }
-        }
-        int exitCode = process.waitFor();
-        if (exitCode != 0) {
-            return null;
-        }
-        return output.toString();
-    }
-
-private RawStatement storeRawStatement(User user, String filename, String rawJson, int pageCount) {
-    RawStatement rawStatement = new RawStatement();
-    rawStatement.setUploadDate(LocalDateTime.now());
-    rawStatement.setFilename(filename);
-    rawStatement.setRawJson(rawJson);
-    rawStatement.setUser(user);
-    rawStatement.setPageCount(pageCount);
-    String bankName = null;
-    try {
-        org.json.JSONArray arr = new org.json.JSONArray(rawJson);
-        if (arr.length() > 0) {
-            org.json.JSONObject first = arr.getJSONObject(0);
-            bankName = first.optString("bankName", null);
-        }
-    } catch (Exception e) {
-        bankName = null;
-    }
-    rawStatement.setBankName(bankName);
-    rawStatementRepository.save(rawStatement);
-    return rawStatement;
-}
-
-    private List<Transaction> parseTransactions(String rawJson, User user, String bankName) {
-        List<Transaction> transactions = new ArrayList<>();
-        org.json.JSONArray arr = new org.json.JSONArray(rawJson);
-        for (int i = 0; i < arr.length(); i++) {
-            org.json.JSONObject obj = arr.getJSONObject(i);
-            Transaction txn = new Transaction();
-            txn.setDate(LocalDate.parse(obj.getString("date")));
-            txn.setDescription(obj.getString("description"));
-            txn.setAmount(obj.getDouble("amount"));
-            txn.setBalance(obj.optDouble("balance", 0.0));
-            txn.setCategory(obj.optString("category", AppConstants.UNKNOWN));
-            txn.setUser(user);
-            txn.setBankName(obj.optString("bankName", bankName != null ? bankName : AppConstants.UNKNOWN));
-            transactions.add(txn);
-        }
-        return transactions;
-    }
-
-    private void upsertBanksAndCategories(User user, List<Transaction> transactions) {
-        Map<String, Long> bankCounts = new HashMap<>();
-        Map<String, Long> categoryCounts = new HashMap<>();
-        for (Transaction t : transactions) {
-            String bank = t.getBankName() != null ? t.getBankName().trim() : AppConstants.UNKNOWN;
-            String cat = t.getCategory() != null ? t.getCategory().trim() : AppConstants.UNKNOWN;
-            if (bank.isEmpty()) bank = AppConstants.UNKNOWN;
-            if (cat.isEmpty()) cat = AppConstants.UNKNOWN;
-            bankCounts.put(bank, bankCounts.getOrDefault(bank, 0L) + 1);
-            categoryCounts.put(cat, categoryCounts.getOrDefault(cat, 0L) + 1);
-        }
-        // Upsert banks
-        for (var entry : bankCounts.entrySet()) {
-            String name = entry.getKey();
-            Long count = entry.getValue();
-            Bank bank = bankRepository.findByUserAndNameIgnoreCase(user, name).orElse(null);
-            if (bank == null) {
-                bank = new Bank();
-                bank.setName(name);
-                bank.setUser(user);
-                bank.setTransactionCount(count);
-            } else {
-                bank.increment(count);
-            }
-            bankRepository.save(bank);
-        }
-        // Upsert categories
-        for (var entry : categoryCounts.entrySet()) {
-            String name = entry.getKey();
-            Long count = entry.getValue();
-            Category cat = categoryRepository.findByUserAndNameIgnoreCase(user, name).orElse(null);
-            if (cat == null) {
-                cat = new Category();
-                cat.setName(name);
-                cat.setUser(user);
-                cat.setTransactionCount(count);
-            } else {
-                cat.increment(count);
-            }
-            categoryRepository.save(cat);
-        }
-    }
+    // Collaborator methods removed from this service; logic now in dedicated components
 }

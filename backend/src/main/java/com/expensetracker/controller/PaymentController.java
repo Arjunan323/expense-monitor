@@ -10,6 +10,7 @@ import com.expensetracker.service.PaymentService;
 
 @RestController
 @RequestMapping("/payment")
+@io.swagger.v3.oas.annotations.tags.Tag(name = "Payment", description = "Payment and subscription order handling")
 
 public class PaymentController {
     private final PaymentService paymentService;
@@ -20,11 +21,13 @@ public class PaymentController {
     }
 
     @PostMapping("/order")
+    @io.swagger.v3.oas.annotations.Operation(summary = "Create a payment order")
     public ResponseEntity<RazorpayOrderResponseDto> createOrder(@RequestBody RazorpayOrderRequestDto req, @RequestHeader("Authorization") String authHeader) {
         return paymentService.createOrder(req, authHeader);
     }
 
     @PostMapping("/webhook")
+    @io.swagger.v3.oas.annotations.Operation(summary = "Handle Razorpay webhook callback")
     public ResponseEntity<String> handleWebhook(@RequestBody RazorpayWebhookDto webhook) {
         return paymentService.handleWebhook(webhook);
     }

@@ -7,7 +7,7 @@ export function AboutUsSection() {
   return (
     <section id="about" className="max-w-2xl mx-auto py-20 px-4">
       <h2 className="text-3xl font-bold mb-4">About Us</h2>
-      <p className="mb-6 text-gray-700">CutTheSpend (Expense Monitor) is on a mission to help people take control of their finances and reduce unnecessary expenses. Founded by a team passionate about financial wellness, our platform combines smart analytics, AI-powered insights, and easy-to-use tools to empower users to track, analyze, and cut spending. Whether you're a student, professional, or business owner, we're your partner in achieving financial freedom.</p>
+      <p className="mb-6 text-gray-700">CutTheSpend is on a mission to help people take control of their finances and reduce unnecessary expenses. Founded by a team passionate about financial wellness, our platform combines smart analytics, AI-powered insights, and easy-to-use tools to empower users to track, analyze, and cut spending. Whether you're a student, professional, or business owner, we're your partner in achieving financial freedom.</p>
       <p className="text-gray-700">Join thousands of users who have already started saving more and spending smarter today!</p>
     </section>
   );

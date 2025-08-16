@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Calendar, X, ArrowRight, RotateCcw } from 'lucide-react';
 
 interface DateRangePickerProps {
@@ -124,17 +125,15 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
         )}
       </button>
 
-      {isOpen && (
+      {isOpen && createPortal(
         <>
-          {/* Backdrop */}
           <div 
-            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40"
+            className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[998]" 
             onClick={() => setIsOpen(false)}
           />
-          
-          {/* Modal */}
-          <div className="absolute top-full left-0 mt-2 bg-white border-2 border-brand-gray-200 rounded-3xl shadow-funky-lg z-50 w-[480px] max-w-[90vw] animate-slide-up">
-            <div className="p-6">
+          <div className="fixed inset-0 z-[999] flex items-start md:items-center justify-center p-4 md:p-8">
+            <div className="bg-white border-2 border-brand-gray-200 rounded-3xl shadow-funky-lg w-[520px] max-w-full animate-slide-up">
+              <div className="p-6">
               {/* Header */}
               <div className="flex items-center justify-between mb-6">
                 <div>
@@ -201,35 +200,36 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
                 </div>
               </div>
 
-              {/* Actions */}
-              <div className="flex items-center justify-between">
-                <button
-                  onClick={clearDates}
-                  className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-brand-gray-600 hover:text-brand-gray-800 hover:bg-brand-gray-100 rounded-xl transition-colors duration-200"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                  <span>Clear</span>
-                </button>
-                <div className="flex items-center space-x-3">
+                {/* Actions */}
+                <div className="flex items-center justify-between">
                   <button
-                    onClick={() => setIsOpen(false)}
-                    className="px-6 py-2 text-sm font-semibold text-brand-gray-600 hover:text-brand-gray-800 hover:bg-brand-gray-100 rounded-xl transition-colors duration-200"
+                    onClick={clearDates}
+                    className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-brand-gray-600 hover:text-brand-gray-800 hover:bg-brand-gray-100 rounded-xl transition-colors duration-200"
                   >
-                    Cancel
+                    <RotateCcw className="w-4 h-4" />
+                    <span>Clear</span>
                   </button>
-                  <button
-                    onClick={applyDates}
-                    className="bg-gradient-blue text-white px-6 py-2 rounded-xl font-semibold text-sm shadow-glow-blue hover:scale-105 active:scale-95 transition-all duration-300 flex items-center space-x-2"
-                  >
-                    <span>Apply</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center space-x-3">
+                    <button
+                      onClick={() => setIsOpen(false)}
+                      className="px-6 py-2 text-sm font-semibold text-brand-gray-600 hover:text-brand-gray-800 hover:bg-brand-gray-100 rounded-xl transition-colors duration-200"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={applyDates}
+                      className="bg-gradient-blue text-white px-6 py-2 rounded-xl font-semibold text-sm shadow-glow-blue hover:scale-105 active:scale-95 transition-all duration-300 flex items-center space-x-2"
+                    >
+                      <span>Apply</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </>
-      )}
+        </>, document.body)
+      }
     </div>
   );
 };

@@ -10,6 +10,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/statements")
+@io.swagger.v3.oas.annotations.tags.Tag(name = "Statements", description = "Upload and list bank statements")
 public class StatementController {
     private final StatementService statementService;
 
@@ -19,21 +20,16 @@ public class StatementController {
     }
 
     @PostMapping
+    @io.swagger.v3.oas.annotations.Operation(summary = "Upload a bank statement PDF")
     public StatementUploadResponseDto uploadStatement(@RequestParam("file") MultipartFile file,
                                                       @RequestParam(value = "pdfPassword", required = false) String pdfPassword,
                                                       @RequestHeader("Authorization") String authHeader) {
-        try {
             return statementService.uploadStatement(file, authHeader, pdfPassword);
-        } catch (Exception e) {
-            String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
-            if (msg.contains("password")) {
-                return new StatementUploadResponseDto(false, "PDF password required or incorrect", true);
-            }
-            return new StatementUploadResponseDto(false, "Failed to process statement", false);
-        }
+     
     }
 
     @GetMapping
+    @io.swagger.v3.oas.annotations.Operation(summary = "List uploaded statements")
     public List<RawStatementDto> getStatements(@RequestHeader("Authorization") String authHeader) {
         return statementService.getStatements(authHeader);
     }

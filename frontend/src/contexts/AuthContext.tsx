@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, AuthContextType } from '../types';
-import { apiCall } from '../utils/api';
+import { apiCall, authApiCall } from '../utils/api';
 import { getDefaultCurrency } from '../utils/formatters';
 import { usePreferences } from './PreferencesContext';
 import toast from 'react-hot-toast';
@@ -54,10 +54,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (username: string, password: string): Promise<void> => {
     try {
       setLoading(true);
-      const response = await apiCall<{ token: string; user: User }>('POST', '/auth/login', {
-        username,
-        password,
-      });
+  const response = await authApiCall<{ token: string; user: User }>('POST', '/auth/login', { username, password });
 
   const { token: newToken, user: userData } = response;
       
@@ -90,7 +87,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setLoading(true);
       const detected = getDefaultCurrency();
-      const response = await apiCall<{ token: string; user: User }>('POST', '/auth/register', {
+      const response = await authApiCall<{ token: string; user: User }>('POST', '/auth/register', {
         email,
         password,
         firstName,

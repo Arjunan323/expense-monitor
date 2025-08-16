@@ -1,18 +1,21 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { EventSourcePolyfill } from 'event-source-polyfill';
 import { useDropzone } from 'react-dropzone';
 import { Upload, FileText, X, CheckCircle, AlertCircle, Clock, Building2, AlertTriangle, Crown } from 'lucide-react';
 import { LoadingSpinner } from './ui/LoadingSpinner';
 import { ParseResult, UsageStats } from '../types';
 import { apiCall } from '../utils/api';
+import { loadJobs, saveJobs, PersistedUploadJob, upsertJob, clearCompletedJobs } from '../utils/jobJobStore';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 interface UploadedFile {
   file: File;
-  status: 'pending' | 'uploading' | 'success' | 'error';
+  status: 'pending' | 'uploading' | 'success' | 'error' | 'processing' | 'password';
   progress: number;
   error?: string;
   parseResult?: ParseResult;
+  jobId?: string; // async job id
 }
 
 export const PdfUpload: React.FC = () => {
@@ -25,9 +28,79 @@ export const PdfUpload: React.FC = () => {
   const [passwordModalValue, setPasswordModalValue] = useState('');
   const [passwordRetryIndex, setPasswordRetryIndex] = useState<number | null>(null);
   const [passwordSubmitting, setPasswordSubmitting] = useState(false);
+  const pollersRef = useRef<Record<string, boolean>>({});
+  // Track active SSE streams to avoid duplicate connections or reconnect after completion
+  const streamsRef = useRef<Record<string, EventSource | undefined>>({});
+
+  const persistFromState = React.useCallback((files: UploadedFile[]) => {
+    const byId = new Map<string, PersistedUploadJob>();
+    for (const f of files) {
+      if (!f.jobId) continue;
+      byId.set(f.jobId, {
+        jobId: f.jobId,
+        filename: f.file.name,
+        status: f.status === 'processing' ? 'processing' : (f.status === 'success' ? 'success' : (f.status === 'error' ? 'error' : 'processing')),
+        progress: f.progress || 0,
+        error: f.error,
+        updatedAt: Date.now(),
+      });
+    }
+    saveJobs(Array.from(byId.values()));
+  }, []);
+
+  const updateFiles = React.useCallback((updater: (prev: UploadedFile[]) => UploadedFile[]) => {
+    setUploadedFiles(prev => {
+      const next = updater(prev);
+      persistFromState(next);
+      return next;
+    });
+  }, [persistFromState]);
 
   React.useEffect(() => {
     fetchUsage();
+    const persisted = loadJobs();
+    if (!persisted.length) return;
+    const reconstructed: UploadedFile[] = persisted.map(j => ({
+      file: new File([''], j.filename, { type: 'application/pdf' }),
+      status: j.status as any,
+      progress: j.progress,
+      error: j.error,
+      jobId: j.jobId,
+    }));
+    setUploadedFiles(prev => {
+      // Avoid adding duplicates on remount
+      const existingIds = new Set(prev.filter(f => f.jobId).map(f => f.jobId as string));
+      const newOnes = reconstructed.filter(r => r.jobId && !existingIds.has(r.jobId));
+      const next = [...newOnes, ...prev];
+      persistFromState(next);
+      return next;
+    });
+    // Sync each job with server to validate status, then attach SSE for those still processing
+    (async () => {
+      for (const job of reconstructed) {
+        if (!job.jobId) continue;
+        try {
+          const remote = await apiCall<any>('GET', `/statement-jobs/${job.jobId}`);
+          updateFiles(prev => prev.map(f => f.jobId === job.jobId ? { ...f, progress: remote.progressPercent || f.progress, status: remote.status === 'COMPLETED' ? 'success' : (remote.status === 'FAILED' ? 'error' : 'processing'), error: remote.errorMessage || f.error } : f));
+        } catch (e:any) {
+          if (e?.status === 404) {
+            updateFiles(prev => prev.map(f => f.jobId === job.jobId ? { ...f, status:'error', error: f.error || 'Job not found' } : f));
+          }
+        }
+      }
+      // After sync, start SSE for still processing jobs
+      setTimeout(() => {
+        const snapshot = loadJobs();
+        snapshot.forEach(s => {
+          if (s.status === 'processing') {
+            // Find current index (may differ after dedupe)
+            const idx = uploadedFiles.findIndex(f => f.jobId === s.jobId);
+            const effectiveIndex = idx >= 0 ? idx : 0; // fallback
+            startJobStream(s.jobId, effectiveIndex, s.filename);
+          }
+        });
+      }, 0);
+    })();
   }, []);
 
   const fetchUsage = async () => {
@@ -66,7 +139,7 @@ export const PdfUpload: React.FC = () => {
       progress: 0,
     }));
     
-    setUploadedFiles(prev => [...prev, ...newFiles]);
+  updateFiles(prev => [...prev, ...newFiles]);
     
     // Start uploading each file sequentially so we can pause if a password is needed
     (async () => {
@@ -89,11 +162,7 @@ export const PdfUpload: React.FC = () => {
   });
 
   const uploadFile = async (file: File, index: number) => {
-    setUploadedFiles(prev => 
-      prev.map((f, i) => 
-        i === index ? { ...f, status: 'uploading' } : f
-      )
-    );
+  updateFiles(prev => prev.map((f, i) => i === index ? { ...f, status: 'uploading' } : f));
 
     let progressInterval: any;
     try {
@@ -103,7 +172,6 @@ export const PdfUpload: React.FC = () => {
         formData.append('pdfPassword', globalPdfPassword.trim());
       }
 
-      // Simulate progress for better UX
       progressInterval = setInterval(() => {
         setUploadedFiles(prev => 
           prev.map((f, i) => 
@@ -115,9 +183,7 @@ export const PdfUpload: React.FC = () => {
       }, 200);
 
       const result = await apiCall<any>('POST', '/statements', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
 
       if (progressInterval) clearInterval(progressInterval);
@@ -125,70 +191,162 @@ export const PdfUpload: React.FC = () => {
         setPasswordRetryIndex(index);
         setPasswordModalValue('');
         setPasswordModalOpen(true);
-        // Mark as error awaiting password instead of success
-        setUploadedFiles(prev => prev.map((f,i)=> i===index ? { ...f, status:'error', progress:0, error:'Password required' } : f));
+  updateFiles(prev => prev.map((f,i)=> i===index ? { ...f, status:'password', progress:f.progress || 5, error:'Password required' } : f));
         return;
       }
-      
-      setUploadedFiles(prev => 
-        prev.map((f, i) => 
-          i === index 
-            ? { ...f, status: 'success', progress: 100, parseResult: result } 
-            : f
-        )
-      );
 
-  if (result.warnings && result.warnings.length > 0) {
+      // Async path
+      if (result?.jobId) {
+  updateFiles(prev => prev.map((f,i)=> i===index ? { ...f, status:'processing', progress:0, jobId: result.jobId } : f));
+        toast.success(`${file.name} accepted for processing`);
+        startJobStream(result.jobId, index, file.name);
+        return;
+      }
+      // Legacy immediate path
+  updateFiles(prev => prev.map((f, i) => i === index ? { ...f, status: 'success', progress: 100, parseResult: result } : f));
+      if (result.warnings && result.warnings.length > 0) {
         toast.success(`${file.name} uploaded with warnings`);
       } else {
         toast.success(`${file.name} uploaded successfully!`);
       }
     } catch (error: any) {
       if (progressInterval) clearInterval(progressInterval);
-      if (error?.response?.data?.passwordRequired) {
+      const code = error?.code;
+      const msg = error?.message || 'Upload failed';
+      const raw = error?.raw;
+      const passwordFlag = raw?.details?.some?.((d: string)=> d.includes('passwordRequired=true')) || code === 'PDF_PASSWORD_REQUIRED';
+      if (passwordFlag) {
         setPasswordRetryIndex(index);
         setPasswordModalValue('');
         setPasswordModalOpen(true);
-        return; // pause normal error flow until user acts
+  updateFiles(prev => prev.map((f,i)=> i===index ? { ...f, status:'password', progress:f.progress || 5, error:'Password required' } : f));
+        return;
       }
-      setUploadedFiles(prev => 
-        prev.map((f, i) => 
-          i === index 
-            ? { 
-                ...f, 
-                status: 'error', 
-                progress: 0,
-                error: error.message || 'Upload failed'
-              } 
-            : f
-        )
-      );
-      
-      toast.error(`Failed to upload ${file.name}`);
+      updateFiles(prev => prev.map((f,i)=> i===index ? { ...f, status:'error', progress:0, error: msg } : f));
+      if (code === 'BAD_REQUEST' || code === 'PDF_PASSWORD_REQUIRED' || code === 'CONSTRAINT_VIOLATION') {
+        toast.error(msg);
+      } else if (code === 'UNAUTHORIZED' || code === 'FORBIDDEN') {
+        toast.error('Session expired. Please log in again.');
+      } else {
+        toast.error(`Failed to upload ${file.name}: ${msg}`);
+      }
     }
-    
-    // Refresh usage after upload
     fetchUsage();
   };
 
+  const startJobStream = (jobId: string, index: number, filename: string) => {
+  // Guard: don't start if already streaming
+  if (streamsRef.current[jobId]) return;
+  // Guard: if current file state already terminal, skip
+  const current = uploadedFiles[index];
+  if (current && ['success','error'].includes(current.status)) return;
+      const token = localStorage.getItem('token');
+      const base = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+      const es: EventSource = EventSourcePolyfill
+        ? new EventSourcePolyfill(`${base}/statement-jobs/${jobId}/stream`, { headers: { Authorization: token ? `Bearer ${token}` : '' } }) as any
+        : new EventSource(`${base}/statement-jobs/${jobId}/stream`);
+    streamsRef.current[jobId] = es;
+    es.addEventListener('job-update', (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data);
+        updateFiles(prev => prev.map((f,i)=> i===index ? { ...f, progress: data.progress, status: data.status === 'COMPLETED' ? 'success' : (data.status === 'FAILED' ? 'error' : 'processing'), error: data.error || f.error } : f));
+        if (data.status === 'COMPLETED') {
+          toast.success(`${filename} processed successfully`);
+          es.close();
+      delete streamsRef.current[jobId];
+          fetchUsage();
+          upsertJob({ jobId, filename, status:'success', progress:100, error: undefined });
+        } else if (data.status === 'FAILED') {
+          toast.error(`${filename} processing failed`);
+          es.close();
+      delete streamsRef.current[jobId];
+          upsertJob({ jobId, filename, status:'error', progress: data.progress || 0, error: data.error });
+        }
+      } catch {}
+    });
+    es.onerror = () => {
+      es.close();
+  delete streamsRef.current[jobId];
+      // Fallback to polling with exponential backoff if SSE fails
+      startJobPolling(jobId, index, filename);
+    };
+  };
+
+  // Exponential backoff polling fallback (used if SSE not available / errors)
+  const startJobPolling = (jobId: string, index: number, filename: string) => {
+    if (pollersRef.current[jobId]) return;
+    pollersRef.current[jobId] = true;
+    let delay = 2000; // 2s initial
+    const maxDelay = 15000; // 15s cap
+    let attempts = 0;
+    const maxAttempts = 120; // safety stop
+
+    const poll = async () => {
+      if (!pollersRef.current[jobId]) return;
+      attempts++;
+      try {
+        const job = await apiCall<any>('GET', `/statement-jobs/${jobId}`);
+  updateFiles(prev => prev.map((f,i)=> i===index ? { ...f, progress: job.progressPercent || f.progress, status: job.status === 'COMPLETED' ? 'success' : (job.status === 'FAILED' ? 'error' : 'processing'), error: job.errorMessage || f.error } : f));
+        if (job.status === 'COMPLETED') {
+          toast.success(`${filename} processed successfully`);
+          delete pollersRef.current[jobId];
+          fetchUsage();
+          return;
+        } else if (job.status === 'FAILED') {
+          toast.error(`${filename} processing failed`);
+          delete pollersRef.current[jobId];
+          return;
+        }
+      } catch (e: any) {
+        if (e?.status === 404) {
+          delete pollersRef.current[jobId];
+          return;
+        }
+      }
+      if (attempts >= maxAttempts) {
+        delete pollersRef.current[jobId];
+        return;
+      }
+      delay = Math.min(Math.round(delay * 1.5), maxDelay);
+      setTimeout(poll, delay);
+    };
+    poll();
+  };
+
+  // Cleanup pollers on unmount
+  useEffect(() => () => { Object.keys(pollersRef.current).forEach(k => { pollersRef.current[k] = false; }); }, []);
+  // Cleanup SSE streams on unmount
+  useEffect(() => () => { Object.values(streamsRef.current).forEach(es => es?.close()); streamsRef.current = { }; }, []);
+
   const uploadFileWithPassword = async (file: File, index: number, password: string) => {
-    setUploadedFiles(prev => prev.map((f,i)=> i===index ? { ...f, status:'uploading', progress:0 } : f));
+  updateFiles(prev => prev.map((f,i)=> i===index ? { ...f, status:'uploading', progress:0 } : f));
     const formData = new FormData();
     formData.append('file', file);
     formData.append('pdfPassword', password);
     try {
       const result = await apiCall<any>('POST', '/statements', formData, { headers: { 'Content-Type':'multipart/form-data' } });
-      setUploadedFiles(prev => prev.map((f,i)=> i===index ? { ...f, status:'success', progress:100, parseResult: result } : f));
-      toast.success(`${file.name} uploaded successfully!`);
+      if (result?.passwordRequired) { // still needs password (maybe wrong password)
+        updateFiles(prev => prev.map((f,i)=> i===index ? { ...f, status:'password', progress: f.progress || 5, error:'Password required (retry)' } : f));
+        toast.error('Incorrect password. Please try again.');
+        return;
+      }
+      if (result?.jobId) { // async path after password success
+        updateFiles(prev => prev.map((f,i)=> i===index ? { ...f, status:'processing', progress:0, jobId: result.jobId, error: undefined } : f));
+        toast.success(`${file.name} accepted for processing`);
+        startJobStream(result.jobId, index, file.name);
+      } else {
+        updateFiles(prev => prev.map((f,i)=> i===index ? { ...f, status:'success', progress:100, parseResult: result, error: undefined } : f));
+        toast.success(`${file.name} uploaded successfully!`);
+      }
       fetchUsage();
     } catch (err:any){
-      setUploadedFiles(prev => prev.map((f,i)=> i===index ? { ...f, status:'error', error: err.message || 'Upload failed' } : f));
+  updateFiles(prev => prev.map((f,i)=> i===index ? { ...f, status:'error', error: err.message || 'Upload failed' } : f));
       toast.error(`Failed to upload ${file.name}`);
     }
   };
 
   const removeFile = (index: number) => {
-    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+  updateFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const retryUpload = (index: number) => {
@@ -212,6 +370,9 @@ export const PdfUpload: React.FC = () => {
     if (percentage >= 80) return 'text-warning-600';
     return 'text-primary-600';
   };
+
+  const activeFiles = uploadedFiles.filter(f => ['pending','uploading','processing','password'].includes(f.status));
+  const completedFiles = uploadedFiles.filter(f => ['success','error'].includes(f.status));
 
   return (
   <div className="space-y-6 animate-fade-in relative">
@@ -389,12 +550,17 @@ export const PdfUpload: React.FC = () => {
         </div>
       </div>
 
-      {/* File List */}
-      {uploadedFiles.length > 0 && (
+      {/* Active Uploads */}
+      {activeFiles.length > 0 && (
         <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Uploaded Files</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Active Uploads</h3>
+          </div>
           <div className="space-y-3">
-            {uploadedFiles.map((fileObj, index) => (
+            {activeFiles.map((fileObj, index) => {
+              // Map index back to original index in uploadedFiles for actions
+              const originalIndex = uploadedFiles.indexOf(fileObj);
+              return (
               <div key={index} className="flex items-center space-x-4 p-3 bg-gray-50 rounded-lg">
                 <div className="flex-shrink-0">
                   <FileText className="w-8 h-8 text-gray-400" />
@@ -422,7 +588,25 @@ export const PdfUpload: React.FC = () => {
                     </div>
                   )}
                   
-                  {fileObj.error && (
+          {['processing','password'].includes(fileObj.status) && (
+                    <div className="mt-2">
+                      <div className="flex items-center space-x-2">
+                        <div className="flex-1 bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-primary-600 h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${fileObj.progress}%` }}
+                          />
+                        </div>
+                        <span className="text-xs text-gray-500">{fileObj.progress}%</span>
+                      </div>
+            <p className="text-xs text-gray-500 mt-1">{fileObj.status === 'password' ? 'Waiting for password...' : 'Processing...'}</p>
+                    </div>
+                  )}
+                  
+                  {fileObj.status === 'password' && (
+                    <p className="text-xs text-yellow-600 mt-1">Password required – enter password to continue.</p>
+                  )}
+                  {fileObj.error && fileObj.status !== 'password' && (
                     <p className="text-xs text-danger-600 mt-1">{fileObj.error}</p>
                   )}
                 </div>
@@ -460,15 +644,10 @@ export const PdfUpload: React.FC = () => {
                   {fileObj.status === 'uploading' && (
                     <LoadingSpinner size="sm" />
                   )}
-                  
-                  {fileObj.status === 'success' && (
-                    <CheckCircle className="w-5 h-5 text-success-600" />
-                  )}
-                  
                   {fileObj.status === 'error' && (
                     <>
                       <button
-                        onClick={() => retryUpload(index)}
+                        onClick={() => retryUpload(originalIndex)}
                         className="text-xs text-primary-600 hover:text-primary-700 font-medium"
                       >
                         Retry
@@ -476,14 +655,61 @@ export const PdfUpload: React.FC = () => {
                       <AlertCircle className="w-5 h-5 text-danger-600" />
                     </>
                   )}
-                  
                   <button
-                    onClick={() => removeFile(index)}
+                    onClick={() => removeFile(originalIndex)}
                     className="text-gray-400 hover:text-gray-600"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
+              </div>
+            );})}
+          </div>
+        </div>
+      )}
+
+      {/* Completed History */}
+      {completedFiles.length > 0 && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Recent Completed Uploads</h3>
+            <button
+              onClick={() => {
+                updateFiles(prev => prev.filter(f => !['success','error'].includes(f.status)));
+                clearCompletedJobs();
+              }}
+              className="text-xs text-gray-500 hover:text-gray-700"
+            >
+              Clear Completed
+            </button>
+          </div>
+          <div className="space-y-3">
+            {completedFiles.map((fileObj, index) => (
+              <div key={index} className="flex items-center space-x-4 p-3 bg-white border border-gray-200 rounded-lg">
+                <div className="flex-shrink-0">
+                  <FileText className="w-6 h-6 text-gray-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate flex items-center gap-2">
+                    {fileObj.file.name}
+                    {fileObj.status === 'success' && <CheckCircle className="w-4 h-4 text-success-600" />}
+                    {fileObj.status === 'error' && <AlertCircle className="w-4 h-4 text-danger-600" />}
+                  </p>
+                  {fileObj.error && <p className="text-xs text-danger-600 mt-0.5 truncate">{fileObj.error}</p>}
+                  {!fileObj.error && fileObj.status === 'success' && (
+                    <p className="text-xs text-success-600 mt-0.5">Completed</p>
+                  )}
+                </div>
+                <button
+                  onClick={() => {
+                    updateFiles(prev => prev.filter(f => f !== fileObj));
+                    clearCompletedJobs();
+                  }}
+                  className="text-gray-300 hover:text-gray-600"
+                  title="Remove"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
             ))}
           </div>

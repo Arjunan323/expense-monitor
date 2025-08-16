@@ -73,6 +73,9 @@ export const getCategoryColor = (category: string): string => {
     'Business Services': '#0d9488', // teal
     'ATM Withdrawal': '#dc2626', // red variant
     'Health & Wellness': '#16a34a', // green variant
+    'Payment': '#f59e0b',
+    'Investment': '#4f46e5', // indigo variant
+    'Dividend': '#8b5cf6',
     'Other': '#64748b',
   };
   return colors[category] || colors['Other'];

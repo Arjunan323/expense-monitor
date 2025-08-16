@@ -250,7 +250,7 @@ export const Billing: React.FC = () => {
           key: response.key,
           amount: response.amount,
           currency: response.currency,
-          name: 'Expense Monitor',
+          name: 'CutTheSpend',
           description: `${planId} Plan Subscription`,
           order_id: response.orderId,
           handler: function (rzpResponse: any) {

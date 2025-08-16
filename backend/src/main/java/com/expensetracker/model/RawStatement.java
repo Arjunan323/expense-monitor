@@ -9,7 +9,6 @@ public class RawStatement {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private Long userId;
     private LocalDateTime uploadDate;
     private String filename;
     @Column(columnDefinition = "TEXT")
@@ -25,8 +24,6 @@ public class RawStatement {
     // Getters and setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
-    public Long getUserId() { return userId; }
-    public void setUserId(Long userId) { this.userId = userId; }
     public LocalDateTime getUploadDate() { return uploadDate; }
     public void setUploadDate(LocalDateTime uploadDate) { this.uploadDate = uploadDate; }
     public String getFilename() { return filename; }

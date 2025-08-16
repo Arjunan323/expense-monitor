@@ -7,13 +7,15 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "openapi": "openapi --input http://localhost:8080/v3/api-docs --output src/api/generated --client axios"
   },
   "dependencies": {
     "axios": "^1.7.7",
     "date-fns": "^3.6.0",
     "framer-motion": "^11.5.4",
     "lucide-react": "^0.445.0",
+    "event-source-polyfill": "^1.0.31",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-dropzone": "^14.2.3",
@@ -36,6 +38,7 @@
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.5.3",
-    "vite": "^5.4.1"
+  "vite": "^5.4.1",
+  "openapi-typescript-codegen": "^0.29.0"
   }
 }
