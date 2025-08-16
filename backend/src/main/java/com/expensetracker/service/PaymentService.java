@@ -10,6 +10,7 @@ import com.expensetracker.dto.RazorpayOrderRequestDto;
 import com.expensetracker.dto.RazorpayOrderResponseDto;
 import com.expensetracker.dto.RazorpayWebhookDto;
 import com.expensetracker.util.AppConstants;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Autowired;
 import com.expensetracker.security.AuthenticationFacade;
 import org.springframework.http.ResponseEntity;
@@ -30,6 +31,10 @@ public class PaymentService {
     private final PlanRepository planRepository;
     private final AuthenticationFacade authenticationFacade;
     private final DomainEventPublisher domainEventPublisher;
+    @Value("${payment.razorpay.key}")
+    private String razorpayKey;
+    @Value("${payment.razorpay.secret}")
+    private String razorpaySecret;
 
     @Autowired
     public PaymentService(UserRepository userRepository, SubscriptionRepository subscriptionRepository, PlanRepository planRepository, AuthenticationFacade authenticationFacade, DomainEventPublisher domainEventPublisher) {
@@ -50,7 +55,7 @@ public class PaymentService {
         String currency = plan.getCurrency();
         String orderId = null;
         try {
-            RazorpayClient razorpay = new RazorpayClient(AppConstants.RAZORPAY_KEY, AppConstants.RAZORPAY_SECRET);
+            RazorpayClient razorpay = new RazorpayClient(razorpayKey, razorpaySecret);
             JSONObject orderRequest = new JSONObject();
             orderRequest.put("amount", amount);
             orderRequest.put("currency", currency);
@@ -73,7 +78,7 @@ public class PaymentService {
         sub.setStartDate(null);
         sub.setEndDate(null);
         subscriptionRepository.save(sub);
-        RazorpayOrderResponseDto resp = new RazorpayOrderResponseDto(orderId, AppConstants.RAZORPAY_KEY, amount, currency, planType);
+    RazorpayOrderResponseDto resp = new RazorpayOrderResponseDto(orderId, razorpayKey, amount, currency, planType);
         return ResponseEntity.ok(resp);
     }
 

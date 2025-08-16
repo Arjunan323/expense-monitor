@@ -14,8 +14,9 @@ public class AppConstants {
     public static final String UPGRADE_PROMPT = "Upgrade to Pro or Premium to unlock advanced analytics and multi-bank support.";
     public static final String CSV_HEADER = "date,description,amount,balance,category\n";
 
-    public static final String RAZORPAY_KEY = "rzp_test_wQbGBqfYJDdZZZ";
-    public static final String RAZORPAY_SECRET = "9yXz8n7l96ILXc5cMDgguv6A";
+    // Razorpay credentials are now externalized via application properties / environment
+    public static final String RAZORPAY_KEY_PROP = "payment.razorpay.key";
+    public static final String RAZORPAY_SECRET_PROP = "payment.razorpay.secret";
     public static final String REGION_DEFAULT = "USD";
     public static final String EVENT_PAYMENT_CAPTURED = "payment.captured";
     public static final String EVENT_ORDER_PAID = "order.paid";
@@ -27,7 +28,6 @@ public class AppConstants {
     public static final int PRO_PAGE_LIMIT = 50;
     public static final int PREMIUM_STATEMENT_LIMIT = Integer.MAX_VALUE;
     public static final int PREMIUM_PAGE_LIMIT = 100;
-    public static final String EXTRACTION_SCRIPT_PATH = "d:/product/expense-monitor/extraction_lambda/extraction_lambda.py";
     public static final String TEMP_FILE_PREFIX = "statement";
     public static final String TEMP_FILE_SUFFIX = ".pdf";
     public static final String ERROR_EXTRACTION_FAILED = "Extraction failed: ";

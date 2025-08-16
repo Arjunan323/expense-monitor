@@ -1,6 +1,6 @@
 package com.expensetracker.service.statement;
 
-import com.expensetracker.util.AppConstants;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
@@ -11,10 +11,16 @@ import java.util.Scanner;
 
 @Component
 public class ExtractionRunner {
+
+    @Value("${openai.api.key:}")
+    private String openAiApiKeyProp;
+
+    @Value("${extraction.script.path}")
+    private String extractionScriptPath;
     public String run(File tempFile, String password) throws IOException, InterruptedException {
         List<String> cmd = new ArrayList<>();
         cmd.add("python");
-        cmd.add(AppConstants.EXTRACTION_SCRIPT_PATH);
+    cmd.add(extractionScriptPath);
         cmd.add(tempFile.getAbsolutePath());
         if (password != null && !password.isEmpty()) {
             cmd.add(password);
@@ -22,11 +28,13 @@ public class ExtractionRunner {
         ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.redirectErrorStream(true);
         try {
-            String openAiKey = System.getenv("OPENAI_API_KEY");
-            if (openAiKey != null && !openAiKey.isEmpty()) {
-                pb.environment().put("OPENAI_API_KEY", openAiKey);
+            // Prefer Spring property (can come from application.properties or env via relaxed binding) then fallback to direct env var
+            String key = (openAiApiKeyProp != null && !openAiApiKeyProp.isEmpty()) ? openAiApiKeyProp : System.getenv("OPENAI_API_KEY");
+            if (key != null && !key.isEmpty()) {
+                pb.environment().put("OPENAI_API_KEY", key);
             }
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
         Process process = pb.start();
         StringBuilder output = new StringBuilder();
         try (Scanner scanner = new Scanner(process.getInputStream())) {

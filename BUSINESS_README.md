@@ -1,70 +1,134 @@
 # CutTheSpend
 
-## Overview
-CutTheSpend is a comprehensive platform designed to help individuals and businesses track, analyze, and manage their financial transactions. It leverages advanced AI and OCR technologies to extract transaction data from bank statements, categorize expenses, and provide actionable insights for better financial decision-making.
+Data-driven personal & small-business financial intelligence: upload multi-bank PDF statements, extract & normalize transactions with AI, enforce plan limits, stream processing progress, and visualize spending & cashflow across accounts.
 
-## Key Features
-- **Automated Transaction Extraction:** Upload bank statements in PDF format and automatically extract transaction details using OCR and GPT-4-powered parsing.
-- **Expense Categorization:** Transactions are categorized into common expense types (Food, Travel, Utilities, Salary, Shopping, Rent, Bank Fee, etc.) for easy analysis.
-- **Dashboard & Analytics:** Visualize spending patterns, track balances, and monitor financial health through an interactive dashboard.
-- **Secure Authentication:** User authentication and authorization are managed securely using JWT tokens.
-- **Payment Integration:** Stripe integration for payment processing and premium feature access.
+## Current Capability Snapshot
+Core
+- PDF statement ingestion (multi-file, password-protected support, size & plan validation)
+- Async extraction pipeline with background job tracking (SSE + resilient polling fallback)
+- GPT / OCR hybrid parsing (Python lambda) -> normalized transactions (deduplicated via txnHash)
+- Multi-bank aggregation, per-bank toggles, category rollups, recent activity & usage stats
+- Transaction de-duplication (backend ingestion + dashboard in-memory guard for overlapping statements)
 
-## How It Works
-1. **Upload Statement:** Users upload their bank statement PDFs via the frontend.
-2. **Extraction Pipeline:**
-   - The backend uses `pdfplumber` and `pytesseract` to extract text from PDFs, including scanned images.
-   - Text is chunked and sent to OpenAI's GPT-4 model for transaction parsing and categorization.
-   - Extracted transactions are post-processed for accuracy and stored in the database.
-3. **Dashboard:** Users view, filter, and analyze their transactions and spending trends.
-4. **Payments:** Stripe integration enables secure payments for premium features.
+User & Access
+- JWT auth (immediate login on registration) with hardened security filters & JSON error responses
+- Role/plan aware usage policy (statement count, page limits, combined bank selection limits)
+- Stripe subscription integration (FREE / PRO / PREMIUM tiers, expired plan gating)
 
-## Technology Stack
-- **Frontend:** React + TypeScript (Vite)
-- **Backend:** Java (Spring Boot)
-- **AI Extraction:** Python (OCR, OpenAI GPT-4)
-- **Database:** (Not specified, but typically MySQL/PostgreSQL for Spring Boot)
-- **Authentication:** JWT
-- **Payments:** Stripe
+Experience
+- Frontend (React + Vite + TypeScript) with persistent upload job store & SSE reconnect guards
+- Mobile (React Native / Expo) mirroring auth & async job progress (SSE or fallback polling)
+- Local storage & in-memory job rehydration so progress bars survive navigation
+- Date range & multi-bank filters (portal-based picker to avoid z-index collisions)
 
-## Folder Structure
-- `frontend/` — React app for user interface
-- `backend/` — Spring Boot REST API for business logic and data management
-- `extraction_lambda/` — Python scripts for AI-powered transaction extraction
+Reliability & Quality
+- Global exception handling with structured ErrorResponse codes
+- Streaming endpoints protected & sanitized (logging aspect avoids deep entity recursion)
+- Connection / pool safety: async processing off main transaction, emitter cleanup to prevent leaks
+- Duplicate transaction prevention: txnHash column + index; dashboard dedupe fallback
 
-## Business Use Cases
-- **Personal Finance:** Individuals can track and categorize their expenses, set budgets, and monitor savings.
-- **Small Businesses:** Automate bookkeeping, expense tracking, and financial reporting.
-- **Accountants:** Streamline client statement processing and transaction categorization.
-- **Financial Advisors:** Provide clients with actionable insights based on spending patterns.
+## High-Level Architecture
+1. Upload: Frontend posts multipart PDF (optional password) -> backend validates plan, stores temp file & creates async job (StatementJob).
+2. Async Processing: Background processor extracts pages, routes to Python extraction service (OCR + GPT), parses transactions, computes txnHash, persists unique rows, updates progress.
+3. Streaming Updates: Client subscribes via /statement-jobs/{id}/stream (SSE). Progress/state events broadcast until COMPLETED/FAILED. Fallback polling with exponential backoff if SSE unavailable.
+4. Analytics: Dashboard aggregates per-bank balances (latest balance per bank), income/expense totals, category top N, recent transactions, applying optional date & bank filters with dedupe.
+5. Usage Enforcement: Monthly counters (statements, pages) + bank selection caps bound to plan; password-required flow pauses queue until user supplies password.
 
-## Getting Started
-1. **Clone the Repository:**
-   ```sh
-   git clone https://github.com/Arjunan323/expense-monitor.git
-   ```
-2. **Install Dependencies:**
-   - Frontend: `npm install` in `frontend/`
-   - Backend: Use Maven to build in `backend/`
-   - Extraction Lambda: Ensure Python dependencies (`pdfplumber`, `pytesseract`, `openai`, etc.) are installed
-3. **Configure API Keys:**
-   - Set your OpenAI API key in `extraction_lambda.py`
-   - Configure Stripe keys in backend
-4. **Run Services:**
-   - Start backend server
-   - Start frontend app
-   - Run extraction lambda as needed
+## Tech Stack
+- Frontend: React, TypeScript, Tailwind-like utility styles, Recharts
+- Mobile: React Native (Expo) + SecureStore abstraction
+- Backend: Spring Boot, Spring Security 6, JPA/Hibernate, Flyway, HikariCP, OpenAPI
+- Extraction: Python (pdfplumber, pytesseract) + OpenAI model
+- Database: PostgreSQL (assumed; configured via Spring), Flyway migrations (bank names, plans, txn hash, etc.)
+- Observability: Structured request/response logging (correlationId), Prometheus readiness (actuator endpoints)
+
+## Key Domain Concepts
+| Concept | Purpose |
+|---------|---------|
+| StatementJob | Tracks async extraction lifecycle & progress |
+| txnHash | Deterministic hash for duplicate transaction suppression |
+| UsageStats | Per-user counters & plan-derived limits |
+| Plan Types | FREE (restricted), PRO, PREMIUM (higher or unlimited limits) |
+| Job Streaming | SSE endpoint emitting job-update events |
+
+## File / Folder Highlights
+- `backend/src/main/java/.../service/statement/AsyncStatementProcessor` – asynchronous pipeline executor
+- `backend/src/main/java/.../controller/StatementJobStreamController` – SSE endpoint
+- `backend/src/main/java/.../config/RequestResponseLoggingAspect` – safe structured logging
+- `backend/src/main/java/.../config/SecurityConfig` + `JwtFilter` – security & JWT injection
+- `backend/src/main/java/.../exception/GlobalExceptionHandler` – unified error shaping
+- `frontend/src/components/PdfUpload.tsx` – upload UI, password flow, SSE management, persistence
+- `frontend/src/components/Dashboard.tsx` – filtering, multi-bank analytics aggregation
+- `mobile/src/.../UploadScreen` (analogous) – mobile job progress & auth flow
+
+## Business Value / Use Cases
+- Rapid onboarding: upload historical statements for multi-bank unified view
+- Expense intelligence: category concentration, monthly deltas, anomaly surfacing (future)
+- Subscription monetization: tiered limits & per-bank analytics gated by plan
+- Accountant / advisor productivity: bulk ingestion & consistent normalization
+
+## Operational Safeguards
+- Dedup at ingestion (txnHash) + second-layer dashboard dedupe for safety
+- Streaming guard rails: SSE suppressed post-completion; client prevents duplicate streams
+- Token validation hardened (invalid tokens do not partially commit responses)
+- Password-protected PDF retry loop without losing progress
+
+## Running Locally (Summary)
+Frontend
+1. cd frontend
+2. npm install
+3. npm run dev
+
+Backend
+1. cd backend
+2. mvn clean spring-boot:run
+
+Mobile (Expo)
+1. cd mobile
+2. npm install
+3. npx expo start
+
+Python Extraction (if run locally)
+1. cd extraction_lambda
+2. pip install -r requirements.txt
+3. python extraction_lambda.py (adapt for async invocation / service mode)
+
+Environment Keys
+- OPENAI_API_KEY (extraction)
+- STRIPE_SECRET / STRIPE_WEBHOOK (payments)
+- JWT secret (backend) – relocate from hard-coded constant for production
 
 ## Security & Privacy
-- All data is processed securely.
-- Sensitive information (API keys, user data) is protected and not exposed.
-- Stripe integration ensures PCI-compliant payment processing.
+- JWT-based stateless auth; custom entry point & access denied JSON handlers
+- Correlation IDs injected for traceability
+- Sensitive secrets to be externalized (env vars / vault) in production
+- Stripe handles card data (PCI scope minimized)
 
-## Future Enhancements
-- Multi-bank support
-- Advanced analytics and forecasting
-- Mobile app integration
-- Team/organization expense management
+## Current Limitations / Known Follow-Ups
+- Hard-coded JWT secret (needs externalization & rotation policy)
+- Basic anomaly detection & forecasting not yet implemented
+- Extraction Python script not containerized in repo (future: microservice + queue)
+- No explicit rate limiting at gateway (recommend adding if public exposure increases)
+- Mobile tests & e2e coverage pending
 
-## Contact & Support
-For business inquiries, support, or partnership opportunities, please contact the repository owner via GitHub or open an issue in the repository.
+## Roadmap (Next Candidates)
+1. Forecasting & cashflow projections (ARIMA / ML lightweight models)
+2. Category reclassification UI & rules engine
+3. Tagging & search improvements (full-text index)
+4. Budget goals & variance alerts (email / push)
+5. Automated bank format learning feedback loop
+6. Multi-user org workspaces (teams / roles)
+7. Export enhancements (Excel, JSON API tokens)
+8. Infrastructure hardening: containerization, CI, staging env, SLO dashboards
+
+## Contribution Guidelines (Lightweight)
+- Keep controllers thin; move logic to services & DTOs
+- Favor immutable DTOs at API boundaries; avoid leaking JPA entities
+- Add or adjust tests when changing business rules (dedupe, limits)
+- Log correlationId for cross-service trace continuity
+
+## Support / Contact
+Open an issue for bugs or feature requests. For partnerships or enterprise inquiries, contact the repository owner via GitHub profile.
+
+---
+This document reflects the active architecture & feature set (updated: 2025-08-16). For technical onboarding, also review code-level READMEs inside `backend/` & `frontend/`.
