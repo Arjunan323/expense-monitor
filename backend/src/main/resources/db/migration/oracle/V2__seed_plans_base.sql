@@ -1,14 +1,20 @@
-MERGE INTO plans p USING (SELECT 'FREE' plan_type FROM dual) src
-ON (p.plan_type = src.plan_type AND p.region = 'GLOBAL')
-WHEN NOT MATCHED THEN INSERT (id, plan_type, region, amount, statements_per_month, pages_per_statement, features, currency, combined_bank)
-VALUES ('FREE', 'GLOBAL', 0, 3, 10, 'AI Parsing,Basic Analytics,Email Support', NULL, NULL);
+-- Disable parallel DML to avoid ORA-12838
+ALTER SESSION DISABLE PARALLEL DML;
 
-MERGE INTO plans p USING (SELECT 'PRO' plan_type FROM dual) src
-ON (p.plan_type = src.plan_type AND p.region = 'GLOBAL')
-WHEN NOT MATCHED THEN INSERT (id, plan_type, region, amount, statements_per_month, pages_per_statement, features, currency, combined_bank)
-VALUES ('PRO', 'GLOBAL', 12900, 5, 50, 'AI Parsing,Advanced Analytics,Priority Support,Spending Trends,Category Breakdown', NULL, NULL);
+-- ========================
+-- V5: Seed base plans (generic)
+-- ========================
+INSERT INTO plans (plan_type, amount, statements_per_month, pages_per_statement, features)
+SELECT 'FREE', 0, 3, 10, 'AI Parsing,Basic Analytics,Email Support'
+FROM dual
+WHERE NOT EXISTS (SELECT 1 FROM plans WHERE plan_type='FREE' AND currency IS NULL);
 
-MERGE INTO plans p USING (SELECT 'PREMIUM' plan_type FROM dual) src
-ON (p.plan_type = src.plan_type AND p.region = 'GLOBAL')
-WHEN NOT MATCHED THEN INSERT (id, plan_type, region, amount, statements_per_month, pages_per_statement, features, currency, combined_bank)
-VALUES ('PREMIUM', 'GLOBAL', 29900, 10, 100, 'AI Parsing,Full Analytics Suite,Priority Processing,Priority Support,Early Access,10 Uploads', NULL, NULL);
+INSERT INTO plans (plan_type, amount, statements_per_month, pages_per_statement, features)
+SELECT 'PRO', 12900, 5, 50, 'AI Parsing,Advanced Analytics,Priority Support,Spending Trends,Category Breakdown'
+FROM dual
+WHERE NOT EXISTS (SELECT 1 FROM plans WHERE plan_type='PRO' AND currency IS NULL);
+
+INSERT INTO plans (plan_type, amount, statements_per_month, pages_per_statement, features)
+SELECT 'PREMIUM', 29900, 10, 100, 'AI Parsing,Full Analytics Suite,Priority Processing,Priority Support,Early Access,10 Uploads'
+FROM dual
+WHERE NOT EXISTS (SELECT 1 FROM plans WHERE plan_type='PREMIUM' AND currency IS NULL);
