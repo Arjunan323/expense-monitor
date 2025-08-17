@@ -10,6 +10,7 @@ public class Transaction {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    @Column(name = "tx_date")
     private LocalDate date;
     private String description;
     @Column(precision = 19, scale = 4)
