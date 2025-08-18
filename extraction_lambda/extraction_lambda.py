@@ -47,6 +47,17 @@ Output a JSON object with two keys:
 - "header": a list of column names you detected
 - "transactions": an array of transaction objects, each including all relevant columns (e.g., date, description, debit, credit, amount, type, balance, category, bankName, etc.)
 
+Each transaction must include:
+
+date (in YYYY-MM-DD format)
+description (short merchant or transfer info)
+debit (negative for debit)
+credit (positive for credit)
+balance (account balance after transaction)
+category (short label like 'Food', 'Travel', 'Utilities', 'Salary', 'Shopping', 'Rent', 'Bank Fee', etc.)
+bankName (use the value you inferred from the whole statement for all transactions)
+
+
 Example output:
 {{
   "header": ["Date", "Description", "Debit", "Credit", "Balance"],
