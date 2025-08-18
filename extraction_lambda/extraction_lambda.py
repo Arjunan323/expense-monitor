@@ -106,7 +106,25 @@ def postprocess_transactions(transactions, bank_name=None):
     cleaned = []
     for txn in transactions:
         try:
-            txn['amount'] = float(txn['amount'])
+            # Heuristic: If description or category suggests debit, force negative
+            desc = txn.get('description', '').lower()
+            cat = txn.get('category', '').lower()
+            amt = float(txn['amount'])
+            # If amount is positive but description/category indicates debit, flip sign
+            if amt > 0 and (
+                'debit' in desc or 'debit' in cat or
+                'payment' in desc or 'withdrawal' in cat or 'withdrawal' in desc or
+                'atm' in desc or 'fee' in cat or 'fee' in desc or 'transfer' in cat or 'transfer' in desc or
+                'upi' in desc or 'neft' in desc or 'imps' in desc or 'rtgs' in desc
+            ):
+                amt = -amt
+            # If amount is negative but description/category indicates credit, flip sign
+            if amt < 0 and (
+                'credit' in desc or 'salary' in cat or 'deposit' in desc or 'interest' in cat or 'interest' in desc or
+                'dividend' in cat or 'dividend' in desc or 'refund' in desc or 'reversal' in desc
+            ):
+                amt = abs(amt)
+            txn['amount'] = amt
             txn['balance'] = float(txn['balance'])
             if bank_name:
                 txn['bankName'] = bank_name
