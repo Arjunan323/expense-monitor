@@ -17,10 +17,13 @@ public class ExtractionRunner {
 
     @Value("${extraction.script.path}")
     private String extractionScriptPath;
+
+    @Value("${python.cmd:python}")
+    private String pythonCmd;
     public String run(File tempFile, String password) throws IOException, InterruptedException {
         List<String> cmd = new ArrayList<>();
-        cmd.add("python");
-    cmd.add(extractionScriptPath);
+        cmd.add(pythonCmd);
+        cmd.add(extractionScriptPath);
         cmd.add(tempFile.getAbsolutePath());
         if (password != null && !password.isEmpty()) {
             cmd.add(password);
