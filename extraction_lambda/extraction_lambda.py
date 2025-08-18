@@ -7,10 +7,12 @@ import os
 import cv2
 import numpy as np
 from PIL import Image
-from typing import Optional, List
+from typing import Optional, List, Dict
 import logging
+import sys
 
 logging.basicConfig(filename="python_app.log", level=logging.INFO)
+
 # OpenAI client – expects OPENAI_API_KEY in environment (never hardcode secrets)
 api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
@@ -29,46 +31,48 @@ def chunk_text(text: str, chunk_size: int = 3000) -> List[str]:
     return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
 
 # -------------- GPT-4 Text Extraction Logic --------------
-def call_gpt_text_vision(chunk):
+def call_gpt_text_vision(chunk, header_row):
     prompt = f"""
 You are a financial assistant helping parse and categorize bank transactions.
 
-Given the following bank statement text, infer the bankName (the name of the bank or card issuer, e.g., 'HDFC', 'ICICI', 'SBI', 'Axis', 'Citi', 'HSBC', etc.) ONCE from the entire statement (not per transaction). Then, for each transaction, add this bankName as a field.
+The following bank statement text starts with a header row. Use the header row to map columns for each transaction. If the header includes columns like 'Debit', 'Credit', 'Type', 'Dr/Cr', or similar, use those to determine the sign of the transaction amount. If only an 'Amount' column is present, use any indicator column (like 'Type', 'Dr/Cr') to determine sign. If no indicator is present, use the amount as-is.
 
-Each transaction must include:
-- date (in YYYY-MM-DD format)
-- description (short merchant or transfer info)
-- amount (positive for credit, negative for debit)
-- balance (account balance after transaction)
-- category (short label like 'Food', 'Travel', 'Utilities', 'Salary', 'Shopping', 'Rent', 'Bank Fee', etc.)
-- bankName (use the value you inferred from the whole statement for all transactions)
+Header row:
+{header_row}
 
 Bank statement text:
-\"\"\"
 {chunk}
-\"\"\"
 
-Output only a valid JSON array of transactions, for example:
-[
-  {{
-    "date": "2023-07-01",
-    "description": "POS AMAZON 1234",
-    "amount": "-120.50",
-    "balance": "5420.45",
-    "category": "Shopping",
-    "bankName": "HDFC"
-  }},
-  {{
-    "date": "2023-07-01",
-    "description": "NEFT ICICI BANK",
-    "amount": "2000.00",
-    "balance": "7420.45",
-    "category": "Salary",
-    "bankName": "HDFC"
-  }}
-]
+Output a JSON object with two keys:
+- "header": a list of column names you detected
+- "transactions": an array of transaction objects, each including all relevant columns (e.g., date, description, debit, credit, amount, type, balance, category, bankName, etc.)
 
-If no transactions are found, return an empty array [].
+Example output:
+{{
+  "header": ["Date", "Description", "Debit", "Credit", "Balance"],
+  "transactions": [
+    {{
+      "date": "2023-07-01",
+      "description": "POS AMAZON 1234",
+      "debit": "120.50",
+      "credit": "",
+      "balance": "5420.45",
+      "category": "Shopping",
+      "bankName": "HDFC"
+    }},
+    {{
+      "date": "2023-07-01",
+      "description": "NEFT ICICI BANK",
+      "debit": "",
+      "credit": "2000.00",
+      "balance": "7420.45",
+      "category": "Salary",
+      "bankName": "HDFC"
+    }}
+  ]
+}}
+
+If no transactions are found, return {{"header": [], "transactions": []}}.
 """
 
     response = client.chat.completions.create(
@@ -99,33 +103,35 @@ If no transactions are found, return an empty array [].
     try:
         return json.loads(raw_content)
     except json.JSONDecodeError:
-        return []
+        return {"header": [], "transactions": []}
 
 # -------------- Transaction Post-Processor --------------
-def postprocess_transactions(transactions, bank_name=None):
+def postprocess_transactions(transactions: List[Dict], header: List[str], bank_name=None):
     cleaned = []
     for txn in transactions:
         try:
-            # Heuristic: If description or category suggests debit, force negative
-            desc = txn.get('description', '').lower()
-            cat = txn.get('category', '').lower()
-            amt = float(txn['amount'])
-            # If amount is positive but description/category indicates debit, flip sign
-            if amt > 0 and (
-                'debit' in desc or 'debit' in cat or
-                'payment' in desc or 'withdrawal' in cat or 'withdrawal' in desc or
-                'atm' in desc or 'fee' in cat or 'fee' in desc or 'transfer' in cat or 'transfer' in desc or
-                'upi' in desc or 'neft' in desc or 'imps' in desc or 'rtgs' in desc
-            ):
-                amt = -amt
-            # If amount is negative but description/category indicates credit, flip sign
-            if amt < 0 and (
-                'credit' in desc or 'salary' in cat or 'deposit' in desc or 'interest' in cat or 'interest' in desc or
-                'dividend' in cat or 'dividend' in desc or 'refund' in desc or 'reversal' in desc
-            ):
-                amt = abs(amt)
+            amt = None
+            # Use header info for sign detection
+            if 'Debit' in header and txn.get('debit') not in [None, '', 0, '0']:
+                amt = -abs(float(txn['debit']))
+            elif 'Credit' in header and txn.get('credit') not in [None, '', 0, '0']:
+                amt = abs(float(txn['credit']))
+            elif 'Type' in header and txn.get('amount') not in [None, '', 0, '0']:
+                amt_val = abs(float(txn['amount']))
+                if str(txn.get('type', '')).strip().lower() in ['dr', 'debit']:
+                    amt = -amt_val
+                elif str(txn.get('type', '')).strip().lower() in ['cr', 'credit']:
+                    amt = amt_val
+                else:
+                    amt = float(txn['amount'])
+            elif 'Amount' in header and txn.get('amount') not in [None, '', 0, '0']:
+                amt = float(txn['amount'])
+            else:
+                continue
+
             txn['amount'] = amt
-            txn['balance'] = float(txn['balance'])
+            if 'balance' in txn:
+                txn['balance'] = float(txn['balance'])
             if bank_name:
                 txn['bankName'] = bank_name
             cleaned.append(txn)
@@ -135,53 +141,72 @@ def postprocess_transactions(transactions, bank_name=None):
 
 # -------------- Main Extraction Pipeline --------------
 def extract_transactions_from_pdf(pdf_path: str, password: Optional[str] = None):
-    import logging
     transactions = []
     empty_pdf = True
     bank_name = None
     all_text = ""
+    header_row = None
+
     try:
         with pdfplumber.open(pdf_path, password=password) as pdf:
-            for page in pdf.pages:
+            for idx, page in enumerate(pdf.pages):
                 text = page.extract_text()
                 if not text or not text.strip():
                     # Try OCR if no extractable text
                     image = convert_from_path(pdf_path, first_page=page.page_number, last_page=page.page_number)[0]
                     processed_image = preprocess_image(image)
                     text = pytesseract.image_to_string(processed_image)
+
                 if text and text.strip():
                     empty_pdf = False
+                    if idx == 0:
+                        # Try to extract header row from first page
+                        lines = text.splitlines()
+                        for line in lines:
+                            if any(col in line.lower() for col in ['date', 'desc', 'debit', 'credit', 'amount', 'balance', 'type']):
+                                header_row = line.strip()
+                                break
                     all_text += "\n" + text
                 else:
                     logging.warning(f"Page {page.page_number} is empty or unreadable.")
     except Exception as e:
         # Provide clearer guidance for password-protected PDFs
         if 'password' in str(e).lower():
-            raise RuntimeError("PDF appears to be password-protected. Provide password via function arg or CLI: python extraction_lambda.py <pdf> <password>") from e
+            raise RuntimeError(
+                "PDF appears to be password-protected. Provide password via function arg or CLI: python extraction_lambda.py <pdf> <password>"
+            ) from e
         raise
 
     if empty_pdf:
         logging.error(f"PDF {pdf_path} appears to be empty or non-standard. No transactions extracted.")
         return []
 
+    if not header_row:
+        logging.warning(f"No header row detected in {pdf_path}. Extraction may be unreliable.")
+        header_row = ""
+
     # Now chunk and process the combined text
+    all_headers = None
+    all_transactions = []
     for chunk in chunk_text(all_text):
-        result = call_gpt_text_vision(chunk)
-        if not isinstance(result, list):
+        result = call_gpt_text_vision(chunk, header_row)
+        if not isinstance(result, dict) or 'transactions' not in result:
             logging.warning(f"Non-standard GPT response: {result}")
             continue
+        if all_headers is None and 'header' in result:
+            all_headers = result['header']
         # Try to extract bankName from first transaction
-        if bank_name is None and result and isinstance(result, list) and 'bankName' in result[0]:
-            bank_name = result[0]['bankName']
-        transactions.extend(result)
+        if bank_name is None and result['transactions'] and 'bankName' in result['transactions'][0]:
+            bank_name = result['transactions'][0]['bankName']
+        all_transactions.extend(result['transactions'])
 
-    processed = postprocess_transactions(transactions, bank_name)
+    processed = postprocess_transactions(all_transactions, all_headers or [], bank_name)
     if not processed:
         logging.warning(f"No valid transactions extracted from {pdf_path}. Check statement format.")
 
     return processed
 
-# -------------- Entry Point --------------
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) < 2:
