@@ -29,8 +29,6 @@ public class ExtractionRunner {
             cmd.add(password);
         }
         ProcessBuilder pb = new ProcessBuilder(cmd);
-        pb.redirectOutput(new File("python_out.log"));
-        pb.redirectError(new File("python_err.log"));
         pb.redirectErrorStream(true);
         try {
             // Prefer Spring property (can come from application.properties or env via relaxed binding) then fallback to direct env var
