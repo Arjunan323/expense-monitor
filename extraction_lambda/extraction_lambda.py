@@ -8,10 +8,13 @@ import cv2
 import numpy as np
 from PIL import Image
 from typing import Optional, List
+import logging
 
+logging.basicConfig(filename="python_app.log", level=logging.INFO)
 # OpenAI client – expects OPENAI_API_KEY in environment (never hardcode secrets)
 api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
+    logging.error("Missing OPENAI_API_KEY environment variable.")
     raise RuntimeError("Missing OPENAI_API_KEY environment variable.")
 client = OpenAI(api_key=api_key)
 
@@ -164,7 +167,7 @@ def extract_transactions_from_pdf(pdf_path: str, password: Optional[str] = None)
 if __name__ == "__main__":
     import sys
     if len(sys.argv) < 2:
-        print("Usage: python extraction_lambda.py <path_to_pdf> [pdf_password]")
+        logging.warning("Usage: python extraction_lambda.py <path_to_pdf> [pdf_password]")
         sys.exit(1)
 
     pdf_path = sys.argv[1]
