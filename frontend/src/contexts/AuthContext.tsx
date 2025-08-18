@@ -54,21 +54,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (username: string, password: string): Promise<void> => {
     try {
       setLoading(true);
-  const response = await authApiCall<{ token: string; user: User }>('POST', '/auth/login', { username, password });
-
-  const { token: newToken, user: userData } = response;
-      
+      const response = await authApiCall<{ token: string; user: User }>('POST', '/auth/login', { username, password });
+      const { token: newToken, user: userData } = response;
       setToken(newToken);
       setUser(userData);
       localStorage.setItem('token', newToken);
       localStorage.setItem('user', JSON.stringify(userData));
+      localStorage.setItem('isLoggedIn', 'true');
       if (userData?.currency || userData?.locale) {
         setPreferences({ currency: userData.currency || 'USD', locale: userData.locale || 'en-US' });
       } else {
         const detected = getDefaultCurrency();
         setPreferences({ currency: detected.currency, locale: detected.locale });
       }
-      
       toast.success('Welcome back!');
     } catch (error: any) {
       toast.error(error.message || 'Login failed');
@@ -95,20 +93,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         currency: detected.currency,
         locale: detected.locale,
       });
-
-  const { token: newToken, user: userData } = response;
-      
+      const { token: newToken, user: userData } = response;
       setToken(newToken);
       setUser(userData);
       localStorage.setItem('token', newToken);
       localStorage.setItem('user', JSON.stringify(userData));
+      localStorage.setItem('isLoggedIn', 'true');
       if (userData?.currency || userData?.locale) {
         setPreferences({ currency: userData.currency || 'USD', locale: userData.locale || 'en-US' });
       } else {
         const detected = getDefaultCurrency();
         setPreferences({ currency: detected.currency, locale: detected.locale });
       }
-      
       toast.success('Account created successfully!');
     } catch (error: any) {
       toast.error(error.message || 'Registration failed');
@@ -123,6 +119,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setToken(null);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('isLoggedIn');
     toast.success('Logged out successfully');
   };
 

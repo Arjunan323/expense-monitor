@@ -1,12 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { LogOut, User, Settings, CreditCard, Scissors, Menu, X } from 'lucide-react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { navigation } from './Sidebar';
 
 export const Header: React.FC = () => {
   const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const navigate = useNavigate();
+
+  // Redirect to home if not logged in (based on localStorage)
+  useEffect(() => {
+    const isLoggedIn = localStorage.getItem('isLoggedIn');
+    if (!user && isLoggedIn !== 'true') {
+      navigate('/');
+    }
+  }, [user, navigate]);
 
   // Lock body scroll when mobile drawer open
   useEffect(() => {
@@ -75,7 +84,7 @@ export const Header: React.FC = () => {
                   <p className="text-sm text-brand-gray-500">{user?.email}</p>
                 </div>
                 <button 
-                  onClick={() => window.location.href = '/settings'}
+                  onClick={() => navigate('/settings')}
                   className="flex items-center w-full px-4 py-3 text-sm text-brand-gray-700 hover:bg-brand-green-50 hover:text-brand-green-700 transition-colors duration-200"
                 >
                   <Settings className="w-4 h-4 mr-3" />
