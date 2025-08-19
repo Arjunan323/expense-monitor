@@ -2,7 +2,7 @@ import pdfplumber
 import pytesseract
 from pdf2image import convert_from_path
 import json
-from openai import OpenAI
+from groq import Groq
 import os
 import cv2
 import numpy as np
@@ -13,12 +13,10 @@ import sys
 
 logging.basicConfig(filename="python_app.log", level=logging.INFO)
 
-# OpenAI client – expects OPENAI_API_KEY in environment (never hardcode secrets)
-api_key = os.getenv("OPENAI_API_KEY")
-if not api_key:
-    logging.error("Missing OPENAI_API_KEY environment variable.")
-    raise RuntimeError("Missing OPENAI_API_KEY environment variable.")
-client = OpenAI(api_key=api_key)
+# Initialize Groq client (expects GROQ_API_KEY in environment)
+client = Groq(
+    api_key=os.environ.get("OPENAI_API_KEY"),
+)
 
 # -------------- Image Preprocessing --------------
 def preprocess_image(pil_image):
@@ -27,15 +25,26 @@ def preprocess_image(pil_image):
     return Image.fromarray(thresh)
 
 # -------------- Chunking Text --------------
-def chunk_text(text: str, chunk_size: int = 3000) -> List[str]:
+def chunk_text(text: str, chunk_size: int = 1000) -> List[str]:
     return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
 
-# -------------- GPT-4 Text Extraction Logic --------------
-def call_gpt_text_vision(chunk, header_row):
+# -------------- Groq LLM Extraction Logic --------------
+def call_groq_text_vision(chunk, header_row):
+    """Call Groq model with structured output enforcing an array of transactions."""
     prompt = f"""
 You are a financial assistant helping parse and categorize bank transactions.
 
-The following bank statement text starts with a header row. Use the header row to map columns for each transaction. If the header includes columns like 'Debit', 'Credit', 'Type', 'Dr/Cr', or similar, use those to determine the sign of the transaction amount. If only an 'Amount' column is present, use any indicator column (like 'Type', 'Dr/Cr') to determine sign. If no indicator is present, use the amount as-is.
+Given the following bank statement text, infer the bankName (the name of the bank or card issuer, e.g., 'HDFC', 'ICICI', 'SBI', 'Axis', 'Citi', 'HSBC', etc.) ONCE from the entire statement (not per transaction). Then, for each transaction, add this bankName as a field.
+
+Each transaction must include:
+- date (in YYYY-MM-DD format)
+- description (short merchant or transfer info)
+- amount (positive for credit, negative for debit)
+- balance (account balance after transaction if available)
+- category (short label like 'Food', 'Travel', 'Utilities', 'Salary', 'Shopping', 'Rent', 'Bank Fee', etc.)
+- bankName (use the value you inferred from the whole statement for all transactions)
+
+The statement starts with a header row. Use the header row to map columns for each transaction. If the header includes columns like 'Debit', 'Credit', 'Type', 'Dr/Cr', or similar, use those to determine the sign of the transaction amount. If only an 'Amount' column is present, use any indicator column (like 'Type', 'Dr/Cr') to determine sign. If no indicator is present, use the amount as-is.
 
 Header row:
 {header_row}
@@ -43,78 +52,66 @@ Header row:
 Bank statement text:
 {chunk}
 
-Output a JSON object with two keys:
-- "header": a list of column names you detected
-- "transactions": an array of transaction objects, each including all relevant columns (e.g., date, description, debit, credit, amount, type, balance, category, bankName, etc.)
-
-Each transaction must include:
-
-date (in YYYY-MM-DD format)
-description (short merchant or transfer info)
-debit (negative for debit)
-credit (positive for credit)
-balance (account balance after transaction)
-category (short label like 'Food', 'Travel', 'Utilities', 'Salary', 'Shopping', 'Rent', 'Bank Fee', etc.)
-bankName (use the value you inferred from the whole statement for all transactions)
-
-
-Example output:
-{{
-  "header": ["Date", "Description", "Debit", "Credit", "Balance"],
-  "transactions": [
-    {{
-      "date": "2023-07-01",
-      "description": "POS AMAZON 1234",
-      "debit": "120.50",
-      "credit": "",
-      "balance": "5420.45",
-      "category": "Shopping",
-      "bankName": "HDFC"
-    }},
-    {{
-      "date": "2023-07-01",
-      "description": "NEFT ICICI BANK",
-      "debit": "",
-      "credit": "2000.00",
-      "balance": "7420.45",
-      "category": "Salary",
-      "bankName": "HDFC"
-    }}
-  ]
-}}
-
-If no transactions are found, return {{"header": [], "transactions": []}}.
+Return ONLY a JSON array of transactions. If none, return [].
 """
 
-    response = client.chat.completions.create(
-        model="gpt-4-turbo",
-        messages=[
-            {
-                "role": "system",
-                "content": "You are a helpful assistant that extracts and categorizes financial transactions from text."
+    # JSON Schema for structured output
+    transactions_schema = {
+        "type": "array",
+        "items": {
+            "type": "object",
+            "properties": {
+                "date": {"type": "string"},
+                "description": {"type": "string"},
+                "amount": {"type": "number"},
+                "balance": {"type": "number"},
+                "category": {"type": "string"},
+                "bankName": {"type": "string"}
             },
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ],
-        temperature=0
-    )
+            "required": ["date", "description", "amount", "category", "bankName"],
+            "additionalProperties": False
+        }
+    }
 
-    raw_content = response.choices[0].message.content.strip()
-
-    # Clean markdown wrappers if present
-    if raw_content.startswith('```'):
-        raw_content = raw_content.lstrip('`').strip()
-        if raw_content.lower().startswith('json'):
-            raw_content = raw_content[4:].strip()
-        if raw_content.endswith('```'):
-            raw_content = raw_content[:-3].strip()
-
-    try:
-        return json.loads(raw_content)
-    except json.JSONDecodeError:
-        return {"header": [], "transactions": []}
+    import time
+    max_retries = 5
+    for attempt in range(1, max_retries + 1):
+        try:
+            completion = client.chat.completions.create(
+                model="openai/gpt-oss-20b",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0,
+                max_completion_tokens=2048,
+                top_p=1,
+                stream=False,
+                stop=None,
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {"name": "transactions_array", "schema": transactions_schema}
+                }
+            )
+            raw_content = completion.choices[0].message.content.strip()
+            # Clean fenced code blocks if present
+            if raw_content.startswith("```"):
+                raw_content = raw_content.strip("`")
+                if raw_content.lower().startswith("json"):
+                    raw_content = raw_content[4:].strip()
+            try:
+                return json.loads(raw_content)
+            except json.JSONDecodeError:
+                logging.warning("Groq response could not be parsed as JSON (attempt %s).", attempt)
+                return []
+        except Exception as e:  # Retry on rate limits
+            msg = str(e).lower()
+            is_rate = "rate limit" in msg or "rate_limit_exceeded" in msg
+            if attempt < max_retries and is_rate:
+                wait_time = 5 * attempt
+                logging.warning(f"Rate limit encountered. Retry in {wait_time}s (attempt {attempt}/{max_retries})")
+                time.sleep(wait_time)
+                continue
+            logging.error(f"Groq API error (attempt {attempt}): {e}")
+            break
+    return []
 
 # -------------- Transaction Post-Processor --------------
 def postprocess_transactions(transactions: List[Dict], header: List[str], bank_name=None):
@@ -136,6 +133,8 @@ def postprocess_transactions(transactions: List[Dict], header: List[str], bank_n
                 else:
                     amt = float(txn['amount'])
             elif 'Amount' in header and txn.get('amount') not in [None, '', 0, '0']:
+                amt = float(txn['amount'])
+            elif txn.get('amount') not in [None, '', 0, '0']:
                 amt = float(txn['amount'])
             else:
                 continue
@@ -163,7 +162,6 @@ def extract_transactions_from_pdf(pdf_path: str, password: Optional[str] = None)
             for idx, page in enumerate(pdf.pages):
                 text = page.extract_text()
                 if not text or not text.strip():
-                    # Try OCR if no extractable text
                     image = convert_from_path(pdf_path, first_page=page.page_number, last_page=page.page_number)[0]
                     processed_image = preprocess_image(image)
                     text = pytesseract.image_to_string(processed_image)
@@ -171,7 +169,6 @@ def extract_transactions_from_pdf(pdf_path: str, password: Optional[str] = None)
                 if text and text.strip():
                     empty_pdf = False
                     if idx == 0:
-                        # Try to extract header row from first page
                         lines = text.splitlines()
                         for line in lines:
                             if any(col in line.lower() for col in ['date', 'desc', 'debit', 'credit', 'amount', 'balance', 'type']):
@@ -181,10 +178,9 @@ def extract_transactions_from_pdf(pdf_path: str, password: Optional[str] = None)
                 else:
                     logging.warning(f"Page {page.page_number} is empty or unreadable.")
     except Exception as e:
-        # Provide clearer guidance for password-protected PDFs
         if 'password' in str(e).lower():
             raise RuntimeError(
-                "PDF appears to be password-protected. Provide password via function arg or CLI: python extraction_lambda.py <pdf> <password>"
+                "PDF appears to be password-protected. Provide password via function arg or CLI: python extraction_lambda_groq.py <pdf> <password>"
             ) from e
         raise
 
@@ -196,30 +192,30 @@ def extract_transactions_from_pdf(pdf_path: str, password: Optional[str] = None)
         logging.warning(f"No header row detected in {pdf_path}. Extraction may be unreliable.")
         header_row = ""
 
-    # Now chunk and process the combined text
     all_headers = None
     all_transactions = []
     for chunk in chunk_text(all_text):
-        result = call_gpt_text_vision(chunk, header_row)
-        if not isinstance(result, dict) or 'transactions' not in result:
-            logging.warning(f"Non-standard GPT response: {result}")
+        result = call_groq_text_vision(chunk, header_row)
+        if not isinstance(result, list):
+            logging.warning(f"Non-standard Groq response: {result}")
             continue
-        if all_headers is None and 'header' in result:
-            all_headers = result['header']
-        # Try to extract bankName from first transaction
-        if bank_name is None and result['transactions'] and 'bankName' in result['transactions'][0]:
-            bank_name = result['transactions'][0]['bankName']
-        all_transactions.extend(result['transactions'])
+        if bank_name is None and result and 'bankName' in result[0]:
+            bank_name = result[0]['bankName']
+        all_transactions.extend(result)
 
-    processed = postprocess_transactions(all_transactions, all_headers or [], bank_name)
+    if header_row:
+        all_headers = [h.strip().title() for h in header_row.split() if h.strip()]
+    else:
+        all_headers = []
+
+    processed = postprocess_transactions(all_transactions, all_headers, bank_name)
     if not processed:
         logging.warning(f"No valid transactions extracted from {pdf_path}. Check statement format.")
 
     return processed
 
-
+# -------------- Entry Point --------------
 if __name__ == "__main__":
-    import sys
     if len(sys.argv) < 2:
         logging.warning("Usage: python extraction_lambda.py <path_to_pdf> [pdf_password]")
         sys.exit(1)

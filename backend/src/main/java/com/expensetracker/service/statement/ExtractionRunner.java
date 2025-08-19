@@ -1,5 +1,7 @@
 package com.expensetracker.service.statement;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -11,6 +13,9 @@ import java.util.Scanner;
 
 @Component
 public class ExtractionRunner {
+
+
+    private static final Logger log = LoggerFactory.getLogger("ExtractionRunner");
 
     @Value("${openai.api.key:}")
     private String openAiApiKeyProp;
@@ -47,6 +52,7 @@ public class ExtractionRunner {
         }
         int exitCode = process.waitFor();
         if (exitCode != 0) {
+            log.info("Output: {}", output.toString());
             return null;
         }
         return output.toString();
