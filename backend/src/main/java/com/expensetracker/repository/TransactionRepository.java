@@ -44,6 +44,4 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
     @Query("select COALESCE(SUM(case when t.amount < 0 then t.amount else 0 end),0) from Transaction t where t.user = :user and t.date between :start and :end")
     java.math.BigDecimal sumOutflow(@Param("user") User user, @Param("start") LocalDate start, @Param("end") LocalDate end);
 
-    @Query("select t.txnHash from Transaction t where t.user = :user and t.txnHash in :hashes")
-    Set<String> findExistingHashes(@Param("user") User user, @Param("hashes") Set<String> hashes);
 }
