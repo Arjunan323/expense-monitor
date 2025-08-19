@@ -721,27 +721,27 @@ export const PdfUpload: React.FC = () => {
         <h3 className="text-lg font-semibold text-blue-900 mb-3">How it works</h3>
         <div className="space-y-2 text-sm text-blue-800">
           <div className="flex items-start space-x-2">
-            <span className="flex-shrink-0 w-5 h-5 bg-blue-200 rounded-full flex items-center justify-center text-xs font-bold text-blue-900 mt-0.5">1</span>
-            <p>Upload your PDF bank statements using the area above</p>
+        <span className="flex-shrink-0 w-5 h-5 bg-blue-200 rounded-full flex items-center justify-center text-xs font-bold text-blue-900 mt-0.5">1</span>
+        <p>Upload your PDF bank statements using the area above</p>
           </div>
           <div className="flex items-start space-x-2">
-            <span className="flex-shrink-0 w-5 h-5 bg-blue-200 rounded-full flex items-center justify-center text-xs font-bold text-blue-900 mt-0.5">2</span>
-            <p>Our AI will extract transaction data using OCR and GPT-4</p>
+        <span className="flex-shrink-0 w-5 h-5 bg-blue-200 rounded-full flex items-center justify-center text-xs font-bold text-blue-900 mt-0.5">2</span>
+        <p>Our AI will extract transaction data using OCR and GPT-4</p>
           </div>
           <div className="flex items-start space-x-2">
-            <span className="flex-shrink-0 w-5 h-5 bg-blue-200 rounded-full flex items-center justify-center text-xs font-bold text-blue-900 mt-0.5">3</span>
-            <p>Transactions are automatically categorized and added to your dashboard</p>
+        <span className="flex-shrink-0 w-5 h-5 bg-blue-200 rounded-full flex items-center justify-center text-xs font-bold text-blue-900 mt-0.5">3</span>
+        <p>Transactions are automatically categorized and added to your dashboard</p>
           </div>
           <div className="flex items-start space-x-2">
-            <span className="flex-shrink-0 w-5 h-5 bg-blue-200 rounded-full flex items-center justify-center text-xs font-bold text-blue-900 mt-0.5">4</span>
-            <p>View insights and analytics on your spending patterns</p>
+        <span className="flex-shrink-0 w-5 h-5 bg-blue-200 rounded-full flex items-center justify-center text-xs font-bold text-blue-900 mt-0.5">4</span>
+        <p>View insights and analytics on your spending patterns</p>
           </div>
         </div>
         
         <div className="mt-4 pt-4 border-t border-blue-200">
           <p className="text-sm text-blue-700">
-            <strong>Supported banks:</strong> Most major Indian banks including SBI, HDFC, ICICI, Axis, Kotak, and more.
-            If your bank format isn't recognized, we\'ll show parsing warnings.
+         <strong>Supported banks:</strong> We also support popular global banks such as Chase, Bank of America, HSBC, Barclays, Deutsche Bank, Citi, and Standard Chartered.<br />
+        If your bank format isn't recognized, we'll show parsing warnings.
           </p>
         </div>
       </div>

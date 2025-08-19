@@ -476,7 +476,7 @@ export const LandingPage: React.FC = () => {
               </div>
               <h3 className="text-xl font-heading font-bold text-brand-gray-900 mb-3">2. Upload Bank Statements</h3>
               <p className="text-brand-gray-600">
-                Upload PDF statements from any Indian bank. Our AI extracts and categorizes everything automatically.
+                Upload PDF statements from any bank. Our AI extracts and categorizes everything automatically.
               </p>
             </div>
 

@@ -10,7 +10,7 @@ export function SupportSection() {
       <ul className="space-y-3 text-sm text-gray-700">
         <li><span className="font-medium">Email:</span> <a href="mailto:support@cutthespend.com" className="text-primary-600 hover:underline">support@cutthespend.com</a></li>
         <li><span className="font-medium">Live Chat:</span> In-app during business hours</li>
-        <li><span className="font-medium">Helpdesk:</span> <a href="https://help.cutthespend.com" className="text-primary-600 hover:underline">help.cutthespend.com</a></li>
+        <li><span className="font-medium">Phone:</span> +91 9884020176</li>
         <li><span className="font-medium">Response Time:</span> Under 24 hours (avg)</li>
       </ul>
     </section>

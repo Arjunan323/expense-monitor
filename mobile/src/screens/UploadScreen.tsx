@@ -431,7 +431,7 @@ export const UploadScreen: React.FC = () => {
           }
         </Text>
         <Text style={styles.uploadHint}>
-          We support most Indian banks • PDF files only • Max 10MB per file
+          We support most banks • PDF files only • Max 10MB per file
         </Text>
   </TouchableOpacity>
   )}

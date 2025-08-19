@@ -172,7 +172,7 @@ export const Dashboard: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-blue-800">
             <div className="flex items-start space-x-2">
               <span className="flex-shrink-0 w-6 h-6 bg-blue-200 rounded-full flex items-center justify-center text-xs font-bold text-blue-900">1</span>
-              <p>Upload PDF bank statements from any Indian bank</p>
+              <p>Upload PDF bank statements from any bank</p>
             </div>
             <div className="flex items-start space-x-2">
               <span className="flex-shrink-0 w-6 h-6 bg-blue-200 rounded-full flex items-center justify-center text-xs font-bold text-blue-900">2</span>
