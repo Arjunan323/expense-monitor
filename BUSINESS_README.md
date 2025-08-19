@@ -6,7 +6,7 @@ Data-driven personal & small-business financial intelligence: upload multi-bank 
 Core
 - PDF statement ingestion (multi-file, password-protected support, size & plan validation)
 - Async extraction pipeline with background job tracking (SSE + resilient polling fallback)
-- GPT / OCR hybrid parsing (Python lambda) -> normalized transactions (deduplicated via txnHash)
+- GPT / OCR hybrid parsing (Python lambda) -> normalized transactions
 - Multi-bank aggregation, per-bank toggles, category rollups, recent activity & usage stats
 - Transaction de-duplication (backend ingestion + dashboard in-memory guard for overlapping statements)
 
@@ -25,11 +25,10 @@ Reliability & Quality
 - Global exception handling with structured ErrorResponse codes
 - Streaming endpoints protected & sanitized (logging aspect avoids deep entity recursion)
 - Connection / pool safety: async processing off main transaction, emitter cleanup to prevent leaks
-- Duplicate transaction prevention: txnHash column + index; dashboard dedupe fallback
 
 ## High-Level Architecture
 1. Upload: Frontend posts multipart PDF (optional password) -> backend validates plan, stores temp file & creates async job (StatementJob).
-2. Async Processing: Background processor extracts pages, routes to Python extraction service (OCR + GPT), parses transactions, computes txnHash, persists unique rows, updates progress.
+2. Async Processing: Background processor extracts pages, routes to Python extraction service (OCR + GPT), parses transactions, persists unique rows, updates progress.
 3. Streaming Updates: Client subscribes via /statement-jobs/{id}/stream (SSE). Progress/state events broadcast until COMPLETED/FAILED. Fallback polling with exponential backoff if SSE unavailable.
 4. Analytics: Dashboard aggregates per-bank balances (latest balance per bank), income/expense totals, category top N, recent transactions, applying optional date & bank filters with dedupe.
 5. Usage Enforcement: Monthly counters (statements, pages) + bank selection caps bound to plan; password-required flow pauses queue until user supplies password.
@@ -46,7 +45,6 @@ Reliability & Quality
 | Concept | Purpose |
 |---------|---------|
 | StatementJob | Tracks async extraction lifecycle & progress |
-| txnHash | Deterministic hash for duplicate transaction suppression |
 | UsageStats | Per-user counters & plan-derived limits |
 | Plan Types | FREE (restricted), PRO, PREMIUM (higher or unlimited limits) |
 | Job Streaming | SSE endpoint emitting job-update events |
@@ -68,7 +66,6 @@ Reliability & Quality
 - Accountant / advisor productivity: bulk ingestion & consistent normalization
 
 ## Operational Safeguards
-- Dedup at ingestion (txnHash) + second-layer dashboard dedupe for safety
 - Streaming guard rails: SSE suppressed post-completion; client prevents duplicate streams
 - Token validation hardened (invalid tokens do not partially commit responses)
 - Password-protected PDF retry loop without losing progress

@@ -28,14 +28,7 @@ public class TransactionParser {
             txn.setCategory(obj.optString("category", AppConstants.UNKNOWN));
             txn.setUser(user);
             txn.setBankName(obj.optString("bankName", fallbackBankName != null ? fallbackBankName : AppConstants.UNKNOWN));
-            // Build stable signature components (normalized)
-            String bank = txn.getBankName() != null ? txn.getBankName().trim().toUpperCase() : "";
-            String desc = txn.getDescription() != null ? txn.getDescription().trim().toUpperCase() : "";
-            String dateStr = txn.getDate() != null ? txn.getDate().toString() : "";
-            String amt = txn.getAmount() != null ? txn.getAmount().stripTrailingZeros().toPlainString() : "0";
-            String bal = txn.getBalance() != null ? txn.getBalance().stripTrailingZeros().toPlainString() : "0";
-            String signature = String.join("|", bank, dateStr, desc, amt, bal, user.getId().toString());
-            txn.setTxnHash(sha256(signature));
+          
             transactions.add(txn);
         }
         return transactions;
@@ -53,17 +46,4 @@ public class TransactionParser {
             return BigDecimal.ZERO;
         }
 
-        private String sha256(String input) {
-            try {
-                MessageDigest md = MessageDigest.getInstance("SHA-256");
-                byte[] hash = md.digest(input.getBytes(StandardCharsets.UTF_8));
-                StringBuilder sb = new StringBuilder();
-                for (byte b : hash) {
-                    sb.append(String.format("%02x", b));
-                }
-                return sb.toString();
-            } catch (Exception e) {
-                return null;
-            }
-        }
 }

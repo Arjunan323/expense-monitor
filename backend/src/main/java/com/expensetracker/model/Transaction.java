@@ -19,9 +19,6 @@ public class Transaction {
     private BigDecimal balance;
     private String category;
     private String bankName;
-    // Deterministic content hash used for idempotent ingestion & deduplication
-    @Column(name = "txn_hash", length = 64)
-    private String txnHash;
 
     @ManyToOne
     @JoinColumn(name = "user_id")
@@ -44,6 +41,4 @@ public class Transaction {
     public void setUser(User user) { this.user = user; }
     public String getBankName() { return bankName; }
     public void setBankName(String bankName) { this.bankName = bankName; }
-    public String getTxnHash() { return txnHash; }
-    public void setTxnHash(String txnHash) { this.txnHash = txnHash; }
 }

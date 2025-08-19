@@ -93,19 +93,6 @@ public class AsyncStatementProcessor {
             statementJobRepository.save(job);
             var rawStatement = rawStatementPersister.persist(user, originalFilename, output, numPages);
             var transactions = transactionParser.parse(output, user, rawStatement.getBankName());
-            // Deduplicate by txnHash (idempotent ingestion of previously uploaded statements)
-            java.util.Set<String> hashes = transactions.stream()
-                .map(t -> t.getTxnHash())
-                .filter(java.util.Objects::nonNull)
-                .collect(java.util.stream.Collectors.toSet());
-            if (!hashes.isEmpty()) {
-                var existing = transactionRepository.findExistingHashes(user, hashes);
-                if (existing != null && !existing.isEmpty()) {
-                    transactions = transactions.stream()
-                        .filter(t -> t.getTxnHash() == null || !existing.contains(t.getTxnHash()))
-                        .toList();
-                }
-            }
             if (!transactions.isEmpty()) {
                 transactionRepository.saveAll(transactions);
             }

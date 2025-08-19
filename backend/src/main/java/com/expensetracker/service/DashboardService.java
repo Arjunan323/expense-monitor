@@ -58,7 +58,7 @@ public class DashboardService {
     );
     // Deduplicate transactions in-memory in case multiple overlapping statements were uploaded.
     // Primary key: txnHash (if populated). Fallback composite (date|amount|balance|description|bankName).
-    List<Transaction> txns = dedupe(txnsRaw);
+       List<Transaction> txns = txnsRaw;
 
         String planType = AppConstants.PLAN_FREE;
         if (user.getSubscription() != null && AppConstants.STATUS_ACTIVE.equals(user.getSubscription().getStatus())) {
@@ -96,7 +96,7 @@ public class DashboardService {
         for (Map.Entry<String, List<Transaction>> entry : bankGroups.entrySet()) {
             String bank = entry.getKey();
             // Deduplicate again per-bank (cheap) to ensure any bank-specific duplicates are removed
-            List<Transaction> list = dedupe(entry.getValue());
+            List<Transaction> list = entry.getValue();
             transactionCountByBank.put(bank, list.size());
             // Latest balance for that bank (same logic as total) – assume sorted by date desc
             double bankBalance = list.stream()
@@ -215,35 +215,5 @@ public class DashboardService {
                .append(t.getCategory()).append("\n");
         }
         return csv.toString();
-    }
-
-    /**
-     * Deduplicate transactions (handles overlapping statement uploads). Prefers txnHash uniqueness when present.
-     */
-    private List<Transaction> dedupe(List<Transaction> input) {
-        if (input == null || input.size() < 2) return input == null ? java.util.Collections.emptyList() : input;
-        Map<String, Transaction> seen = new LinkedHashMap<>();
-        for (Transaction t : input) {
-            if (t == null) continue;
-            String key = null;
-            try {
-                java.lang.reflect.Field f = t.getClass().getDeclaredField("txnHash");
-                f.setAccessible(true);
-                Object hv = f.get(t);
-                if (hv instanceof String s && !s.isBlank()) {
-                    key = "H|" + s;
-                }
-            } catch (Exception ignored) { /* field absent */ }
-            if (key == null) {
-                key = "C|" + (t.getDate() != null ? t.getDate().toString() : "") + "|" +
-                        (t.getAmount() != null ? t.getAmount().toPlainString() : "") + "|" +
-                        (t.getBalance() != null ? t.getBalance().toPlainString() : "") + "|" +
-                        (t.getDescription() != null ? t.getDescription() : "") + "|" +
-                        (t.getBankName() != null ? t.getBankName() : "");
-            }
-            // Keep the first occurrence (earliest in current ordering) – assumes repository order roughly insertion / id asc.
-            seen.putIfAbsent(key, t);
-        }
-        return new ArrayList<>(seen.values());
     }
 }
