@@ -32,6 +32,7 @@ import { ContactSection } from './ContactUs';
 import { PrivacyPolicySection } from './PrivacyPolicy';
 import { TermsSection } from './TermsOfService';
 import { Modal } from './ui/Modal';
+import BrandLogo from './ui/BrandLogo';
 
 export const LandingPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -84,17 +85,8 @@ export const LandingPage: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-18">
             <div className="logo-container pt-4">
-              <div className="logo-icon">
-                <img 
-                  src="/logo.png" 
-                  alt="CutTheSpend" 
-                  className="w-8 h-8"
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                    target.nextElementSibling?.classList.remove('hidden');
-                  }}
-                />
+              <div className="">
+                <BrandLogo className="w-8 h-10" size={40} />
                 <Scissors className="w-6 h-6 text-white hidden" />
               </div>
               <div>
@@ -660,17 +652,8 @@ export const LandingPage: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div className="col-span-1 md:col-span-2">
               <div className="logo-container mb-6">
-                <div className="logo-icon">
-                  <img 
-                    src="/logo.png" 
-                    alt="CutTheSpend" 
-                    className="w-8 h-8"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.style.display = 'none';
-                      target.nextElementSibling?.classList.remove('hidden');
-                    }}
-                  />
+                <div className="">
+                  <BrandLogo className="w-8 h-10" size={40} />
                   <Scissors className="w-6 h-6 text-white hidden" />
                 </div>
                 <div>

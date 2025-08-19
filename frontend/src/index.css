@@ -60,8 +60,14 @@
     @apply flex items-center space-x-3;
   }
 
+  /* Logo background circle */
   .logo-icon {
-    @apply w-10 h-10 rounded-2xl flex items-center justify-center bg-gradient-green shadow-glow-green;
+    @apply w-11 h-11 rounded-full flex items-center justify-center bg-gradient-to-br from-brand-green-500 via-brand-green-400 to-brand-green-300 shadow-funky relative overflow-hidden;
+  }
+  /* Optional subtle inner ring for definition */
+  .logo-icon::after {
+    content: '';
+    @apply absolute inset-0 rounded-full ring-1 ring-white/40 pointer-events-none;
   }
 
   .logo-text {

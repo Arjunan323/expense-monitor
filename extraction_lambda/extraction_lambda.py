@@ -47,6 +47,63 @@ def chunk_by_rows(text: str, header_row: str, rows_per_chunk: int = 50) -> List[
 
     return chunks
 
+# -------------- Footer / Legend Stripping --------------
+LEGEND_TRIGGER_KEYWORDS = [
+    "legends", "legend :", "legend:", "++++ end of statement", "end of statement", "this is a system generated", "registered office", "branch address",
+    "gst list", "gstin", "hsbc site list", "terms and conditions", "for any further clarifications", "cheque books", "rbi notification", "non cts cheque",
+    "goods and services tax", "visit our website", "for more details", "valuable feedback", "nomination facility", "harmonized system nomenclature"
+]
+
+# Descriptions that are almost certainly legend entries (not real transactions)
+LEGEND_DESCRIPTION_BLACKLIST = {
+    "interest paid to customer",
+    "interest collected from the customer",
+    "cheque clearing transaction",
+    "transaction through internet banking",
+    "cash withdrawal through atm",
+    "pos purchase",
+    "surcharge on usage of debit card at pumps/railway ticket purchase or hotel tips",
+    "difference in rates on usage of card internationally",
+}
+
+def strip_footer_and_legends(text: str) -> str:
+    """Remove footer / legend / glossary sections so they are not hallucinated as transactions.
+
+    Additional heuristics for varied bank footers:
+    - If we see 3 consecutive long narrative lines ( >160 chars, many spaces) without digits in money/date patterns, treat the rest as footer.
+    - Trigger phrases (LEGEND_TRIGGER_KEYWORDS) immediately start footer removal.
+    - Remove glossary pattern CODE - Description lines.
+    """
+    if not text:
+        return text
+    cleaned_lines: List[str] = []
+    narrative_run = 0
+    stop = False
+    for raw in text.splitlines():
+        line = raw.rstrip()
+        if not line.strip():
+            continue
+        lower = line.lower()
+        if any(k in lower for k in LEGEND_TRIGGER_KEYWORDS):
+            stop = True
+        # Heuristic: narrative paragraph line
+        has_money_or_date = bool(__import__('re').search(r"(\d{1,2}[-/][A-Za-z]{3}|\d{4}-\d{2}-\d{2}|\d+\.\d{2})", line))
+        if not has_money_or_date and len(line) > 160 and line.count(' ') > 15:
+            narrative_run += 1
+        else:
+            narrative_run = 0
+        if narrative_run >= 3:
+            stop = True
+        if stop:
+            continue
+        # Glossary style lines CODE - Description
+        if " - " in line:
+            left = line.split(" - ", 1)[0].strip()
+            if 2 <= len(left) <= 15 and left.replace('.', '').replace('/', '').replace('-', '').isalpha():
+                continue
+        cleaned_lines.append(line.strip())
+    return "\n".join(cleaned_lines)
+
 # -------------- Groq Calls --------------
 def detect_bank_name(text: str) -> Optional[str]:
     """Detect bank name once from a sample of statement text."""
@@ -86,25 +143,65 @@ Bank Name:"""
 def call_groq_text_vision(chunk, header_row, bank_name=None):
     """Call Groq model with structured output enforcing an array of transactions."""
     prompt = f"""
-You are a financial assistant helping parse and categorize bank transactions.
+You are a precise bank statement transaction extractor.
 
-Bank Name: {bank_name or "Detect if missing"}
+GOAL: Extract ONLY genuine monetary transactions from the provided statement text. Output must follow the JSON schema already supplied (array of objects). Do NOT wrap inside any extra object (no type/value wrappers) and do NOT add commentary.
 
-Header row:
+BANK NAME:
+- In every transaction, set bankName to: {bank_name or "the bank you infer once"}.
+- If not given above, infer a SHORT uppercase bank identifier (e.g., HDFC, ICICI, SBI, AXIS, CITI, HSBC, YES) exactly once and reuse it.
+
+INPUT METADATA
+Header row (use to map columns & infer debit/credit semantics):
 {header_row}
 
-Bank statement rows:
+Statement text slice (may contain noise / footer):
 {chunk}
 
-For each transaction row:
-- date (YYYY-MM-DD)
-- description
-- amount (negative for debit, positive for credit)
-- balance (if available, else null)
-- category (Food, Travel, Salary, etc.)
-- bankName (use {bank_name or "the detected value"} for all rows)
+INCLUDE a row ONLY if ALL are true:
+1. It corresponds to a financial movement line (not a note, footer, legend, address, compliance paragraph, or glossary definition).
+2. Contains a plausible date and an amount.
+3. Description is not purely a legend/glossary explanation (e.g., 'Interest paid to customer', 'Transaction through Internet Banking', 'POS purchase' as a definition line without its own date/amount context).
 
-Return ONLY a JSON array of transactions.
+DATE NORMALIZATION:
+- Accept common date formats (DD-MM-YYYY, DD/MM/YYYY, DD Mon YYYY, DD-Mon-YY, YYYY-MM-DD).
+- Convert all to ISO YYYY-MM-DD.
+- If day or month is ambiguous or invalid -> skip the line.
+
+AMOUNT & SIGN RULES:
+- If separate Debit/Credit columns: debit -> negative, credit -> positive.
+- If a single Amount plus a Type/Dr/Cr indicator: Dr/DEBIT => negative, Cr/CREDIT => positive.
+- If no indicator columns: keep sign as shown; do NOT guess.
+- Never fabricate amounts. Use numeric characters only; strip commas.
+- Ignore thousands separators; preserve decimals (two decimal places if present).
+
+BALANCE:
+- Include balance only if clearly present on the same line; else set to null (do NOT compute).
+
+CATEGORY:
+- Short semantic label (examples: Salary, Food, Groceries, Travel, Fuel, Rent, Utilities, Shopping, Transfer, Bank Fee, Interest, Investment, Insurance, Tax, Entertainment, Healthcare, Education, Misc).
+- If uncertain choose a broad neutral category (Misc or Transfer) rather than hallucinating specifics.
+
+EXCLUSIONS (DO NOT OUTPUT):
+- Legends/glossaries after sections like 'LEGENDS', 'LEGEND', '++++ End of Statement ++++'.
+- Lines of the form CODE - Explanation (e.g., INT.PD - Interest paid to customer).
+- Long narrative paragraphs (regulatory / GST / address / RBI notification / disclaimers / website links / nomination facility text).
+- State GSTIN lists, address blocks, signature notices, 'This is a system generated output'.
+
+DEDUPLICATION:
+- If an identical transaction line (same date, description, amount, balance) repeats inside this chunk, include only once.
+
+OUTPUT FORMAT STRICTNESS:
+- Return ONLY a JSON array of transaction objects.
+ - Do NOT return any wrapping object like {{"type":..., "value": [...]}}.
+- Do NOT include comments, prose, or trailing text.
+
+POSITIVE EXAMPLE (conceptual):
+[
+    {{"date":"2025-02-18","description":"ATM Withdrawal Chennai","amount":-2000.00,"balance":15340.55,"category":"Cash","bankName":"AXIS"}}
+]
+
+If no valid transactions in this slice: return []
 """
 
     # JSON Schema for structured output
@@ -185,6 +282,13 @@ def postprocess_transactions(transactions: List[Dict], header: List[str], bank_n
                 txn["balance"] = float(txn["balance"])
             if bank_name:
                 txn["bankName"] = bank_name
+            # Legend / glossary description blacklist
+            desc = str(txn.get("description", "")).strip().lower()
+            if desc in LEGEND_DESCRIPTION_BLACKLIST:
+                continue
+            # Additional heuristic: skip very long paragraph-like descriptions unlikely for a transaction
+            if len(desc) > 120 and desc.count(' ') > 15:
+                continue
             cleaned.append(txn)
         except Exception:
             continue
@@ -230,8 +334,11 @@ def extract_transactions_from_pdf(pdf_path: str, password: Optional[str] = None)
     # Detect bank name once
     bank_name = detect_bank_name(first_pages_text) or None
 
+    # Strip footer / legends before chunking
+    all_text_clean = strip_footer_and_legends(all_text)
+
     # Chunk rows instead of characters
-    chunks = chunk_by_rows(all_text, header_row, rows_per_chunk=50)
+    chunks = chunk_by_rows(all_text_clean, header_row, rows_per_chunk=50)
 
     all_transactions = []
     for chunk in chunks:

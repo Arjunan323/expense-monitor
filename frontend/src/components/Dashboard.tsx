@@ -68,12 +68,17 @@ export const Dashboard: React.FC = () => {
     setDateRange({ start, end });
   };
 
-  const fetchDashboardData = async () => {
+  // UPDATED: allow optional override list of banks to include in query params
+  const fetchDashboardData = async (banksOverride?: string[]) => {
     try {
       setLoading(true);
-  const params = new URLSearchParams();
-  params.append('startDate', dateRange.start || '');
-  params.append('endDate', dateRange.end || '');
+      const params = new URLSearchParams();
+      params.append('startDate', dateRange.start || '');
+      params.append('endDate', dateRange.end || '');
+      const banksToUse = banksOverride ?? selectedBanks;
+      if (banksToUse && banksToUse.length > 0) {
+        params.append('banks', banksToUse.join(','));
+      }
 
       const data = await apiCall<DashboardStats>('GET', `/dashboard/summary?${params.toString()}`);
       setStats(data);
@@ -216,6 +221,7 @@ export const Dashboard: React.FC = () => {
             onClick={() => {
               setDateRange({ start: '', end: '' });
               setSelectedBanks(stats.bankSources);
+              fetchDashboardData(stats.bankSources); // refetch with reset banks
             }}
           >
             Reset Filters
@@ -277,7 +283,10 @@ export const Dashboard: React.FC = () => {
                   <button
                     className="bg-gradient-green text-white px-6 py-3 rounded-2xl font-semibold text-sm shadow-glow-green hover:scale-105 active:scale-95 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={bankDraft.sort().join(',') === selectedBanks.sort().join(',')}
-                    onClick={() => setSelectedBanks(bankDraft)}
+                    onClick={() => {
+                      setSelectedBanks(bankDraft);
+                      fetchDashboardData(bankDraft); // immediate refetch with chosen banks
+                    }}
                   >
                     Apply ({bankDraft.length}/{usage?.combinedBankLimit || (usage?.planType === 'PREMIUM' ? 5 : usage?.planType === 'PRO' ? 3 : 2)})
                   </button>
@@ -352,6 +361,7 @@ export const Dashboard: React.FC = () => {
               const allBanksList = allBanks.length ? allBanks : stats.bankSources;
               setSelectedBanks(allBanksList);
               setBankDraft(allBanksList);
+              fetchDashboardData(allBanksList); // refetch with all banks
             }}
             className="bg-white border-2 border-brand-gray-200 hover:border-brand-gray-400 text-brand-gray-700 hover:text-brand-gray-900 px-6 py-2 rounded-2xl font-semibold text-sm transition-all duration-300 hover:shadow-funky flex items-center space-x-2"
           >

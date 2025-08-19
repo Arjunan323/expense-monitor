@@ -1,4 +1,5 @@
 import React from 'react';
+import BrandLogo from '../ui/BrandLogo';
 import { NavLink } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -29,17 +30,8 @@ export const Sidebar: React.FC = () => {
           {/* Logo Section */}
           <div className="px-6 mb-8">
             <div className="logo-container">
-              <div className="logo-icon">
-                <img 
-                  src="/logo.png" 
-                  alt="CutTheSpend" 
-                  className="w-8 h-8"
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                    target.nextElementSibling?.classList.remove('hidden');
-                  }}
-                />
+              <div className="">
+                <BrandLogo className="w-8 h-10" size={40} />
                 <Scissors className="w-6 h-6 text-white hidden" />
               </div>
               <div>

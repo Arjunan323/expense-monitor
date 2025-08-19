@@ -9,3 +9,4 @@
 /mobile/android
 node_modules
 /backend/src/main/resources/wallet/
+/frontend/dist

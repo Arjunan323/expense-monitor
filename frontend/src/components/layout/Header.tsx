@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { LogOut, User, Settings, CreditCard, Scissors, Menu, X } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { navigation } from './Sidebar';
+import BrandLogo from '../ui/BrandLogo';
 
 export const Header: React.FC = () => {
   const { user, logout } = useAuth();
@@ -32,18 +33,8 @@ export const Header: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <div className="flex justify-between items-center h-16">
           <div className="logo-container">
-            <div className="logo-icon">
-              <img 
-                src="/logo.png" 
-                alt="CutTheSpend" 
-                className="w-8 h-8"
-                onError={(e) => {
-                  // Fallback to scissors icon if logo fails to load
-                  const target = e.target as HTMLImageElement;
-                  target.style.display = 'none';
-                  target.nextElementSibling?.classList.remove('hidden');
-                }}
-              />
+            <div className="">
+              <BrandLogo className="w-8 h-10" />
               <Scissors className="w-6 h-6 text-white hidden" />
             </div>
             <div>
@@ -116,8 +107,8 @@ export const Header: React.FC = () => {
           <div className="relative flex flex-col w-full max-w-xs  ml-0 bg-white border-r border-brand-gray-100 shadow-2xl animate-[slideIn_.25s_ease-out] h-fit">
             <div className="flex items-center justify-between px-5 h-16 border-b border-brand-gray-100"> 
               <div className="flex items-center space-x-2">
-                <div className="logo-icon">
-                  <Scissors className="w-6 h-6 text-white" />
+                <div className="">
+                  <BrandLogo className="w-8 h-10" size={40} />
                 </div>
                 <span className="font-heading font-bold text-lg bg-gradient-to-r from-brand-green-600 to-brand-blue-600 bg-clip-text text-transparent">CutTheSpend</span>
               </div>

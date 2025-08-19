@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight, Scissors, Sparkles } from 'lucide-react';
 import { LoadingSpinner } from './ui/LoadingSpinner';
+import BrandLogo from './ui/BrandLogo';
 import toast from 'react-hot-toast';
 
 export const Auth: React.FC = () => {
@@ -55,17 +56,8 @@ export const Auth: React.FC = () => {
 
       <div className="max-w-md w-full space-y-8 relative z-10">
         <div className="text-center">
-          <div className="mx-auto w-20 h-20 bg-gradient-green rounded-3xl flex items-center justify-center mb-6 shadow-glow-green animate-bounce-gentle">
-            <img 
-              src="/logo.png" 
-              alt="CutTheSpend" 
-              className="w-12 h-12"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.style.display = 'none';
-                target.nextElementSibling?.classList.remove('hidden');
-              }}
-            />
+          <div className="mx-auto w-20 h-20 rounded-3xl flex items-center justify-center mb-6  animate-bounce-gentle">
+            <BrandLogo className="w-14 h-14" size={56} />
             <Scissors className="w-10 h-10 text-white hidden" />
           </div>
           <h1 className="text-3xl font-heading font-bold gradient-text mb-2">
