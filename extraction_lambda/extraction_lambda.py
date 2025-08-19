@@ -49,29 +49,37 @@ def chunk_by_rows(text: str, header_row: str, rows_per_chunk: int = 50) -> List[
 
 # -------------- Groq Calls --------------
 def detect_bank_name(text: str) -> Optional[str]:
-    """Call Groq once to detect the bank name from the first 2–3 pages."""
+    """Detect bank name once from a sample of statement text."""
+    snippet = (text or "").strip()
+    if not snippet:
+        return None
+    if len(snippet) > 4000:
+        snippet = snippet[:4000]
     prompt = f"""
-Given the following bank statement text, identify the bank or card issuer name.
-Examples: "HDFC", "ICICI", "SBI", "Axis", "Citi", "HSBC".
-
-Text:
-{text}
-
-Return ONLY the bank name as plain text (no JSON, no extra words).
-"""
+Identify the bank or card issuer SHORT name (one token like HDFC, ICICI, SBI, Axis, Citi, HSBC, Yes, Kotak, BoB, PNB, IDFC) from the statement snippet below.
+If unsure return the best guess.
+Reply with ONLY the name.
+---
+{snippet}
+---
+Bank Name:"""
     try:
-        completion = client.chat.completions.create(
+        resp = client.chat.completions.create(
             model="meta-llama/llama-4-scout-17b-16e-instruct",
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
-            max_completion_tokens=50,
+            max_completion_tokens=16,
             top_p=1,
             stream=False,
         )
-        raw_content = completion.choices[0].message.content.strip()
-        return raw_content.split()[0] if raw_content else None
+        content = (resp.choices[0].message.content or "").strip()
+        # Take first word, strip punctuation
+        bank = content.split()[0] if content else None
+        if bank:
+            bank = bank.strip().strip(':,.')
+        return bank
     except Exception as e:
-        logging.error(f"Bank name detection failed: {e}")
+        logging.warning(f"Bank name detection failed: {e}")
         return None
 
 
@@ -139,15 +147,19 @@ Return ONLY a JSON array of transactions.
                     raw_content = raw_content[4:].strip()
             try:
                 data = json.loads(raw_content)
-                if isinstance(data, dict) and "value" in data and isinstance(data["value"], list):
-                    data = data["value"]
+                # Unwrap various structured wrappers: {type, value|items|data}
+                if isinstance(data, dict):
+                    for key in ("value", "items", "data"):
+                        if key in data and isinstance(data[key], list):
+                            data = data[key]
+                            break
                 if not isinstance(data, list):
-                    logging.warning("Parsed JSON is not a list of transactions; got %s", type(data))
+                    logging.warning("Parsed JSON is not a list; got %s", type(data))
                     return []
                 return data
             except json.JSONDecodeError:
                 logging.warning("Groq response JSON parse error (attempt %s).", attempt)
-                return []
+                continue
         except Exception as e:  # Retry on rate limits
             msg = str(e).lower()
             is_rate = "rate limit" in msg or "rate_limit_exceeded" in msg
@@ -242,5 +254,6 @@ if __name__ == "__main__":
 
     pdf_path = sys.argv[1]
     pdf_password = sys.argv[2] if len(sys.argv) > 2 else None
+    # txns = extract_transactions_from_pdf("C:\\Users\\admin\\Downloads\\XXXXXXXXXX3449-15-02-2025to14-08-2025.pdf", password="ARJU962196663")
     txns = extract_transactions_from_pdf(pdf_path, password=pdf_password)
     print(json.dumps(txns, indent=2))
