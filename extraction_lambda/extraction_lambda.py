@@ -97,7 +97,17 @@ Return ONLY a JSON array of transactions. If none, return [].
                 if raw_content.lower().startswith("json"):
                     raw_content = raw_content[4:].strip()
             try:
-                return json.loads(raw_content)
+                data = json.loads(raw_content)
+                # Groq structured output may wrap the schema result as {"type": "name", "value": <schema>}
+                if isinstance(data, dict):
+                    if 'value' in data and isinstance(data['value'], list):
+                        data = data['value']
+                    elif 'data' in data and isinstance(data['data'], list):  # fallback key variant
+                        data = data['data']
+                if not isinstance(data, list):
+                    logging.warning("Parsed JSON is not a list of transactions; got type %s", type(data))
+                    return []
+                return data
             except json.JSONDecodeError:
                 logging.warning("Groq response could not be parsed as JSON (attempt %s).", attempt)
                 return []
