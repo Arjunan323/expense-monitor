@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -9,61 +9,193 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { MonthlyTrendsScreen } from './analytics/MonthlyTrendsScreen';
+import { BudgetTrackingScreen } from './analytics/BudgetTrackingScreen';
+
+type AnalyticsView = 'overview' | 'trends' | 'budget' | 'alerts' | 'forecast' | 'goals' | 'tax';
 
 export const AnalyticsScreen: React.FC = () => {
   const navigation = useNavigation<any>();
+  const [currentView, setCurrentView] = useState<AnalyticsView>('overview');
+
+  const analyticsMenuItems = [
+    {
+      id: 'trends' as AnalyticsView,
+      title: 'Monthly Spending Trends',
+      description: 'Track and compare spending patterns over time',
+      icon: 'trending-up',
+      color: '#00B77D',
+      emoji: '📈'
+    },
+    {
+      id: 'budget' as AnalyticsView,
+      title: 'Budget Tracking',
+      description: 'Set budgets by category and monitor progress',
+      icon: 'target',
+      color: '#0077B6',
+      emoji: '🎯'
+    },
+    {
+      id: 'alerts' as AnalyticsView,
+      title: 'Spending Alerts',
+      description: 'Get notified of unusual spending patterns',
+      icon: 'warning',
+      color: '#F59E0B',
+      emoji: '🚨'
+    },
+    {
+      id: 'forecast' as AnalyticsView,
+      title: 'Cash Flow Forecast',
+      description: 'Predict future financial position',
+      icon: 'analytics',
+      color: '#8B5CF6',
+      emoji: '🔮'
+    },
+    {
+      id: 'goals' as AnalyticsView,
+      title: 'Goal Tracking',
+      description: 'Track savings goals and debt reduction',
+      icon: 'trophy',
+      color: '#EC4899',
+      emoji: '🏆'
+    },
+    {
+      id: 'tax' as AnalyticsView,
+      title: 'Tax Benefit Tracker',
+      description: 'Maximize tax savings with smart categorization',
+      icon: 'calculator',
+      color: '#6366F1',
+      emoji: '📊'
+    }
+  ];
+
+  if (currentView !== 'overview') {
+    return (
+      <View style={styles.container}>
+        {/* Back Navigation */}
+        <View style={styles.backNavigation}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => setCurrentView('overview')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-back" size={20} color="#00B77D" />
+            <Text style={styles.backButtonText}>Back to Analytics</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Render Selected View */}
+        {currentView === 'trends' && <MonthlyTrendsScreen />}
+        {currentView === 'budget' && <BudgetTrackingScreen />}
+        {/* Add other screens as needed */}
+      </View>
+    );
+  }
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Analytics</Text>
+        <Text style={styles.headerTitle}>Advanced Analytics</Text>
         <Text style={styles.headerSubtitle}>
-          Advanced financial insights and analytics are coming soon
+          Powerful insights to help you make smarter financial decisions
         </Text>
       </View>
 
-      {/* Coming Soon Card */}
-      <View style={styles.comingSoonCard}>
-        <View style={styles.iconContainer}>
-          <Ionicons name="bar-chart-outline" size={48} color="#0ea5e9" />
-        </View>
-        <Text style={styles.comingSoonTitle}>
-          Advanced Analytics Coming Soon
-        </Text>
-        <Text style={styles.comingSoonDescription}>
-          We're building powerful analytics features including budgets, spending trends, 
-          anomaly detection, and personalized financial insights. Help us prioritize 
-          what matters most to you.
-        </Text>
-        
-        <View style={styles.featuresGrid}>
-          <View style={styles.featureItem}>
-            <Ionicons name="trending-up-outline" size={32} color="#0ea5e9" />
-            <Text style={styles.featureTitle}>Spending Trends</Text>
-            <Text style={styles.featureDescription}>
-              Month-over-month analysis and spending pattern detection
-            </Text>
+      {/* Quick Stats */}
+      <View style={styles.quickStats}>
+        <View style={styles.statCard}>
+          <View style={[styles.statIcon, { backgroundColor: '#CCFBEF' }]}>
+            <Ionicons name="trending-up" size={20} color="#00B77D" />
           </View>
-          <View style={styles.featureItem}>
-            <Ionicons name="bar-chart-outline" size={32} color="#0ea5e9" />
-            <Text style={styles.featureTitle}>Budget Tracking</Text>
-            <Text style={styles.featureDescription}>
-              Set budgets by category and track your progress
-            </Text>
-          </View>
-          <View style={styles.featureItem}>
-            <Ionicons name="time-outline" size={32} color="#0ea5e9" />
-            <Text style={styles.featureTitle}>Forecasting</Text>
-            <Text style={styles.featureDescription}>
-              Predict future expenses and cash flow patterns
-            </Text>
-          </View>
+          <Text style={styles.statLabel}>Spending Trend</Text>
+          <Text style={[styles.statValue, { color: '#00B77D' }]}>-12%</Text>
+          <Text style={styles.statSubtext}>vs last month</Text>
         </View>
 
-  <TouchableOpacity style={styles.feedbackButton} onPress={() => navigation.navigate('AnalyticsFeedback')}>
-          <Ionicons name="chatbubble-outline" size={20} color="#ffffff" />
-          <Text style={styles.feedbackButtonText}>Tell us what analytics you need</Text>
-        </TouchableOpacity>
+        <View style={styles.statCard}>
+          <View style={[styles.statIcon, { backgroundColor: '#E0F2FE' }]}>
+            <Ionicons name="target" size={20} color="#0077B6" />
+          </View>
+          <Text style={styles.statLabel}>Budget Adherence</Text>
+          <Text style={[styles.statValue, { color: '#0077B6' }]}>85%</Text>
+          <Text style={styles.statSubtext}>This month</Text>
+        </View>
+
+        <View style={styles.statCard}>
+          <View style={[styles.statIcon, { backgroundColor: '#FEF3C7' }]}>
+            <Ionicons name="warning" size={20} color="#F59E0B" />
+          </View>
+          <Text style={styles.statLabel}>Active Alerts</Text>
+          <Text style={[styles.statValue, { color: '#F59E0B' }]}>3</Text>
+          <Text style={styles.statSubtext}>Need attention</Text>
+        </View>
+
+        <View style={styles.statCard}>
+          <View style={[styles.statIcon, { backgroundColor: '#F3E8FF' }]}>
+            <Ionicons name="trophy" size={20} color="#8B5CF6" />
+          </View>
+          <Text style={styles.statLabel}>Goals Progress</Text>
+          <Text style={[styles.statValue, { color: '#8B5CF6' }]}>68%</Text>
+          <Text style={styles.statSubtext}>Average completion</Text>
+        </View>
+      </View>
+
+      {/* Analytics Menu */}
+      <View style={styles.menuSection}>
+        <Text style={styles.menuTitle}>Choose Analytics Tool</Text>
+        <Text style={styles.menuSubtitle}>Select the analysis you want to explore</Text>
+        
+        <View style={styles.menuGrid}>
+          {analyticsMenuItems.map(item => (
+            <TouchableOpacity
+              key={item.id}
+              style={styles.menuItem}
+              onPress={() => setCurrentView(item.id)}
+              activeOpacity={0.8}
+            >
+              <View style={styles.menuItemHeader}>
+                <View style={[styles.menuIcon, { backgroundColor: item.color }]}>
+                  <Ionicons name={item.icon as any} size={24} color="#FFFFFF" />
+                </View>
+                <Text style={styles.menuEmoji}>{item.emoji}</Text>
+              </View>
+              
+              <Text style={styles.menuItemTitle}>{item.title}</Text>
+              <Text style={styles.menuItemDescription}>{item.description}</Text>
+              
+              <View style={styles.menuItemFooter}>
+                <Text style={styles.exploreText}>Explore</Text>
+                <Ionicons name="arrow-forward" size={16} color="#00B77D" />
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      {/* Coming Soon */}
+      <View style={styles.comingSoonCard}>
+        <View style={styles.comingSoonIcon}>
+          <Ionicons name="rocket" size={32} color="#FFFFFF" />
+        </View>
+        <Text style={styles.comingSoonTitle}>More Analytics Coming Soon! 🚀</Text>
+        <Text style={styles.comingSoonDescription}>
+          We're working on even more powerful analytics features including AI-powered insights, 
+          investment tracking, and personalized financial recommendations.
+        </Text>
+        <View style={styles.comingSoonFeatures}>
+          <View style={styles.featureItem}>
+            <Text style={styles.featureEmoji}>🤖</Text>
+            <Text style={styles.featureText}>AI Insights</Text>
+          </View>
+          <View style={styles.featureItem}>
+            <Text style={styles.featureEmoji}>📊</Text>
+            <Text style={styles.featureText}>Investment Tracking</Text>
+          </View>
+          <View style={styles.featureItem}>
+            <Text style={styles.featureEmoji}>💡</Text>
+            <Text style={styles.featureText}>Smart Recommendations</Text>
+          </View>
+        </View>
       </View>
     </ScrollView>
   );
@@ -72,8 +204,26 @@ export const AnalyticsScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#F8FAFC',
+  },
+  contentContainer: {
     paddingBottom: Platform.OS === 'ios' ? 120 : 100,
+  },
+  backNavigation: {
+    paddingHorizontal: 24,
+    paddingTop: 60,
+    paddingBottom: 16,
+    backgroundColor: '#FFFFFF',
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#00B77D',
   },
   header: {
     backgroundColor: '#6366F1',
@@ -82,11 +232,6 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: 24,
     paddingHorizontal: 24,
-    shadowColor: '#6366F1',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 15,
-    elevation: 10,
     marginBottom: 24,
   },
   headerTitle: {
@@ -101,88 +246,165 @@ const styles = StyleSheet.create({
     opacity: 0.9,
     lineHeight: 22,
   },
-  comingSoonCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 25,
-    padding: 24,
-    marginHorizontal: 24,
+  quickStats: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 24,
     marginBottom: 24,
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#6366F1',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 8,
-    },
-    shadowOpacity: 0.15,
-    shadowRadius: 15,
-    elevation: 10,
+    gap: 12,
   },
-  iconContainer: {
-    width: 96,
-    height: 96,
-    backgroundColor: '#6366F1',
-    borderRadius: 48,
+  statCard: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  statIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 8,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  statSubtext: {
+    fontSize: 10,
+    color: '#9CA3AF',
+    textAlign: 'center',
+  },
+  menuSection: {
+    paddingHorizontal: 24,
     marginBottom: 24,
-    shadowColor: '#6366F1',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
+  },
+  menuTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  menuSubtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginBottom: 20,
+  },
+  menuGrid: {
+    gap: 16,
+  },
+  menuItem: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 2,
+    borderColor: '#F3F4F6',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
     shadowRadius: 12,
-    elevation: 8,
+    elevation: 6,
+  },
+  menuItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  menuIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  menuEmoji: {
+    fontSize: 32,
+  },
+  menuItemTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  menuItemDescription: {
+    fontSize: 14,
+    color: '#6B7280',
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  menuItemFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  exploreText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#00B77D',
+  },
+  comingSoonCard: {
+    backgroundColor: '#6366F1',
+    marginHorizontal: 24,
+    borderRadius: 25,
+    padding: 24,
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  comingSoonIcon: {
+    width: 64,
+    height: 64,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
   },
   comingSoonTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 16,
+    color: '#FFFFFF',
+    marginBottom: 12,
     textAlign: 'center',
   },
   comingSoonDescription: {
     fontSize: 16,
-    color: '#6b7280',
+    color: 'rgba(255, 255, 255, 0.9)',
     textAlign: 'center',
     lineHeight: 22,
-    marginBottom: 32,
+    marginBottom: 20,
   },
-  featuresGrid: {
+  comingSoonFeatures: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
     width: '100%',
-    marginBottom: 32,
   },
   featureItem: {
     alignItems: 'center',
-    marginBottom: 24,
-    paddingHorizontal: 16,
-  },
-  featureTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginTop: 12,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  featureDescription: {
-    fontSize: 14,
-    color: '#6b7280',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  feedbackButton: {
-    backgroundColor: '#0ea5e9',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
     gap: 8,
   },
-  feedbackButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
+  featureEmoji: {
+    fontSize: 24,
   },
-  // removed inline feedback form styles (moved to AnalyticsFeedbackScreen)
+  featureText: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: '500',
+  },
 });

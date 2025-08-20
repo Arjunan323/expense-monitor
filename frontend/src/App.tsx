@@ -8,6 +8,12 @@ import { Dashboard } from './components/Dashboard';
 import { Transactions } from './components/Transactions';
 import { PdfUpload } from './components/PdfUpload';
 import { Analytics } from './components/Analytics';
+import { MonthlyTrends } from './components/analytics/MonthlyTrends';
+import { BudgetTracking } from './components/analytics/BudgetTracking';
+import { SpendingAlerts } from './components/analytics/SpendingAlerts';
+import { CashFlowForecast } from './components/analytics/CashFlowForecast';
+import { GoalTracking } from './components/analytics/GoalTracking';
+import { TaxTracker } from './components/analytics/TaxTracker';
 import { Statements } from './components/Statements';
 import { Billing } from './components/Billing';
 import { Settings } from './components/Settings';
@@ -90,6 +96,66 @@ const AppRoutes: React.FC = () => {
             <ProtectedRoute>
               <Layout>
                 <Analytics />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/analytics/trends"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <MonthlyTrends />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/analytics/budget"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <BudgetTracking />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/analytics/alerts"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <SpendingAlerts />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/analytics/forecast"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <CashFlowForecast />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/analytics/goals"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <GoalTracking />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/analytics/tax"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <TaxTracker />
               </Layout>
             </ProtectedRoute>
           }
