@@ -65,10 +65,10 @@ export const LandingPage: React.FC = () => {
         if (!region) region = 'IN';
         const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/public/plans?region=${region}`);
         if (!res.ok) throw new Error('Failed to load plans');
-  const data = await res.json();
-  const rank: Record<string, number> = { FREE: 0, PRO: 1, PREMIUM: 2 };
-  data.sort((a: any, b: any) => (rank[a.planType] ?? 99) - (rank[b.planType] ?? 99));
-  setPlans(data);
+        const data = await res.json();
+        const rank: Record<string, number> = { FREE: 0, PRO: 1, PREMIUM: 2 };
+        data.sort((a: any, b: any) => (rank[a.planType] ?? 99) - (rank[b.planType] ?? 99));
+        setPlans(data);
       } catch (e: any) {
         setPlansError(e.message || 'Unable to load plans');
       } finally {
