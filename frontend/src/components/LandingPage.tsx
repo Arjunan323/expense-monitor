@@ -691,9 +691,9 @@ export const LandingPage: React.FC = () => {
               <ul className="space-y-3 text-brand-gray-300">
                 <li><a href="#about" className="hover:text-brand-green-400 transition-colors duration-200">About Us</a></li>
                 <li><a href="#support" className="hover:text-brand-green-400 transition-colors duration-200">Support</a></li>
-                <li><button onClick={() => setShowContact(true)} className="hover:text-brand-green-400 transition-colors duration-200 text-left">Contact</button></li>
+                <li><button onClick={() => setShowContact(true)} className="hover:text-brand-green-400 transition-colors duration-200 text-left">Contact Us</button></li>
                 <li><button onClick={() => setShowPrivacy(true)} className="hover:text-brand-green-400 transition-colors duration-200 text-left">Privacy Policy</button></li>
-                <li><button onClick={() => setShowTerms(true)} className="hover:text-brand-green-400 transition-colors duration-200 text-left">Terms of Service</button></li>
+                <li><button onClick={() => setShowTerms(true)} className="hover:text-brand-green-400 transition-colors duration-200 text-left">Terms and Conditions</button></li>
               </ul>
             </div>
           </div>
