@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ArrowRight,
   Smartphone,
@@ -35,6 +36,7 @@ import { Modal } from './ui/Modal';
 import BrandLogo from './ui/BrandLogo';
 
 export const LandingPage: React.FC = () => {
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
@@ -540,7 +542,13 @@ export const LandingPage: React.FC = () => {
                       <li key={idx} className="text-sm text-gray-600 flex items-start"><span className="text-primary-500 mr-2">✔</span>{f}</li>
                     ))}
                   </ul>
-                  <button className={`w-full py-3 rounded-lg font-semibold transition ${p.planType === 'FREE' ? 'bg-gray-100 text-gray-700' : popular ? 'bg-primary-600 text-white hover:bg-primary-700' : 'bg-secondary-600 text-white hover:bg-secondary-700'}`}>{p.planType === 'FREE' ? 'Get Started Free' : 'Get Started'}</button>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/login')}
+                    className={`w-full py-3 rounded-lg font-semibold transition ${p.planType === 'FREE' ? 'bg-gray-100 text-gray-700' : popular ? 'bg-primary-600 text-white hover:bg-primary-700' : 'bg-secondary-600 text-white hover:bg-secondary-700'}`}
+                  >
+                    {p.planType === 'FREE' ? 'Get Started Free' : 'Get Started'}
+                  </button>
                 </div>
               );
             })}
