@@ -101,4 +101,12 @@ export const authApiCall = async <T>(url: string, body: any): Promise<T> => {
   return apiCall<T>('POST', url, body, { headers: { 'X-Auth-Attempt': 'true' }});
 };
 
+export const fetchMonthlySpendingSeriesMobile = async (from: string, to: string, opts?: { includeBanks?: boolean; includePrevYear?: boolean; topCategories?: number }) => {
+  const params = new URLSearchParams({ from, to });
+  if (opts?.includeBanks) params.append('includeBanks','true');
+  if (opts?.includePrevYear) params.append('includePrevYear','true');
+  if (opts?.topCategories) params.append('topCategories', String(opts.topCategories));
+  return apiCall<any>('GET', `/analytics/trends/spending/monthly-series?${params.toString()}`);
+};
+
 export default api;

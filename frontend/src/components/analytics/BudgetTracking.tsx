@@ -4,34 +4,50 @@ import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { formatCurrency } from '../../utils/formatters';
 import { usePreferences } from '../../contexts/PreferencesContext';
 
-interface BudgetCategory {
-  id: string;
-  name: string;
-  budget: number;
-  spent: number;
-  icon: string;
-  color: string;
+import { budgetsApi, BudgetCategoryUsageDto, BudgetSummaryResponse } from '../../api/budgets';
+import { fetchCategories } from '../../utils/api';
+import { CategoryRecord } from '../../types';
+
+interface LocalBudgetCategory extends BudgetCategoryUsageDto {
+  budget: number; // alias for monthlyBudget for existing code readability
 }
 
 export const BudgetTracking: React.FC = () => {
   const { preferences } = usePreferences();
   const [loading, setLoading] = useState(true);
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`; // YYYY-MM
+  });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   const [newCategory, setNewCategory] = useState({ name: '', budget: '', icon: '💰' });
 
-  const [budgets, setBudgets] = useState<BudgetCategory[]>([
-    { id: '1', name: 'Groceries', budget: 15000, spent: 12500, icon: '🛒', color: '#00B77D' },
-    { id: '2', name: 'Utilities', budget: 8000, spent: 9200, icon: '⚡', color: '#0077B6' },
-    { id: '3', name: 'Entertainment', budget: 5000, spent: 3800, icon: '🎬', color: '#FFD60A' },
-    { id: '4', name: 'Transport', budget: 6000, spent: 7500, icon: '🚗', color: '#8B5CF6' },
-    { id: '5', name: 'Healthcare', budget: 4000, spent: 2100, icon: '🏥', color: '#10B981' },
-  ]);
+  const [budgets, setBudgets] = useState<LocalBudgetCategory[]>([]);
+  const [summary, setSummary] = useState<BudgetSummaryResponse | null>(null);
+  const [allCategories, setAllCategories] = useState<CategoryRecord[]>([]);
 
   useEffect(() => {
-    setTimeout(() => setLoading(false), 800);
-  }, []);
+    let cancelled = false;
+    const load = async () => {
+      try {
+        setLoading(true);
+        const [cats, summaryResp] = await Promise.all([
+          fetchCategories().catch(()=>[]),
+          budgetsApi.summary(selectedMonth)
+        ]);
+        if(cancelled) return;
+        setAllCategories(cats);
+        setSummary(summaryResp);
+        setBudgets(summaryResp.categories.map(c => ({ ...c, budget: c.monthlyBudget })));
+      } catch (e) {
+        if(!cancelled) console.error('Failed to load budgets', e);
+      } finally { if(!cancelled) setLoading(false); }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [selectedMonth]);
 
   const getProgressColor = (spent: number, budget: number) => {
     const percentage = (spent / budget) * 100;
@@ -49,36 +65,37 @@ export const BudgetTracking: React.FC = () => {
     setEditValue(currentBudget.toString());
   };
 
-  const saveBudget = (id: string) => {
+  const saveBudget = async (id: string) => {
     const newBudget = parseFloat(editValue);
     if (newBudget > 0) {
-      setBudgets(prev => prev.map(b => 
-        b.id === id ? { ...b, budget: newBudget } : b
-      ));
+      try {
+  await budgetsApi.updateLimit(Number(id), newBudget);
+        // optimistic update
+        setBudgets(prev => prev.map(b => b.id === Number(id) ? { ...b, monthlyBudget: newBudget, budget: newBudget } : b));
+        // refresh summary silently
+  budgetsApi.summary(selectedMonth).then(s => { setSummary(s); setBudgets(s.categories.map(c => ({ ...c, budget: c.monthlyBudget }))); });
+      } catch(e){ console.error(e); }
     }
     setEditingId(null);
     setEditValue('');
   };
 
-  const addNewCategory = () => {
+  const addNewCategory = async () => {
     if (newCategory.name && newCategory.budget) {
-      const budget: BudgetCategory = {
-        id: Date.now().toString(),
-        name: newCategory.name,
-        budget: parseFloat(newCategory.budget),
-        spent: 0,
-        icon: newCategory.icon,
-        color: '#00B77D'
-      };
-      setBudgets(prev => [...prev, budget]);
-      setNewCategory({ name: '', budget: '', icon: '💰' });
-      setShowAddForm(false);
+      try {
+        await budgetsApi.create({ name: newCategory.name, monthlyBudget: parseFloat(newCategory.budget), icon: newCategory.icon, color: '#00B77D' });
+  const s = await budgetsApi.summary(selectedMonth);
+        setSummary(s);
+        setBudgets(s.categories.map(c => ({ ...c, budget: c.monthlyBudget })));
+        setNewCategory({ name: '', budget: '', icon: '💰' });
+        setShowAddForm(false);
+      } catch(e){ console.error(e); }
     }
   };
 
-  const totalBudget = budgets.reduce((sum, b) => sum + b.budget, 0);
-  const totalSpent = budgets.reduce((sum, b) => sum + b.spent, 0);
-  const overBudgetCount = budgets.filter(b => b.spent > b.budget).length;
+  const totalBudget = summary?.totals.totalBudget ?? budgets.reduce((sum,b)=> sum + b.budget,0);
+  const totalSpent = summary?.totals.totalSpent ?? budgets.reduce((sum,b)=> sum + b.spent,0);
+  const overBudgetCount = summary?.totals.overBudgetCount ?? budgets.filter(b=> b.spent > b.budget).length;
 
   if (loading) {
     return (
@@ -93,8 +110,25 @@ export const BudgetTracking: React.FC = () => {
       {/* Header */}
       <div className="space-y-6">
         <div>
-          <h1 className="text-4xl font-heading font-bold gradient-text mb-3">Budget Tracking</h1>
-          <p className="text-brand-gray-600 text-lg">Set budgets by category and track your spending progress</p>
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+            <div>
+              <h1 className="text-4xl font-heading font-bold gradient-text mb-3">Budget Tracking</h1>
+              <p className="text-brand-gray-600 text-lg">Set budgets by category and track your spending progress</p>
+            </div>
+            <div className="flex items-center space-x-3">
+              <label className="text-sm font-medium text-brand-gray-700">Month</label>
+              <input
+                type="month"
+                value={selectedMonth}
+                onChange={(e)=> setSelectedMonth(e.target.value)}
+                className="input-field !py-2 !px-3"
+                max={`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`}
+              />
+            </div>
+          </div>
+          {summary && (
+            <p className="text-xs text-brand-gray-500 mt-1">Showing data for {new Date(selectedMonth + '-01T00:00:00').toLocaleString(undefined, { month:'long', year:'numeric' })}</p>
+          )}
         </div>
 
         {/* Summary Cards */}
@@ -175,9 +209,9 @@ export const BudgetTracking: React.FC = () => {
 
         <div className="space-y-4">
           {budgets.map(budget => {
-            const percentage = getProgressPercentage(budget.spent, budget.budget);
-            const isOverBudget = budget.spent > budget.budget;
-            const isNearBudget = percentage >= 80 && !isOverBudget;
+            const percentage = budget.progressPercent ?? getProgressPercentage(budget.spent, budget.budget);
+            const isOverBudget = budget.over ?? (budget.spent > budget.budget);
+            const isNearBudget = budget.near ?? (percentage >= 80 && !isOverBudget);
 
             return (
               <div key={budget.id} className="p-6 bg-white border-2 border-brand-gray-100 rounded-3xl hover:shadow-funky transition-all duration-300">
@@ -206,7 +240,7 @@ export const BudgetTracking: React.FC = () => {
                       </span>
                     )}
                     
-                    {editingId === budget.id ? (
+                    {editingId === budget.id.toString() ? (
                       <div className="flex items-center space-x-2">
                         <input
                           type="number"
@@ -216,7 +250,7 @@ export const BudgetTracking: React.FC = () => {
                           autoFocus
                         />
                         <button
-                          onClick={() => saveBudget(budget.id)}
+                          onClick={() => saveBudget(budget.id.toString())}
                           className="text-brand-green-600 hover:text-brand-green-700"
                         >
                           <Check className="w-4 h-4" />
@@ -230,7 +264,7 @@ export const BudgetTracking: React.FC = () => {
                       </div>
                     ) : (
                       <button
-                        onClick={() => handleEditBudget(budget.id, budget.budget)}
+                        onClick={() => handleEditBudget(budget.id.toString(), budget.budget)}
                         className="text-brand-gray-600 hover:text-brand-blue-600 transition-colors duration-200"
                       >
                         <Edit3 className="w-4 h-4" />
@@ -272,14 +306,17 @@ export const BudgetTracking: React.FC = () => {
             <h4 className="text-lg font-heading font-bold text-brand-gray-900 mb-4">Add New Budget Category</h4>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-semibold text-brand-gray-700 mb-2">Category Name</label>
-                <input
-                  type="text"
+                <label className="block text-sm font-semibold text-brand-gray-700 mb-2">Category</label>
+                <select
                   value={newCategory.name}
                   onChange={(e) => setNewCategory(prev => ({ ...prev, name: e.target.value }))}
                   className="input-field"
-                  placeholder="e.g., Dining Out"
-                />
+                >
+                  <option value="">Select category</option>
+                  {allCategories.map(c => (
+                    <option key={c.id} value={c.name}>{c.name}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-brand-gray-700 mb-2">Monthly Budget</label>
@@ -337,7 +374,7 @@ export const BudgetTracking: React.FC = () => {
               <TrendingUp className="w-8 h-8 text-white" />
             </div>
             <h4 className="text-lg font-bold text-brand-gray-900 mb-2">This Month</h4>
-            <p className="text-3xl font-bold text-brand-green-600 mb-1">85%</p>
+            <p className="text-3xl font-bold text-brand-green-600 mb-1">{summary ? Math.round(summary.history.thisMonthAdherence) + '%' : '—'}</p>
             <p className="text-sm text-brand-gray-600">Budget adherence</p>
           </div>
           
@@ -346,7 +383,7 @@ export const BudgetTracking: React.FC = () => {
               <Target className="w-8 h-8 text-white" />
             </div>
             <h4 className="text-lg font-bold text-brand-gray-900 mb-2">Last Month</h4>
-            <p className="text-3xl font-bold text-brand-blue-600 mb-1">92%</p>
+            <p className="text-3xl font-bold text-brand-blue-600 mb-1">{summary ? Math.round(summary.history.lastMonthAdherence) + '%' : '—'}</p>
             <p className="text-sm text-brand-gray-600">Budget adherence</p>
           </div>
           
@@ -355,7 +392,7 @@ export const BudgetTracking: React.FC = () => {
               <PiggyBank className="w-8 h-8 text-brand-gray-900" />
             </div>
             <h4 className="text-lg font-bold text-brand-gray-900 mb-2">Avg. 6 Months</h4>
-            <p className="text-3xl font-bold text-accent-600 mb-1">88%</p>
+            <p className="text-3xl font-bold text-accent-600 mb-1">{summary ? Math.round(summary.history.avg6MonthsAdherence) + '%' : '—'}</p>
             <p className="text-sm text-brand-gray-600">Budget adherence</p>
           </div>
         </div>

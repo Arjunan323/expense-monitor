@@ -1,0 +1,12 @@
+<div>
+  <h1 th:text="${title}">Spending Alert</h1>
+  <p th:text="${description}">An unusual spending pattern was detected.</p>
+  <ul style="list-style:none;padding:0;font-size:14px;">
+    <li><strong>Category:</strong> <span th:text="${category}">General</span></li>
+    <li th:if="${merchant}"><strong>Merchant:</strong> <span th:text="${merchant}"></span></li>
+    <li><strong>Amount:</strong> <span th:text="${amount}"></span></li>
+    <li><strong>Date:</strong> <span th:text="${date}"></span></li>
+    <li><strong>Severity:</strong> <span th:text="${severity}"></span></li>
+  </ul>
+  <p class="muted">You can adjust alert settings or mute categories in the dashboard.</p>
+</div>

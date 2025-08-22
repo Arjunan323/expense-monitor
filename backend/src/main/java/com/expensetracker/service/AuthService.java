@@ -20,12 +20,14 @@ public class AuthService {
     private final UserRepository userRepository;
     private final JwtUtil jwtUtil;
     private final BCryptPasswordEncoder passwordEncoder;
+    private final VerificationService verificationService;
 
     @Autowired
-    public AuthService(UserRepository userRepository, JwtUtil jwtUtil, BCryptPasswordEncoder passwordEncoder) {
+    public AuthService(UserRepository userRepository, JwtUtil jwtUtil, BCryptPasswordEncoder passwordEncoder, VerificationService verificationService) {
         this.userRepository = userRepository;
         this.jwtUtil = jwtUtil;
         this.passwordEncoder = passwordEncoder;
+        this.verificationService = verificationService;
     }
 
     public RegisterResponseDto register(RegisterRequestDto body) {
@@ -43,7 +45,9 @@ public class AuthService {
         user.setLocale(body.getLocale() != null ? body.getLocale() : "en-US");
         user.setSubscribed(false);
         userRepository.save(user);
-        // Auto-login after registration: issue token & return user dto
+    // Send verification email (async could be added later)
+    try { verificationService.sendVerification(user); } catch(Exception ignored) {}
+    // Auto-login after registration: issue token & return user dto
         String token = jwtUtil.generateToken(username);
         UserDto userDto = new UserDto(user.getId(), user.getUsername(), user.getEmail(), user.getLocale(), user.getCurrency());
         return new RegisterResponseDto(true, "User registered successfully", token, userDto);

@@ -4,86 +4,59 @@ import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { formatCurrency } from '../../utils/formatters';
 import { usePreferences } from '../../contexts/PreferencesContext';
+import { goalsApi, GoalDto, GoalStatsDto } from '../../api/client';
+import toast from 'react-hot-toast';
 
-interface Goal {
-  id: string;
-  title: string;
-  description: string;
-  targetAmount: number;
-  currentAmount: number;
-  targetDate: string;
-  category: 'savings' | 'debt' | 'investment';
-  icon: string;
-  color: string;
-  monthlyContribution: number;
-}
+type GoalCategory = 'savings' | 'debt' | 'investment' | 'travel' | 'education' | 'home' | 'retirement' | 'health' | 'wedding' | 'car' | 'emergency';
+interface Goal extends GoalDto { color?: string; icon?: string; category: GoalCategory; }
 
 export const GoalTracking: React.FC = () => {
   const { preferences } = usePreferences();
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingGoalId, setEditingGoalId] = useState<number | null>(null);
+  const [editDraft, setEditDraft] = useState<Partial<Goal>>({});
   const [newGoal, setNewGoal] = useState({
     title: '',
     description: '',
     targetAmount: '',
     targetDate: '',
-    category: 'savings' as 'savings' | 'debt' | 'investment',
+    category: 'savings' as GoalCategory,
     icon: '🎯'
   });
 
-  const [goals, setGoals] = useState<Goal[]>([
-    {
-      id: '1',
-      title: 'Emergency Fund',
-      description: 'Build 6 months of expenses',
-      targetAmount: 300000,
-      currentAmount: 125000,
-      targetDate: '2024-12-31',
-      category: 'savings',
-      icon: '🛡️',
-      color: '#00B77D',
-      monthlyContribution: 25000
-    },
-    {
-      id: '2',
-      title: 'Home Down Payment',
-      description: 'Save for dream home',
-      targetAmount: 1000000,
-      currentAmount: 450000,
-      targetDate: '2025-06-30',
-      category: 'savings',
-      icon: '🏠',
-      color: '#0077B6',
-      monthlyContribution: 50000
-    },
-    {
-      id: '3',
-      title: 'Credit Card Debt',
-      description: 'Pay off high-interest debt',
-      targetAmount: 75000,
-      currentAmount: 45000,
-      targetDate: '2024-10-31',
-      category: 'debt',
-      icon: '💳',
-      color: '#EF4444',
-      monthlyContribution: 15000
-    },
-    {
-      id: '4',
-      title: 'Vacation Fund',
-      description: 'Europe trip savings',
-      targetAmount: 200000,
-      currentAmount: 85000,
-      targetDate: '2024-11-30',
-      category: 'savings',
-      icon: '✈️',
-      color: '#FFD60A',
-      monthlyContribution: 20000
-    }
-  ]);
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [stats, setStats] = useState<GoalStatsDto | null>(null);
+  const CATEGORY_META: Record<GoalCategory, { color: string; icon: string; badgeBg: string; badgeText: string; label: string }> = {
+    savings:    { color: '#00B77D', icon: '💰', badgeBg: 'bg-brand-green-100', badgeText: 'text-brand-green-700', label: 'Savings' },
+    debt:       { color: '#EF4444', icon: '💳', badgeBg: 'bg-red-100',          badgeText: 'text-red-700',          label: 'Debt Reduction' },
+    investment: { color: '#0077B6', icon: '📈', badgeBg: 'bg-brand-blue-100',   badgeText: 'text-brand-blue-700',   label: 'Investment' },
+    travel:     { color: '#F59E0B', icon: '✈️', badgeBg: 'bg-amber-100',        badgeText: 'text-amber-700',        label: 'Travel' },
+    education:  { color: '#6366F1', icon: '🎓', badgeBg: 'bg-indigo-100',       badgeText: 'text-indigo-700',       label: 'Education' },
+    home:       { color: '#0EA5E9', icon: '🏠', badgeBg: 'bg-sky-100',          badgeText: 'text-sky-700',          label: 'Home' },
+    retirement: { color: '#16A34A', icon: '🛡️', badgeBg: 'bg-green-100',       badgeText: 'text-green-700',        label: 'Retirement' },
+    health:     { color: '#DC2626', icon: '🩺', badgeBg: 'bg-rose-100',         badgeText: 'text-rose-700',         label: 'Health' },
+    wedding:    { color: '#DB2777', icon: '💍', badgeBg: 'bg-pink-100',         badgeText: 'text-pink-700',         label: 'Wedding' },
+    car:        { color: '#2563EB', icon: '�', badgeBg: 'bg-blue-100',         badgeText: 'text-blue-700',         label: 'Car' },
+    emergency:  { color: '#F97316', icon: '🚨', badgeBg: 'bg-orange-100',       badgeText: 'text-orange-700',       label: 'Emergency Fund' }
+  };
+  const categoryColor = (c:GoalCategory) => CATEGORY_META[c]?.color || '#0077B6';
+  const defaultIcon = (c:GoalCategory) => CATEGORY_META[c]?.icon || '🎯';
+  const coerceCategory = (c:string): GoalCategory => (Object.keys(CATEGORY_META) as GoalCategory[]).includes(c as GoalCategory) ? c as GoalCategory : 'savings';
 
   useEffect(() => {
-    setTimeout(() => setLoading(false), 800);
+    let active = true;
+    (async () => {
+      try {
+        const [list, s] = await Promise.all([goalsApi.list(), goalsApi.stats()]);
+        if(!active) return;
+  setGoals(list.map(g => { const cat = coerceCategory(g.category); return ({ ...g, category: cat, color: g.color || categoryColor(cat), icon: g.icon || defaultIcon(cat) }); }) as Goal[]);
+        setStats(s);
+      } catch (e) {
+        console.error('Failed loading goals', e); toast.error('Failed to load goals');
+      } finally { if(active) setLoading(false); }
+    })();
+    return () => { active = false; };
   }, []);
 
   const getProgressPercentage = (current: number, target: number) => {
@@ -106,32 +79,60 @@ export const GoalTracking: React.FC = () => {
     return projectedDate.toLocaleDateString();
   };
 
-  const addContribution = (goalId: string, amount: number) => {
-    setGoals(prev => prev.map(goal => 
-      goal.id === goalId 
-        ? { ...goal, currentAmount: Math.min(goal.currentAmount + amount, goal.targetAmount) }
-        : goal
-    ));
+  const addContribution = async (goalId: number, amount: number) => {
+    // optimistic update
+    setGoals(prev => prev.map(g => g.id===goalId ? { ...g, currentAmount: Math.min(g.currentAmount + amount, g.targetAmount) } : g));
+    try {
+      const updated = await goalsApi.contribute(goalId, amount);
+      setGoals(prev => prev.map(g => g.id === updated.id ? { ...(updated as any), color: g.color, icon: g.icon } : g));
+      goalsApi.invalidateStats(); const s = await goalsApi.stats(); setStats(s);
+    } catch(e){ toast.error('Contribution failed'); }
   };
 
-  const addNewGoal = () => {
+  const addNewGoal = async () => {
     if (newGoal.title && newGoal.targetAmount && newGoal.targetDate) {
-      const goal: Goal = {
-        id: Date.now().toString(),
-        title: newGoal.title,
-        description: newGoal.description,
-        targetAmount: parseFloat(newGoal.targetAmount),
-        currentAmount: 0,
-        targetDate: newGoal.targetDate,
-        category: newGoal.category,
-        icon: newGoal.icon,
-        color: newGoal.category === 'savings' ? '#00B77D' : newGoal.category === 'debt' ? '#EF4444' : '#0077B6',
-        monthlyContribution: 0
-      };
-      setGoals(prev => [...prev, goal]);
-      setNewGoal({ title: '', description: '', targetAmount: '', targetDate: '', category: 'savings', icon: '🎯' });
-      setShowAddForm(false);
+      try {
+        const payload = {
+          title: newGoal.title,
+            description: newGoal.description,
+            targetAmount: parseFloat(newGoal.targetAmount),
+            targetDate: newGoal.targetDate,
+            category: newGoal.category,
+            icon: newGoal.icon,
+            color: categoryColor(newGoal.category),
+            monthlyContribution: 0
+        };
+        const created = await goalsApi.create(payload as any);
+        setGoals(prev => [...prev, { ...(created as any), color: payload.color, icon: payload.icon }]);
+        setNewGoal({ title: '', description: '', targetAmount: '', targetDate: '', category: 'savings', icon: '🎯' });
+        setShowAddForm(false);
+        const s = await goalsApi.stats(); setStats(s);
+      } catch(e){ console.error('Create goal failed', e); toast.error('Create goal failed'); }
     }
+  };
+
+  const startEdit = (g:Goal) => { setEditingGoalId(g.id); setEditDraft({ ...g, targetAmount: g.targetAmount, monthlyContribution: g.monthlyContribution }); };
+  const cancelEdit = () => { setEditingGoalId(null); setEditDraft({}); };
+  const saveEdit = async () => {
+    if(editingGoalId==null) return; const id = editingGoalId;
+    try {
+      const payload:any = { ...editDraft }; delete payload.id; // ensure id not sent if backend disallows
+      const updated = await goalsApi.update(id, payload);
+      setGoals(prev => prev.map(g => {
+        if(g.id!==id) return g;
+        const cat = coerceCategory((updated as any).category);
+        return { ...(updated as any), category: cat, color: g.color || categoryColor(cat), icon: g.icon || defaultIcon(cat) };
+      }));
+      setEditingGoalId(null); setEditDraft({}); goalsApi.invalidateStats(); const s = await goalsApi.stats(); setStats(s); toast.success('Goal updated');
+    } catch(e){ toast.error('Update failed'); }
+  };
+
+  const deleteGoal = async (id:number) => {
+    const existing = goals.find(g => g.id===id); if(!existing) return;
+    if(!confirm(`Delete goal "${existing.title}"?`)) return;
+    const prev = goals; setGoals(prev.filter(g => g.id!==id));
+    try { await goalsApi.delete(id); goalsApi.invalidateStats(); const s = await goalsApi.stats(); setStats(s); toast.success('Goal deleted'); }
+    catch(e){ toast.error('Delete failed'); setGoals(prev); }
   };
 
   const completedGoals = goals.filter(g => g.currentAmount >= g.targetAmount);
@@ -164,7 +165,7 @@ export const GoalTracking: React.FC = () => {
               <span className="text-xs font-semibold text-brand-blue-600 bg-brand-blue-100 px-2 py-1 rounded-full">ACTIVE</span>
             </div>
             <h3 className="text-sm font-medium text-brand-gray-600 mb-1">Active Goals</h3>
-            <p className="text-3xl font-bold text-brand-blue-600">{activeGoals.length}</p>
+            <p className="text-3xl font-bold text-brand-blue-600">{stats ? stats.activeGoals : activeGoals.length}</p>
             <p className="text-sm text-brand-gray-500">In progress</p>
           </div>
 
@@ -176,7 +177,7 @@ export const GoalTracking: React.FC = () => {
               <span className="text-xs font-semibold text-brand-green-600 bg-brand-green-100 px-2 py-1 rounded-full">COMPLETED</span>
             </div>
             <h3 className="text-sm font-medium text-brand-gray-600 mb-1">Completed</h3>
-            <p className="text-3xl font-bold text-brand-green-600">{completedGoals.length}</p>
+            <p className="text-3xl font-bold text-brand-green-600">{stats ? stats.completedGoals : completedGoals.length}</p>
             <p className="text-sm text-brand-gray-500">This year</p>
           </div>
 
@@ -189,7 +190,7 @@ export const GoalTracking: React.FC = () => {
             </div>
             <h3 className="text-sm font-medium text-brand-gray-600 mb-1">Total Saved</h3>
             <p className="text-3xl font-bold text-accent-600">
-              {formatCurrency(goals.reduce((sum, g) => sum + g.currentAmount, 0), undefined, preferences)}
+              {formatCurrency(stats ? stats.totalSaved : goals.reduce((sum, g) => sum + g.currentAmount, 0), undefined, preferences)}
             </p>
             <p className="text-sm text-brand-gray-500">Across all goals</p>
           </div>
@@ -203,7 +204,7 @@ export const GoalTracking: React.FC = () => {
             </div>
             <h3 className="text-sm font-medium text-brand-gray-600 mb-1">Monthly Target</h3>
             <p className="text-3xl font-bold text-purple-600">
-              {formatCurrency(goals.reduce((sum, g) => sum + g.monthlyContribution, 0), undefined, preferences)}
+              {formatCurrency(stats ? stats.monthlyTarget : goals.reduce((sum, g) => sum + (g.monthlyContribution || 0), 0), undefined, preferences)}
             </p>
             <p className="text-sm text-brand-gray-500">Total contributions</p>
           </div>
@@ -261,12 +262,12 @@ export const GoalTracking: React.FC = () => {
                 <label className="block text-sm font-semibold text-brand-gray-700 mb-2">Category</label>
                 <select
                   value={newGoal.category}
-                  onChange={(e) => setNewGoal(prev => ({ ...prev, category: e.target.value as any }))}
+                  onChange={(e) => setNewGoal(prev => ({ ...prev, category: e.target.value as GoalCategory }))}
                   className="input-field"
                 >
-                  <option value="savings">💰 Savings</option>
-                  <option value="debt">💳 Debt Reduction</option>
-                  <option value="investment">📈 Investment</option>
+                  {Object.entries(CATEGORY_META).map(([value, meta]) => (
+                    <option key={value} value={value}>{meta.icon} {meta.label}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -293,7 +294,8 @@ export const GoalTracking: React.FC = () => {
             const percentage = getProgressPercentage(goal.currentAmount, goal.targetAmount);
             const isCompleted = goal.currentAmount >= goal.targetAmount;
             const monthsRemaining = getMonthsRemaining(goal.targetDate);
-            const projectedDate = getProjectedDate(goal.currentAmount, goal.targetAmount, goal.monthlyContribution);
+            const projectedDate = getProjectedDate(goal.currentAmount, goal.targetAmount, goal.monthlyContribution || 0);
+            const isEditing = editingGoalId === goal.id;
 
             return (
               <div key={goal.id} className={`card border-2 transition-all duration-300 ${
@@ -313,22 +315,44 @@ export const GoalTracking: React.FC = () => {
                       {goal.icon}
                     </div>
                     <div>
-                      <h4 className="text-xl font-heading font-bold text-brand-gray-900 mb-1">{goal.title}</h4>
-                      <p className="text-brand-gray-600 mb-2">{goal.description}</p>
+                      {isEditing ? (
+                        <input className="input-field mb-2" value={editDraft.title as any || ''} onChange={e=>setEditDraft(d=>({...d,title:e.target.value}))} />
+                      ) : (
+                        <h4 className="text-xl font-heading font-bold text-brand-gray-900 mb-1">{goal.title}</h4>
+                      )}
+                      {isEditing ? (
+                        <textarea className="input-field mb-2" rows={2} value={editDraft.description as any || ''} onChange={e=>setEditDraft(d=>({...d,description:e.target.value}))} />
+                      ) : (
+                        <p className="text-brand-gray-600 mb-2">{goal.description}</p>
+                      )}
                       <div className="flex items-center space-x-4 text-sm text-brand-gray-500">
                         <div className="flex items-center space-x-1">
                           <Calendar className="w-3 h-3" />
-                          <span>Target: {new Date(goal.targetDate).toLocaleDateString()}</span>
+                          {isEditing ? (
+                            <input type="date" className="input-field py-0 h-6" value={editDraft.targetDate as any || goal.targetDate} onChange={e=>setEditDraft(d=>({...d,targetDate:e.target.value}))} />
+                          ) : (
+                            <span>Target: {new Date(goal.targetDate).toLocaleDateString()}</span>
+                          )}
                         </div>
-                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                          goal.category === 'savings' ? 'bg-brand-green-100 text-brand-green-700' :
-                          goal.category === 'debt' ? 'bg-red-100 text-red-700' :
-                          'bg-brand-blue-100 text-brand-blue-700'
-                        }`}>
-                          {goal.category}
+                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${CATEGORY_META[goal.category]?.badgeBg} ${CATEGORY_META[goal.category]?.badgeText}`}>
+                          {CATEGORY_META[goal.category]?.label || goal.category}
                         </span>
                       </div>
                     </div>
+                  </div>
+                  <div className="flex gap-2">
+                    {!isCompleted && !isEditing && (
+                      <button className="btn-secondary text-xs" onClick={()=>startEdit(goal)}>Edit</button>
+                    )}
+                    {isEditing && (
+                      <>
+                        <button className="btn-primary text-xs" onClick={saveEdit}>Save</button>
+                        <button className="btn-secondary text-xs" onClick={cancelEdit}>Cancel</button>
+                      </>
+                    )}
+                    {!isEditing && (
+                      <button className="text-xs text-red-600 hover:underline" onClick={()=>deleteGoal(goal.id as any)}>Delete</button>
+                    )}
                   </div>
                 </div>
 
@@ -374,15 +398,23 @@ export const GoalTracking: React.FC = () => {
                   <div className="space-y-4">
                     <div>
                       <span className="text-sm font-medium text-brand-gray-600">Current Amount</span>
-                      <p className="text-xl font-bold text-brand-gray-900">
-                        {formatCurrency(goal.currentAmount, undefined, preferences)}
-                      </p>
+                      {isEditing ? (
+                        <input type="number" className="input-field" value={editDraft.currentAmount as any ?? goal.currentAmount} onChange={e=>setEditDraft(d=>({...d,currentAmount: parseFloat(e.target.value)}))} />
+                      ) : (
+                        <p className="text-xl font-bold text-brand-gray-900">
+                          {formatCurrency(goal.currentAmount, undefined, preferences)}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <span className="text-sm font-medium text-brand-gray-600">Target Amount</span>
-                      <p className="text-xl font-bold text-brand-gray-900">
-                        {formatCurrency(goal.targetAmount, undefined, preferences)}
-                      </p>
+                      {isEditing ? (
+                        <input type="number" className="input-field" value={editDraft.targetAmount as any ?? goal.targetAmount} onChange={e=>setEditDraft(d=>({...d,targetAmount: parseFloat(e.target.value)}))} />
+                      ) : (
+                        <p className="text-xl font-bold text-brand-gray-900">
+                          {formatCurrency(goal.targetAmount, undefined, preferences)}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <span className="text-sm font-medium text-brand-gray-600">Remaining</span>
@@ -408,29 +440,27 @@ export const GoalTracking: React.FC = () => {
                     </p>
                     <p className="text-sm text-brand-gray-600">to reach goal</p>
                   </div>
+                  <div className="p-4 bg-brand-gray-50 rounded-2xl">
+                    <h5 className="font-semibold text-brand-gray-900 mb-2">Monthly Contribution</h5>
+                    {isEditing ? (
+                      <input type="number" className="input-field" value={(editDraft.monthlyContribution as any) ?? (goal.monthlyContribution || 0)} onChange={e=>setEditDraft(d=>({...d,monthlyContribution: parseFloat(e.target.value)}))} />
+                    ) : (
+                      <p className="text-2xl font-bold text-brand-gray-900">{formatCurrency(goal.monthlyContribution || 0, undefined, preferences)}</p>
+                    )}
+                    <p className="text-sm text-brand-gray-600">planned per month</p>
+                  </div>
                 </div>
 
                 {/* Quick Actions */}
-                {!isCompleted && (
+                {!isCompleted && !isEditing && (
                   <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() => addContribution(goal.id, 1000)}
-                      className="bg-brand-green-100 hover:bg-brand-green-200 text-brand-green-700 px-4 py-2 rounded-2xl font-semibold text-sm transition-all duration-300 hover:scale-105"
-                    >
-                      +₹1,000
-                    </button>
-                    <button
-                      onClick={() => addContribution(goal.id, 5000)}
-                      className="bg-brand-blue-100 hover:bg-brand-blue-200 text-brand-blue-700 px-4 py-2 rounded-2xl font-semibold text-sm transition-all duration-300 hover:scale-105"
-                    >
-                      +₹5,000
-                    </button>
-                    <button
-                      onClick={() => addContribution(goal.id, 10000)}
-                      className="bg-accent-100 hover:bg-accent-200 text-accent-700 px-4 py-2 rounded-2xl font-semibold text-sm transition-all duration-300 hover:scale-105"
-                    >
-                      +₹10,000
-                    </button>
+                    {[1000,5000,10000].map(v => {
+                      const label = formatCurrency(v, undefined, preferences).replace(/\.00$/, '');
+                      const baseClass = v===1000? 'bg-brand-green-100 hover:bg-brand-green-200 text-brand-green-700' : v===5000? 'bg-brand-blue-100 hover:bg-brand-blue-200 text-brand-blue-700' : 'bg-accent-100 hover:bg-accent-200 text-accent-700';
+                      return (
+                        <button key={v} onClick={()=>addContribution(goal.id as any, v)} className={`${baseClass} px-4 py-2 rounded-2xl font-semibold text-sm transition-all duration-300 hover:scale-105`}>+{label}</button>
+                      );
+                    })}
                   </div>
                 )}
 
@@ -466,7 +496,7 @@ export const GoalTracking: React.FC = () => {
               <p className="text-white/80">Months ahead</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl font-bold text-white">₹2.1L</p>
+              <p className="text-2xl font-bold text-white">{formatCurrency(stats ? stats.totalSaved : goals.reduce((sum, g) => sum + g.currentAmount, 0), undefined, preferences)}</p>
               <p className="text-white/80">Total saved</p>
             </div>
           </div>

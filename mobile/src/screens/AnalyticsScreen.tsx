@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { MonthlyTrendsScreen } from './analytics/MonthlyTrendsScreen';
 import { BudgetTrackingScreen } from './analytics/BudgetTrackingScreen';
+import TaxTrackerScreen from './analytics/TaxTrackerScreen';
 
 type AnalyticsView = 'overview' | 'trends' | 'budget' | 'alerts' | 'forecast' | 'goals' | 'tax';
 
@@ -86,7 +87,8 @@ export const AnalyticsScreen: React.FC = () => {
 
         {/* Render Selected View */}
         {currentView === 'trends' && <MonthlyTrendsScreen />}
-        {currentView === 'budget' && <BudgetTrackingScreen />}
+  {currentView === 'budget' && <BudgetTrackingScreen />}
+  {currentView === 'tax' && <TaxTrackerScreen />}
         {/* Add other screens as needed */}
       </View>
     );
@@ -114,7 +116,7 @@ export const AnalyticsScreen: React.FC = () => {
 
         <View style={styles.statCard}>
           <View style={[styles.statIcon, { backgroundColor: '#E0F2FE' }]}>
-            <Ionicons name="target" size={20} color="#0077B6" />
+            <Ionicons name="radio-outline" size={20} color="#0077B6" />
           </View>
           <Text style={styles.statLabel}>Budget Adherence</Text>
           <Text style={[styles.statValue, { color: '#0077B6' }]}>85%</Text>

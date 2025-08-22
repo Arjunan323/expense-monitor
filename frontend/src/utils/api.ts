@@ -12,7 +12,7 @@ import { BankRecord, CategoryRecord } from '../types';
 import toast from 'react-hot-toast';
 import { AnalyticsSummary, AnalyticsFeedbackPayload, FeedbackResponse } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://macaw-deciding-hermit.ngrok-free.app';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
 export const api = axios.create({
   baseURL: API_BASE_URL,

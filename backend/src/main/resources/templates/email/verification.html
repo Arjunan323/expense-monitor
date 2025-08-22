@@ -1,0 +1,9 @@
+<div>
+    <h1>Email Verification</h1>
+    <p>Hi <span th:text="${firstName}">there</span>,</p>
+    <p>Please confirm your email to activate full features.</p>
+    <p style="margin:32px 0;">
+        <a th:href="${verificationLink}" class="btn">Verify Email</a>
+    </p>
+    <p class="muted">This link expires in <span th:text="${ttlMinutes}"></span> minutes.</p>
+</div>

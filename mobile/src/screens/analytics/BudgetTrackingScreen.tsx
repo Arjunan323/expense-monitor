@@ -72,7 +72,7 @@ export const BudgetTrackingScreen: React.FC = () => {
       <View style={styles.summaryGrid}>
         <View style={styles.summaryCard}>
           <View style={styles.summaryIcon}>
-            <Ionicons name="target" size={24} color="#0077B6" />
+            <Ionicons name="pie-chart-outline" size={24} color="#0077B6" />
           </View>
           <Text style={styles.summaryLabel}>Total Budget</Text>
           <Text style={styles.summaryValue}>{formatCurrency(totalBudget, preferences)}</Text>

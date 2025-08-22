@@ -13,6 +13,8 @@ public class Transaction {
     @Column(name = "tx_date")
     private LocalDate date;
     private String description;
+    // Normalized merchant name (optional). Will default/backfill from description if null.
+    private String merchant;
     @Column(precision = 19, scale = 4)
     private BigDecimal amount;
     @Column(precision = 19, scale = 4)
@@ -31,6 +33,8 @@ public class Transaction {
     public void setDate(LocalDate date) { this.date = date; }
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
+    public String getMerchant() { return merchant; }
+    public void setMerchant(String merchant) { this.merchant = merchant; }
     public BigDecimal getAmount() { return amount; }
     public void setAmount(BigDecimal amount) { this.amount = amount; }
     public BigDecimal getBalance() { return balance; }

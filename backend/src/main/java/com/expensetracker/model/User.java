@@ -26,6 +26,9 @@ public class User {
     @Column(nullable = false)
     private boolean subscribed = false;
 
+    @Column(name = "email_verified", nullable = false)
+    private boolean emailVerified = false;
+
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private Subscription subscription;
 
@@ -51,4 +54,6 @@ public class User {
 
     public boolean isSubscribed() { return subscribed; }
     public void setSubscribed(boolean subscribed) { this.subscribed = subscribed; }
+    public boolean isEmailVerified() { return emailVerified; }
+    public void setEmailVerified(boolean emailVerified) { this.emailVerified = emailVerified; }
 }

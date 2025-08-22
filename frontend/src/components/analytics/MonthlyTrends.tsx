@@ -1,48 +1,156 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { TrendingUp, TrendingDown, Calendar, Filter, BarChart3, LineChart, Eye, EyeOff } from 'lucide-react';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { DateRangePicker } from '../ui/DateRangePicker';
 import { MultiSelect } from '../ui/MultiSelect';
-import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
 import { formatCurrency } from '../../utils/formatters';
+import { fetchMonthlySpendingSeries } from '../../api/analyticsTrends';
+import { fetchBanks } from '../../utils/api';
 import { usePreferences } from '../../contexts/PreferencesContext';
 
 export const MonthlyTrends: React.FC = () => {
   const { preferences } = usePreferences();
   const [loading, setLoading] = useState(true);
+  const STORAGE_KEY = 'monthlyTrendsPrefs';
   const [chartType, setChartType] = useState<'line' | 'bar'>('line');
   const [viewMode, setViewMode] = useState<'category' | 'bank' | 'previous'>('category');
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [selectedBanks, setSelectedBanks] = useState<string[]>([]);
+  const [bankOptions, setBankOptions] = useState<{ value:string; label:string; count?:number }[]>([]);
   const [showPerBank, setShowPerBank] = useState(false);
 
-  // Mock data - replace with API calls
-  const [trendData, setTrendData] = useState([
-    { month: 'Jan 2024', amount: 45000, category: 'Food', bank: 'HDFC' },
-    { month: 'Feb 2024', amount: 52000, category: 'Food', bank: 'HDFC' },
-    { month: 'Mar 2024', amount: 48000, category: 'Food', bank: 'ICICI' },
-    { month: 'Apr 2024', amount: 55000, category: 'Travel', bank: 'HDFC' },
-    { month: 'May 2024', amount: 42000, category: 'Food', bank: 'ICICI' },
-    { month: 'Jun 2024', amount: 38000, category: 'Food', bank: 'HDFC' },
-  ]);
-
+  const [trendData, setTrendData] = useState<{ month: string; amount: number; banks?: { name: string; outflow: number; }[]; categories?: { name: string; outflow: number; }[] }[]>([]);
+  const [bankKeys, setBankKeys] = useState<string[]>([]);
+  const [categoryKeys, setCategoryKeys] = useState<string[]>([]);
   const [summaryStats, setSummaryStats] = useState({
-    highestMonth: { month: 'Apr 2024', amount: 55000 },
-    lowestMonth: { month: 'Jun 2024', amount: 38000 },
-    averageSpending: 46667,
-    momChange: -10.5
+    highestMonth: { month: '', amount: 0 },
+    lowestMonth: { month: '', amount: 0 },
+    averageSpending: 0,
+    momChange: 0
   });
+  const [error, setError] = useState<string | null>(null);
 
+  const currencySymbol = useMemo(()=>{
+    try {
+      const sample = new Intl.NumberFormat(preferences.locale||'en-US', { style:'currency', currency: preferences.currency||'USD', minimumFractionDigits:0, maximumFractionDigits:0 }).format(0);
+      return sample.replace(/0/g,'').trim();
+    } catch { return preferences.currency || '$'; }
+  }, [preferences]);
+  const shortCurrency = (value:number)=> `${currencySymbol}${(value/1000).toFixed(0)}K`;
+
+  const computeDefaultRange = () => {
+    const now = new Date();
+    const endYm = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startYm = new Date(endYm.getFullYear(), endYm.getMonth() - 5, 1);
+    const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    return { start: fmt(startYm), end: fmt(endYm) };
+  };
+
+  // Load persisted preferences
   useEffect(() => {
-    // Simulate API loading
-    setTimeout(() => setLoading(false), 1000);
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(raw){
+        const p = JSON.parse(raw);
+        if(p.chartType) setChartType(p.chartType);
+        if(p.viewMode) setViewMode(p.viewMode);
+        if(p.dateRange && p.dateRange.start && p.dateRange.end) setDateRange(p.dateRange);
+        if(Array.isArray(p.selectedBanks)) setSelectedBanks(p.selectedBanks);
+        if(typeof p.showPerBank === 'boolean') setShowPerBank(p.showPerBank);
+      }
+    }catch{/* ignore */}
+    setDateRange(dr => (!dr.start || !dr.end) ? computeDefaultRange() : dr);
   }, []);
 
-  const bankOptions = [
-    { value: 'HDFC', label: 'HDFC Bank', count: 45 },
-    { value: 'ICICI', label: 'ICICI Bank', count: 32 },
-    { value: 'SBI', label: 'State Bank', count: 28 }
-  ];
+  // Persist preferences
+  useEffect(()=>{
+    const payload = { chartType, viewMode, dateRange, selectedBanks, showPerBank };
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); } catch {/* ignore */}
+  }, [chartType, viewMode, dateRange, selectedBanks, showPerBank]);
+
+  const loadData = useCallback(async () => {
+    if(!dateRange.start || !dateRange.end) return;
+    setLoading(true); setError(null);
+    try {
+      const includeBanksActive = (showPerBank || viewMode==='bank');
+      const resp = await fetchMonthlySpendingSeries({ from: dateRange.start, to: dateRange.end, includeBanks: includeBanksActive, includePrevYear: viewMode==='previous', banks: selectedBanks.length ? selectedBanks : undefined });
+      const chart = resp.monthly.map((p: any) => ({
+        month: labelMonth(p.month),
+        amount: Number(p.totalOutflow),
+        banks: p.banks?.map((b: any) => ({ name: b.bank, outflow: Number(b.outflow) })),
+        categories: p.categories?.map((c:any) => ({ name: c.category, outflow: Number(c.outflow) }))
+      }));
+      setTrendData(chart);
+      if(includeBanksActive){
+        const keys = new Set<string>();
+  chart.forEach(m => m.banks?.forEach((b: { name: string; outflow: number }) => keys.add(b.name)));
+        setBankKeys(Array.from(keys).sort());
+      } else {
+        setBankKeys([]);
+      }
+      // derive top categories overall (sum across months)
+      if(viewMode==='category'){
+        const catTotals: Record<string, number> = {};
+  chart.forEach(m => m.categories?.forEach((c: { name: string; outflow: number }) => { catTotals[c.name] = (catTotals[c.name]||0)+c.outflow; }));
+        const top = Object.entries(catTotals).sort((a,b)=>b[1]-a[1]).slice(0,6).map(e=>e[0]);
+        setCategoryKeys(top);
+      } else {
+        setCategoryKeys([]);
+      }
+      setSummaryStats({
+        highestMonth: { month: resp.summary.highest.month||'', amount: Number(resp.summary.highest.amount) },
+        lowestMonth: { month: resp.summary.lowest.month||'', amount: Number(resp.summary.lowest.amount) },
+        averageSpending: Number(resp.summary.averageOutflow),
+        momChange: resp.summary.momChangePct ? Number(resp.summary.momChangePct) : 0
+      });
+    } catch(e:any){
+      setError(e.message || 'Failed to load');
+    } finally { setLoading(false); }
+  }, [dateRange.start, dateRange.end, showPerBank, viewMode, selectedBanks]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const labelMonth = (ym: string) => {
+    const [y,m] = ym.split('-');
+    const date = new Date(Number(y), Number(m)-1, 1);
+    return date.toLocaleString(undefined,{ month:'short', year:'numeric'});
+  };
+
+  // load banks once
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const banks = await fetchBanks();
+        setBankOptions(banks.map(b=>({ value: b.name, label: b.name, count: b.transactionCount })));
+      }catch(err){ /* silent */ }
+    })();
+  },[]);
+  // reload when banks changed
+  useEffect(()=>{ loadData(); }, [selectedBanks]);
+
+  const effectiveBankOptions = bankOptions;
+
+  const includeBanksActive = (showPerBank || viewMode==='bank') && bankKeys.length>0;
+  const includeCategoriesActive = (viewMode==='category') && !includeBanksActive && categoryKeys.length>0;
+  const stackedData = useMemo(()=>{
+    if(includeBanksActive){
+      return trendData.map(row => {
+        const base: any = { month: row.month };
+        bankKeys.forEach(k => { base[k] = row.banks?.find(b=>b.name===k)?.outflow || 0; });
+        return base;
+      });
+    } else if(includeCategoriesActive){
+      return trendData.map(row => {
+        const base: any = { month: row.month };
+        categoryKeys.forEach(k => { base[k] = row.categories?.find(c=>c.name===k)?.outflow || 0; });
+        return base;
+      });
+    }
+    return trendData;
+  }, [trendData, includeBanksActive, includeCategoriesActive, bankKeys, categoryKeys]);
+  const palette = ['#00B77D','#0891B2','#6366F1','#F59E0B','#EC4899','#10B981','#8B5CF6','#DC2626','#0EA5E9','#14B8A6'];
+  const colorFor = (name:string, idx:number) => palette[idx % palette.length];
 
   if (loading) {
     return (
@@ -50,6 +158,13 @@ export const MonthlyTrends: React.FC = () => {
         <LoadingSpinner size="lg" />
       </div>
     );
+  }
+
+  if(error){
+    return <div className="p-8 text-center">
+      <p className="text-red-600 mb-4">{error}</p>
+      <button onClick={loadData} className="btn-primary">Retry</button>
+    </div>;
   }
 
   return (
@@ -78,13 +193,14 @@ export const MonthlyTrends: React.FC = () => {
               
               <div className="flex flex-wrap gap-3">
                 <MultiSelect
-                  options={bankOptions}
+                  options={effectiveBankOptions}
                   selected={selectedBanks}
                   onChange={setSelectedBanks}
                   placeholder="🏦 Select Banks"
                   className="min-w-[200px]"
                   title="Select Bank Accounts"
                   desc="Choose which banks to analyze"
+                  deferCommit
                 />
                 
                 <DateRangePicker
@@ -130,16 +246,19 @@ export const MonthlyTrends: React.FC = () => {
             <div className="flex flex-wrap gap-2">
               {[
                 { key: 'category', label: 'By Category', icon: '📊' },
-                { key: 'bank', label: 'By Bank Account', icon: '🏦' },
+                { key: 'bank', label: 'By Bank Account', icon: '🏦', disabled: bankOptions.length===0 },
                 { key: 'previous', label: 'Previous Year', icon: '📅' }
               ].map(mode => (
                 <button
                   key={mode.key}
-                  onClick={() => setViewMode(mode.key as any)}
+                  onClick={() => !('disabled' in mode && mode.disabled) && setViewMode(mode.key as any)}
+                  disabled={('disabled' in mode && mode.disabled)}
                   className={`px-4 py-2 rounded-2xl font-semibold text-sm transition-all duration-300 ${
-                    viewMode === mode.key
-                      ? 'bg-gradient-green text-white shadow-glow-green'
-                      : 'bg-white border-2 border-brand-gray-200 text-brand-gray-700 hover:border-brand-green-400'
+                    ('disabled' in mode && mode.disabled)
+                      ? 'bg-brand-gray-100 text-brand-gray-400 cursor-not-allowed'
+                      : viewMode === mode.key
+                        ? 'bg-gradient-green text-white shadow-glow-green'
+                        : 'bg-white border-2 border-brand-gray-200 text-brand-gray-700 hover:border-brand-green-400'
                   }`}
                 >
                   <span className="mr-2">{mode.icon}</span>
@@ -226,8 +345,9 @@ export const MonthlyTrends: React.FC = () => {
             <p className="text-brand-gray-600">Monthly expenditure patterns</p>
           </div>
           <button
+            disabled={bankOptions.length===0}
             onClick={() => setShowPerBank(!showPerBank)}
-            className="flex items-center space-x-2 text-sm text-brand-gray-600 hover:text-brand-green-600 transition-colors duration-300"
+            className={`flex items-center space-x-2 text-sm transition-colors duration-300 ${bankOptions.length===0 ? 'text-brand-gray-300 cursor-not-allowed' : 'text-brand-gray-600 hover:text-brand-green-600'}`}
           >
             {showPerBank ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             <span>{showPerBank ? 'Hide' : 'Show'} bank breakdown</span>
@@ -237,12 +357,12 @@ export const MonthlyTrends: React.FC = () => {
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
             {chartType === 'line' ? (
-              <RechartsLineChart data={trendData}>
+              <RechartsLineChart data={stackedData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="month" stroke="#6b7280" fontSize={12} />
-                <YAxis stroke="#6b7280" fontSize={12} tickFormatter={(value) => `₹${(value/1000).toFixed(0)}K`} />
+                <YAxis stroke="#6b7280" fontSize={12} tickFormatter={(value) => shortCurrency(value)} />
                 <Tooltip 
-                  formatter={(value: number) => [formatCurrency(value, undefined, preferences), 'Amount']}
+                  formatter={(value: number, name: string) => [formatCurrency(value, undefined, preferences), includeBanksActive ? name : 'Amount']}
                   labelStyle={{ color: '#374151' }}
                   contentStyle={{ 
                     backgroundColor: 'white', 
@@ -251,22 +371,35 @@ export const MonthlyTrends: React.FC = () => {
                     boxShadow: '0 10px 25px -5px rgba(0, 183, 125, 0.1)'
                   }}
                 />
-                <Line 
-                  type="monotone" 
-                  dataKey="amount" 
-                  stroke="#00B77D" 
-                  strokeWidth={3}
-                  dot={{ fill: '#00B77D', strokeWidth: 2, r: 6 }}
-                  activeDot={{ r: 8, stroke: '#00B77D', strokeWidth: 2, fill: '#ffffff' }}
-                />
+                {includeBanksActive ? (
+                  bankKeys.map((bk, idx) => (
+                    <Line key={bk} type="monotone" dataKey={bk} stroke={colorFor(bk, idx)} strokeWidth={2}
+                      dot={false} activeDot={{ r: 6, stroke: colorFor(bk, idx), strokeWidth: 2, fill: '#ffffff' }} />
+                  ))
+                ) : includeCategoriesActive ? (
+                  categoryKeys.map((ck, idx) => (
+                    <Line key={ck} type="monotone" dataKey={ck} stroke={colorFor(ck, idx)} strokeWidth={2}
+                      dot={false} activeDot={{ r: 5, stroke: colorFor(ck, idx), strokeWidth: 2, fill: '#ffffff' }} />
+                  ))
+                ) : (
+                  <Line 
+                    type="monotone" 
+                    dataKey="amount" 
+                    stroke="#00B77D" 
+                    strokeWidth={3}
+                    dot={{ fill: '#00B77D', strokeWidth: 2, r: 6 }}
+                    activeDot={{ r: 8, stroke: '#00B77D', strokeWidth: 2, fill: '#ffffff' }}
+                  />
+                )}
+                {(includeBanksActive || includeCategoriesActive) && <Legend />}
               </RechartsLineChart>
             ) : (
-              <BarChart data={trendData}>
+              <BarChart data={stackedData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="month" stroke="#6b7280" fontSize={12} />
-                <YAxis stroke="#6b7280" fontSize={12} tickFormatter={(value) => `₹${(value/1000).toFixed(0)}K`} />
+                <YAxis stroke="#6b7280" fontSize={12} tickFormatter={(value) => shortCurrency(value)} />
                 <Tooltip 
-                  formatter={(value: number) => [formatCurrency(value, undefined, preferences), 'Amount']}
+                  formatter={(value: number, name: string) => [formatCurrency(value, undefined, preferences), includeBanksActive ? name : 'Amount']}
                   labelStyle={{ color: '#374151' }}
                   contentStyle={{ 
                     backgroundColor: 'white', 
@@ -275,7 +408,18 @@ export const MonthlyTrends: React.FC = () => {
                     boxShadow: '0 10px 25px -5px rgba(0, 183, 125, 0.1)'
                   }}
                 />
-                <Bar dataKey="amount" fill="#00B77D" radius={[8, 8, 0, 0]} />
+                {includeBanksActive ? (
+                  bankKeys.map((bk, idx) => (
+                    <Bar key={bk} dataKey={bk} stackId="a" fill={colorFor(bk, idx)} radius={[8,8,0,0]} />
+                  ))
+                ) : includeCategoriesActive ? (
+                  categoryKeys.map((ck, idx) => (
+                    <Bar key={ck} dataKey={ck} stackId="a" fill={colorFor(ck, idx)} radius={[8,8,0,0]} />
+                  ))
+                ) : (
+                  <Bar dataKey="amount" fill="#00B77D" radius={[8, 8, 0, 0]} />
+                )}
+                {(includeBanksActive || includeCategoriesActive) && <Legend />}
               </BarChart>
             )}
           </ResponsiveContainer>
@@ -286,20 +430,41 @@ export const MonthlyTrends: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card bg-gradient-to-br from-brand-green-50 to-brand-blue-50 border-brand-green-200">
           <h4 className="text-lg font-heading font-bold text-brand-gray-900 mb-4">💡 Key Insights</h4>
-          <div className="space-y-3">
-            <div className="flex items-start space-x-3">
-              <div className="w-2 h-2 bg-brand-green-500 rounded-full mt-2"></div>
-              <p className="text-sm text-brand-gray-700">Your spending decreased by 10.5% last month - great job cutting costs!</p>
+          {includeCategoriesActive ? (
+            (()=>{
+              // derive insights for category distribution
+              const totals: Record<string, number> = {};
+              trendData.forEach(m => m.categories?.forEach(c => { totals[c.name]=(totals[c.name]||0)+c.outflow; }));
+              const sorted = Object.entries(totals).sort((a,b)=>b[1]-a[1]);
+              const totalAll = sorted.reduce((s,[_k,v])=>s+v,0);
+              const top1 = sorted[0];
+              const top3Share = sorted.slice(0,3).reduce((s,[_k,v])=>s+v,0) / (totalAll||1) * 100;
+              // pareto 80% categories count
+              let running=0, paretoCount=0; for(const [_k,v] of sorted){ running+=v; paretoCount++; if(running/ (totalAll||1) >=0.8) break; }
+              return (
+                <div className="space-y-3">
+                  <div className="flex items-start space-x-3">
+                    <div className="w-2 h-2 bg-brand-green-500 rounded-full mt-2" />
+                    <p className="text-sm text-brand-gray-700">Top category <span className="font-semibold">{top1? top1[0]: 'N/A'}</span> contributes {top1? ((top1[1]/(totalAll||1))*100).toFixed(1): '0.0'}% of spend.</p>
+                  </div>
+                  <div className="flex items-start space-x-3">
+                    <div className="w-2 h-2 bg-brand-blue-500 rounded-full mt-2" />
+                    <p className="text-sm text-brand-gray-700">Top 3 categories account for {top3Share.toFixed(1)}% of total outflow.</p>
+                  </div>
+                  <div className="flex items-start space-x-3">
+                    <div className="w-2 h-2 bg-accent-500 rounded-full mt-2" />
+                    <p className="text-sm text-brand-gray-700">{paretoCount} categories make up 80% of spending (focus here for optimization).</p>
+                  </div>
+                </div>
+              );
+            })()
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-start space-x-3"><div className="w-2 h-2 bg-brand-green-500 rounded-full mt-2" /><p className="text-sm text-brand-gray-700">Switch to "By Category" to see category composition stacked.</p></div>
+              <div className="flex items-start space-x-3"><div className="w-2 h-2 bg-brand-blue-500 rounded-full mt-2" /><p className="text-sm text-brand-gray-700">Use bank breakdown for per-account performance.</p></div>
+              <div className="flex items-start space-x-3"><div className="w-2 h-2 bg-accent-500 rounded-full mt-2" /><p className="text-sm text-brand-gray-700">Previous Year mode gives YoY context.</p></div>
             </div>
-            <div className="flex items-start space-x-3">
-              <div className="w-2 h-2 bg-brand-blue-500 rounded-full mt-2"></div>
-              <p className="text-sm text-brand-gray-700">Food category shows the most consistent spending pattern.</p>
-            </div>
-            <div className="flex items-start space-x-3">
-              <div className="w-2 h-2 bg-accent-500 rounded-full mt-2"></div>
-              <p className="text-sm text-brand-gray-700">Consider setting a budget for Travel category to control peaks.</p>
-            </div>
-          </div>
+          )}
         </div>
 
         <div className="card">

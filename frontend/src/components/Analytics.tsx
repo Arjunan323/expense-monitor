@@ -1,6 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BarChart3, TrendingUp, Target, AlertTriangle, DollarSign, Calculator, ArrowLeft } from 'lucide-react';
 import { MonthlyTrends } from './analytics/MonthlyTrends';
+import { fetchMonthlySpendingSeries } from '../api/analyticsTrends';
+import { budgetsApi } from '../api/budgets';
+import { spendingAlertsApi } from '../api/spendingAlerts';
+import { goalsApi } from '../api/client';
 import { BudgetTracking } from './analytics/BudgetTracking';
 import { SpendingAlerts } from './analytics/SpendingAlerts';
 import { CashFlowForecast } from './analytics/CashFlowForecast';
@@ -11,6 +15,41 @@ type AnalyticsView = 'overview' | 'trends' | 'budget' | 'alerts' | 'forecast' | 
 
 export const Analytics: React.FC = () => {
   const [currentView, setCurrentView] = useState<AnalyticsView>('overview');
+  const [spendingTrendPct, setSpendingTrendPct] = useState<number | null>(null);
+  const [budgetAdherence, setBudgetAdherence] = useState<number | null>(null);
+  const [activeAlerts, setActiveAlerts] = useState<number | null>(null);
+  const [goalsProgressPct, setGoalsProgressPct] = useState<number | null>(null);
+  const [loadingStats, setLoadingStats] = useState<boolean>(false);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        setLoadingStats(true);
+        const now = new Date();
+        const to = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const from = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
+        const [trends, budgetSummary, alertSummary, goalStats] = await Promise.all([
+          fetchMonthlySpendingSeries({ from, to }),
+          budgetsApi.summary().catch(()=>null),
+            spendingAlertsApi.summary().catch(()=>null),
+          goalsApi.stats().catch(()=>null)
+        ]);
+        if(!mounted) return;
+        setSpendingTrendPct(typeof trends.summary.momChangePct === 'number' ? Math.round(trends.summary.momChangePct) : null);
+        if(budgetSummary) setBudgetAdherence(Math.round(budgetSummary.history.thisMonthAdherence));
+        if(alertSummary) setActiveAlerts(alertSummary.total);
+        if(goalStats) setGoalsProgressPct(Math.round(goalStats.averageProgressPercent));
+      } catch(err){
+        // eslint-disable-next-line no-console
+        console.error('Failed loading quick stats', err);
+      } finally {
+        if(mounted) setLoadingStats(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
 
   const analyticsMenuItems = [
     {
@@ -107,7 +146,7 @@ export const Analytics: React.FC = () => {
               <span className="text-xs font-semibold text-brand-green-600 bg-brand-green-100 px-2 py-1 rounded-full">TRENDS</span>
             </div>
             <h3 className="text-sm font-medium text-brand-gray-600 mb-1">Spending Trend</h3>
-            <p className="text-2xl font-bold text-brand-green-600">-12%</p>
+            <p className="text-2xl font-bold text-brand-green-600">{spendingTrendPct !== null ? `${spendingTrendPct > 0 ? '+' : ''}${spendingTrendPct}%` : (loadingStats ? '…' : '—')}</p>
             <p className="text-sm text-brand-gray-500">vs last month</p>
           </div>
 
@@ -119,7 +158,7 @@ export const Analytics: React.FC = () => {
               <span className="text-xs font-semibold text-brand-blue-600 bg-brand-blue-100 px-2 py-1 rounded-full">BUDGET</span>
             </div>
             <h3 className="text-sm font-medium text-brand-gray-600 mb-1">Budget Adherence</h3>
-            <p className="text-2xl font-bold text-brand-blue-600">85%</p>
+            <p className="text-2xl font-bold text-brand-blue-600">{budgetAdherence !== null ? `${budgetAdherence}%` : (loadingStats ? '…' : '—')}</p>
             <p className="text-sm text-brand-gray-500">This month</p>
           </div>
 
@@ -131,7 +170,7 @@ export const Analytics: React.FC = () => {
               <span className="text-xs font-semibold text-yellow-600 bg-yellow-100 px-2 py-1 rounded-full">ALERTS</span>
             </div>
             <h3 className="text-sm font-medium text-brand-gray-600 mb-1">Active Alerts</h3>
-            <p className="text-2xl font-bold text-yellow-600">3</p>
+            <p className="text-2xl font-bold text-yellow-600">{activeAlerts !== null ? activeAlerts : (loadingStats ? '…' : '—')}</p>
             <p className="text-sm text-brand-gray-500">Need attention</p>
           </div>
 
@@ -143,7 +182,7 @@ export const Analytics: React.FC = () => {
               <span className="text-xs font-semibold text-purple-600 bg-purple-100 px-2 py-1 rounded-full">GOALS</span>
             </div>
             <h3 className="text-sm font-medium text-brand-gray-600 mb-1">Goals Progress</h3>
-            <p className="text-2xl font-bold text-purple-600">68%</p>
+            <p className="text-2xl font-bold text-purple-600">{goalsProgressPct !== null ? `${goalsProgressPct}%` : (loadingStats ? '…' : '—')}</p>
             <p className="text-sm text-brand-gray-500">Average completion</p>
           </div>
         </div>

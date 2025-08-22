@@ -1,25 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { TrendingUp, Plus, Calendar, DollarSign, AlertCircle, Target, Zap } from 'lucide-react';
+import { TrendingUp, Plus, Calendar, AlertCircle, Target, Zap, Trash2, Edit3, X, Save } from 'lucide-react';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { formatCurrency } from '../../utils/formatters';
 import { usePreferences } from '../../contexts/PreferencesContext';
+import { forecastApi, ForecastResponse, UpcomingApiDto } from '../../api/client';
+import { toast } from 'react-hot-toast';
 
-interface ForecastData {
-  month: string;
-  actual?: number;
-  predicted: number;
-  isActual: boolean;
-}
-
-interface UpcomingTransaction {
-  id: string;
-  description: string;
-  amount: number;
-  date: string;
-  type: 'income' | 'expense';
-  recurring: boolean;
-}
+interface ForecastData { month: string; actual?: number; predicted?: number; isActual: boolean }
 
 export const CashFlowForecast: React.FC = () => {
   const { preferences } = usePreferences();
@@ -34,52 +22,83 @@ export const CashFlowForecast: React.FC = () => {
     recurring: false
   });
 
-  const [forecastData, setForecastData] = useState<ForecastData[]>([
-    { month: 'Jan 2024', actual: 45000, predicted: 45000, isActual: true },
-    { month: 'Feb 2024', actual: 52000, predicted: 52000, isActual: true },
-    { month: 'Mar 2024', actual: 48000, predicted: 48000, isActual: true },
-    { month: 'Apr 2024', actual: 55000, predicted: 55000, isActual: true },
-    { month: 'May 2024', predicted: 50000, isActual: false },
-    { month: 'Jun 2024', predicted: 48000, isActual: false },
-    { month: 'Jul 2024', predicted: 52000, isActual: false },
-    { month: 'Aug 2024', predicted: 49000, isActual: false },
-  ]);
-
-  const [upcomingTransactions, setUpcomingTransactions] = useState<UpcomingTransaction[]>([
-    { id: '1', description: 'Salary Credit', amount: 75000, date: '2024-05-01', type: 'income', recurring: true },
-    { id: '2', description: 'Rent Payment', amount: -25000, date: '2024-05-05', type: 'expense', recurring: true },
-    { id: '3', description: 'Insurance Premium', amount: -8000, date: '2024-05-15', type: 'expense', recurring: false },
-  ]);
+  const [forecastData, setForecastData] = useState<ForecastData[]>([]);
+  const [upcomingTransactions, setUpcomingTransactions] = useState<UpcomingApiDto[]>([]);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editDraft, setEditDraft] = useState<Partial<UpcomingApiDto>>({});
 
   const [summaryStats, setSummaryStats] = useState({
-    predictedBalance: 125000,
+    predictedBalance: 0,
     potentialShortfall: 0,
-    expectedSurplus: 15000
+    expectedSurplus: 0
   });
 
-  useEffect(() => {
-    setTimeout(() => setLoading(false), 1000);
-  }, []);
-
-  const addTransaction = () => {
-    if (newTransaction.description && newTransaction.amount && newTransaction.date) {
-      const transaction: UpcomingTransaction = {
-        id: Date.now().toString(),
-        description: newTransaction.description,
-        amount: newTransaction.type === 'expense' ? -Math.abs(parseFloat(newTransaction.amount)) : Math.abs(parseFloat(newTransaction.amount)),
-        date: newTransaction.date,
-        type: newTransaction.type,
-        recurring: newTransaction.recurring
-      };
-      setUpcomingTransactions(prev => [...prev, transaction]);
-      setNewTransaction({ description: '', amount: '', date: '', type: 'expense', recurring: false });
-      setShowAddForm(false);
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [forecast, upcoming] = await Promise.all([
+        forecastApi.get(6),
+        forecastApi.upcoming.list()
+      ]);
+      transformForecast(forecast);
+      setUpcomingTransactions(upcoming);
+      setLoading(false);
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to load forecast');
+      setLoading(false);
     }
   };
 
+  const transformForecast = (f: ForecastResponse) => {
+    const actuals: ForecastData[] = f.actuals.map(a => ({ month: prettyMonth(a.month), actual: a.projectedNet, predicted: a.projectedNet, isActual: true }));
+    const projections: ForecastData[] = f.projections.map(p => ({ month: prettyMonth(p.month), predicted: p.projectedNet, isActual: false }));
+    setForecastData([...actuals, ...projections]);
+    setSummaryStats({
+      predictedBalance: f.summary.projectedNextMonth,
+      potentialShortfall: f.summary.projectedNextMonth < 0 ? Math.abs(f.summary.projectedNextMonth) : 0,
+      expectedSurplus: f.summary.projectedNextMonth > 0 ? f.summary.projectedNextMonth : 0
+    });
+  };
+
+  const prettyMonth = (ym:string) => {
+    const [year, month] = ym.split('-').map(Number);
+    const date = new Date(year, month-1, 1);
+    return date.toLocaleString('default', { month: 'short', year: 'numeric' });
+  };
+
+  useEffect(() => { loadData(); }, []);
+
+  const addTransaction = async () => {
+    if (newTransaction.description && newTransaction.amount && newTransaction.date) {
+      try {
+        const amount = newTransaction.type === 'expense' ? -Math.abs(parseFloat(newTransaction.amount)) : Math.abs(parseFloat(newTransaction.amount));
+  const flowType = amount >=0 ? 'INCOME':'EXPENSE';
+  const created = await forecastApi.upcoming.create({ description: newTransaction.description, amount, dueDate: newTransaction.date, category: newTransaction.type, status: 'PENDING', recurring: newTransaction.recurring, flowType });
+        setUpcomingTransactions(prev => [...prev, created]);
+        setNewTransaction({ description: '', amount: '', date: '', type: 'expense', recurring: false });
+        setShowAddForm(false);
+        toast.success('Upcoming transaction added');
+      } catch (e) {
+        toast.error('Failed to add');
+      }
+    }
+  };
+
+  const startEdit = (t: UpcomingApiDto) => { setEditingId(t.id); setEditDraft({ ...t }); };
+  const cancelEdit = () => { setEditingId(null); setEditDraft({}); };
+  const saveEdit = async () => {
+    if(editingId==null) return; try {
+      const updated = await forecastApi.upcoming.update(editingId, editDraft);
+      setUpcomingTransactions(list => list.map(l => l.id===editingId? updated : l));
+      setEditingId(null); setEditDraft({}); toast.success('Updated');
+    } catch(e){ toast.error('Update failed'); }
+  };
+  const remove = async (id:number) => { const prev = upcomingTransactions; setUpcomingTransactions(list=>list.filter(l=>l.id!==id)); try { await forecastApi.upcoming.delete(id); toast.success('Deleted'); } catch(e){ toast.error('Delete failed'); setUpcomingTransactions(prev); } };
+
   const adjustedForecastData = forecastData.map(item => ({
     ...item,
-    predicted: item.predicted + (item.predicted * sensitivityFactor / 100)
+    predicted: item.predicted ? item.predicted + (item.predicted * sensitivityFactor / 100) : undefined
   }));
 
   if (loading) {
@@ -193,7 +212,13 @@ export const CashFlowForecast: React.FC = () => {
             <LineChart data={adjustedForecastData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="month" stroke="#6b7280" fontSize={12} />
-              <YAxis stroke="#6b7280" fontSize={12} tickFormatter={(value) => `₹${(value/1000).toFixed(0)}K`} />
+              <YAxis stroke="#6b7280" fontSize={12} tickFormatter={(value) => {
+                try {
+                  const sample = new Intl.NumberFormat(preferences.locale||'en-US', { style:'currency', currency: preferences.currency||'USD', minimumFractionDigits:0, maximumFractionDigits:0 }).format(0);
+                  const sym = sample.replace(/0/g,'').trim();
+                  return `${sym}${(value/1000).toFixed(0)}K`;
+                } catch { return (value/1000).toFixed(0)+'K'; }
+              }} />
               <Tooltip 
                 formatter={(value: number, name: string) => [
                   formatCurrency(value, undefined, preferences), 
@@ -207,7 +232,11 @@ export const CashFlowForecast: React.FC = () => {
                   boxShadow: '0 10px 25px -5px rgba(0, 183, 125, 0.1)'
                 }}
               />
-              <ReferenceLine x="Apr 2024" stroke="#6b7280" strokeDasharray="2 2" />
+              {/* Reference line at boundary between actual & forecast (last actual) */}
+              {(() => {
+                const lastActual = forecastData.filter(f=>f.isActual).slice(-1)[0];
+                return lastActual ? <ReferenceLine x={lastActual.month} stroke="#6b7280" strokeDasharray="2 2" /> : null;
+              })()}
               <Line 
                 type="monotone" 
                 dataKey="actual" 
@@ -332,38 +361,60 @@ export const CashFlowForecast: React.FC = () => {
 
         {/* Transactions List */}
         <div className="space-y-3">
-          {upcomingTransactions.map(transaction => (
-            <div key={transaction.id} className="flex items-center justify-between p-4 bg-brand-gray-50 rounded-2xl hover:bg-brand-gray-100 transition-colors duration-200">
-              <div className="flex items-center space-x-4">
-                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${
-                  transaction.type === 'income' 
-                    ? 'bg-brand-green-100 text-brand-green-600' 
-                    : 'bg-red-100 text-red-600'
-                }`}>
-                  {transaction.type === 'income' ? '💰' : '💸'}
-                </div>
-                <div>
-                  <h4 className="font-semibold text-brand-gray-900">{transaction.description}</h4>
-                  <div className="flex items-center space-x-2 text-sm text-brand-gray-600">
-                    <Calendar className="w-3 h-3" />
-                    <span>{new Date(transaction.date).toLocaleDateString()}</span>
-                    {transaction.recurring && (
-                      <span className="bg-brand-blue-100 text-brand-blue-700 px-2 py-0.5 rounded-full text-xs font-semibold">
-                        Recurring
-                      </span>
-                    )}
+          {upcomingTransactions.map(t => {
+            const income = t.amount >= 0;
+            const isEditing = editingId === t.id;
+            return (
+              <div key={t.id} className="flex items-center justify-between p-4 bg-brand-gray-50 rounded-2xl hover:bg-brand-gray-100 transition-colors duration-200">
+                <div className="flex items-center space-x-4">
+                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${ income ? 'bg-brand-green-100 text-brand-green-600' : 'bg-red-100 text-red-600'}`}>{income ? '💰' : '💸'}</div>
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      {isEditing ? (
+                        <input value={editDraft.description||''} onChange={e=>setEditDraft(d=>({...d, description:e.target.value}))} className="input-field py-1" />
+                      ) : (
+                        <h4 className="font-semibold text-brand-gray-900">{t.description}</h4>
+                      )}
+                      {t.recurring && <span className="text-xs px-2 py-0.5 rounded-full bg-brand-green-100 text-brand-green-700 font-semibold">Recurring</span>}
+                    </div>
+                    <div className="flex items-center space-x-2 text-sm text-brand-gray-600">
+                      <Calendar className="w-3 h-3" />
+                      {isEditing ? (
+                        <input type="date" value={(editDraft as any).dueDate?.slice(0,10) || (t as any).dueDate?.slice(0,10)} onChange={e=>setEditDraft(d=>({...d, dueDate:e.target.value}))} className="input-field py-1" />
+                      ) : (
+                        <span>{new Date((t as any).dueDate).toLocaleDateString()}</span>
+                      )}
+                      <span className="bg-brand-blue-100 text-brand-blue-700 px-2 py-0.5 rounded-full text-xs font-semibold">{t.status}</span>
+                      {isEditing && (
+                        <label className="flex items-center space-x-1 ml-2 text-xs">
+                          <input type="checkbox" checked={!!editDraft.recurring} onChange={e=>setEditDraft(d=>({...d, recurring:e.target.checked}))} />
+                          <span>Recurring</span>
+                        </label>
+                      )}
+                    </div>
                   </div>
                 </div>
+                <div className="flex items-center space-x-3">
+                  {isEditing ? (
+                    <>
+                      <input type="number" value={editDraft.amount?.toString() || t.amount.toString()} onChange={e=>setEditDraft(d=>({...d, amount: parseFloat(e.target.value)}))} className="input-field py-1 w-28" />
+                      <select value={editDraft.flowType || t.flowType || (t.amount>=0?'INCOME':'EXPENSE')} onChange={e=>setEditDraft(d=>({...d, flowType: e.target.value as any}))} className="input-field py-1 w-28">
+                        <option value="INCOME">Income</option>
+                        <option value="EXPENSE">Expense</option>
+                      </select>
+                      <button onClick={saveEdit} className="btn-primary !px-3"><Save className="w-4 h-4" /></button>
+                      <button onClick={cancelEdit} className="btn-secondary !px-3"><X className="w-4 h-4" /></button>
+                    </>
+                  ) : (<>
+                    <p className={`text-lg font-bold ${ income ? 'text-brand-green-600' : 'text-red-600'}`}>{income? '+' : ''}{formatCurrency(Math.abs(t.amount), undefined, preferences)}</p>
+                    {t.flowType && <span className="text-xs font-semibold text-brand-gray-500">{t.flowType}</span>}
+                    <button onClick={()=>startEdit(t)} className="btn-secondary !px-3"><Edit3 className="w-4 h-4" /></button>
+                    <button onClick={()=>remove(t.id)} className="btn-secondary !px-3"><Trash2 className="w-4 h-4" /></button>
+                  </>)}
+                </div>
               </div>
-              <div className="text-right">
-                <p className={`text-lg font-bold ${
-                  transaction.type === 'income' ? 'text-brand-green-600' : 'text-red-600'
-                }`}>
-                  {transaction.type === 'income' ? '+' : ''}{formatCurrency(Math.abs(transaction.amount), undefined, preferences)}
-                </p>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 

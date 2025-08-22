@@ -75,7 +75,7 @@ export const Sidebar: React.FC = () => {
           <div className="px-6 py-4">
             <div className="bg-gradient-funky rounded-2xl p-4 text-center">
               <div className="text-white text-sm font-semibold mb-1">💰 Money Saved</div>
-              <div className="text-white text-lg font-bold font-mono">₹12,450</div>
+              {/* <div className="text-white text-lg font-bold font-mono">₹12,450</div> */}
               <div className="text-white/80 text-xs">This month</div>
             </div>
           </div>

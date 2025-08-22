@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { LineChart } from 'react-native-chart-kit';
 import { formatCurrency } from '../../utils/formatters';
+import { apiCall } from '../../utils/api';
 import { usePreferences } from '../../contexts/PreferencesContext';
 
 const { width } = Dimensions.get('window');
@@ -22,28 +23,48 @@ export const MonthlyTrendsScreen: React.FC = () => {
   const [chartType, setChartType] = useState<'line' | 'bar'>('line');
   const [viewMode, setViewMode] = useState<'category' | 'bank' | 'previous'>('category');
 
-  const chartData = {
-    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-    datasets: [{
-      data: [45000, 52000, 48000, 55000, 42000, 38000],
-      color: (opacity = 1) => `rgba(0, 183, 125, ${opacity})`,
-      strokeWidth: 3
-    }]
+  const [chartData, setChartData] = useState({ labels: [] as string[], datasets: [{ data: [] as number[], color: (o=1)=>`rgba(0,183,125,${o})`, strokeWidth:3 }]});
+  const [summaryStats, setSummaryStats] = useState({
+    highestMonth: { month: '', amount: 0 },
+    lowestMonth: { month: '', amount: 0 },
+    averageSpending: 0,
+    momChange: 0
+  });
+  const [error, setError] = useState<string|null>(null);
+
+  const computeRange = () => {
+    const now = new Date();
+    const end = new Date(now.getFullYear(), now.getMonth(), 1);
+    const start = new Date(end.getFullYear(), end.getMonth()-5, 1);
+    const fmt = (d:Date)=> `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    return { from: fmt(start), to: fmt(end) };
   };
 
-  const summaryStats = {
-    highestMonth: { month: 'Apr 2024', amount: 55000 },
-    lowestMonth: { month: 'Jun 2024', amount: 38000 },
-    averageSpending: 46667,
-    momChange: -10.5
-  };
+  const load = useCallback(async ()=>{
+    setLoading(true); setError(null);
+    try {
+      const r = await apiCall<any>('GET', `/analytics/trends/spending/monthly-series?from=${computeRange().from}&to=${computeRange().to}&includePrevYear=${viewMode==='previous'}&includeBanks=${viewMode==='bank'}`);
+      const labels = r.monthly.map((m:any)=>{ const [y,mo]=m.month.split('-'); return new Date(Number(y), Number(mo)-1,1).toLocaleString(undefined,{month:'short'}); });
+      const data = r.monthly.map((m:any)=> Number(m.totalOutflow));
+      setChartData({ labels, datasets:[{ data, color:(o=1)=>`rgba(0,183,125,${o})`, strokeWidth:3 }]});
+      setSummaryStats({
+        highestMonth: { month: r.summary.highest.month, amount: Number(r.summary.highest.amount) },
+        lowestMonth: { month: r.summary.lowest.month, amount: Number(r.summary.lowest.amount) },
+        averageSpending: Number(r.summary.averageOutflow),
+        momChange: r.summary.momChangePct? Number(r.summary.momChangePct):0
+      });
+    } catch(e:any){ setError(e.message||'Failed'); }
+    finally { setLoading(false); }
+  }, [viewMode]);
 
-  useEffect(() => {
-    setTimeout(() => setLoading(false), 1000);
-  }, []);
+  useEffect(()=>{ load(); }, [load]);
 
   if (loading) {
     return <LoadingSpinner />;
+  }
+
+  if(error){
+    return <View style={{ padding:24 }}><Text style={{ color:'#dc2626', marginBottom:12 }}>{error}</Text><TouchableOpacity onPress={load} style={{ backgroundColor:'#00B77D', padding:12, borderRadius:10 }}><Text style={{ color:'#fff', textAlign:'center', fontWeight:'600' }}>Retry</Text></TouchableOpacity></View>;
   }
 
   return (
@@ -145,7 +166,7 @@ export const MonthlyTrendsScreen: React.FC = () => {
             </TouchableOpacity>
           ))}
         </View>
-      </div>
+      </View>
 
       {/* Chart */}
       <View style={styles.chartCard}>
