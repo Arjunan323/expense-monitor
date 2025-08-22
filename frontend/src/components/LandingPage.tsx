@@ -672,7 +672,7 @@ export const LandingPage: React.FC = () => {
               <p className="text-brand-gray-300 mb-6 max-w-md leading-relaxed">
                 AI-powered expense tracking that helps you cut unnecessary spending and save more money every month.
               </p>
-              <div className="flex space-x-4">
+              {/* <div className="flex space-x-4">
                 <button className="bg-brand-gray-800 hover:bg-brand-gray-700 px-6 py-3 rounded-2xl flex items-center space-x-2 transition-all duration-300 hover:scale-105">
                   <Download className="w-5 h-5" />
                   <span className="font-semibold">App Store</span>
@@ -681,7 +681,7 @@ export const LandingPage: React.FC = () => {
                   <Download className="w-5 h-5" />
                   <span className="font-semibold">Google Play</span>
                 </button>
-              </div>
+              </div> */}
             </div>
 
             <div>
