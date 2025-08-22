@@ -47,10 +47,28 @@ export const LandingPage: React.FC = () => {
   const [plansLoading, setPlansLoading] = useState(false);
   const [plansError, setPlansError] = useState<string | null>(null);
 
-  const handleEmailSubmit = (e: React.FormEvent) => {
+  const [emailStatus, setEmailStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Email submitted:', email);
-    setEmail('');
+    if(!email) return;
+    try {
+      setEmailStatus('loading');
+      setEmailError(null);
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/public/newsletter-subscriptions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, source: 'landing_page' })
+      });
+      if(!res.ok) throw new Error('Subscription failed');
+      setEmailStatus('success');
+      setEmail('');
+      setTimeout(()=> setEmailStatus('idle'), 4000);
+    } catch(err:any){
+      setEmailStatus('error');
+      setEmailError(err.message || 'Failed');
+      setTimeout(()=> setEmailStatus('idle'), 5000);
+    }
   };
 
   useEffect(() => {
@@ -581,13 +599,16 @@ export const LandingPage: React.FC = () => {
               </div>
               <button
                 type="submit"
-                className="bg-white text-brand-green-600 font-bold py-4 px-8 rounded-2xl hover:bg-brand-gray-50 transition-all duration-300 flex items-center justify-center space-x-2 hover:scale-105 active:scale-95"
+                disabled={emailStatus==='loading'}
+                className={`bg-white text-brand-green-600 font-bold py-4 px-8 rounded-2xl transition-all duration-300 flex items-center justify-center space-x-2 hover:scale-105 active:scale-95 ${emailStatus==='loading' ? 'opacity-70 cursor-not-allowed' : 'hover:bg-brand-gray-50'}`}
               >
-                <Sparkles className="w-5 h-5" />
-                <span>Subscribe</span>
+                <Sparkles className={`w-5 h-5 ${emailStatus==='loading' ? 'animate-spin' : ''}`} />
+                <span>{emailStatus==='loading' ? 'Subscribing...' : emailStatus==='success' ? 'Subscribed!' : 'Subscribe'}</span>
               </button>
             </div>
           </form>
+          {emailStatus==='error' && <p className="text-red-200 text-sm mt-2">{emailError}</p>}
+          {emailStatus==='success' && <p className="text-emerald-200 text-sm mt-2">You are subscribed.</p>}
           <p className="text-white/70 text-sm mt-4">
             Join 10,000+ users saving money with our tips • Unsubscribe anytime
           </p>
