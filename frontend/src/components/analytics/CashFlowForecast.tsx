@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { TrendingUp, Plus, Calendar, AlertCircle, Target, Zap, Trash2, Edit3, X, Save } from 'lucide-react';
+import { TrendingUp, Plus, Calendar, AlertCircle, Target, Zap, Trash2, Edit3, X, Save, CheckCircle } from 'lucide-react';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { formatCurrency } from '../../utils/formatters';
@@ -7,7 +7,7 @@ import { usePreferences } from '../../contexts/PreferencesContext';
 import { forecastApi, ForecastResponse, UpcomingApiDto } from '../../api/client';
 import { toast } from 'react-hot-toast';
 
-interface ForecastData { month: string; actual?: number; predicted?: number; isActual: boolean }
+interface ForecastData { month: string; actual?: number; predicted?: number; isActual: boolean; }
 
 export const CashFlowForecast: React.FC = () => {
   const { preferences } = usePreferences();
@@ -533,101 +533,6 @@ export const CashFlowForecast: React.FC = () => {
               </button>
             </div>
           )}
-        </div>
-      </div>
-                  value={newTransaction.type}
-                  onChange={(e) => setNewTransaction(prev => ({ ...prev, type: e.target.value as 'income' | 'expense' }))}
-                  className="input-field"
-                >
-                  <option value="income">💰 Income</option>
-                  <option value="expense">💸 Expense</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex items-center justify-between mt-4">
-              <label className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  checked={newTransaction.recurring}
-                  onChange={(e) => setNewTransaction(prev => ({ ...prev, recurring: e.target.checked }))}
-                  className="rounded border-brand-gray-300 text-brand-green-600 focus:ring-brand-green-500"
-                />
-                <span className="text-sm text-brand-gray-700">Recurring monthly</span>
-              </label>
-              <div className="flex space-x-3">
-                <button
-                  onClick={() => setShowAddForm(false)}
-                  className="btn-secondary"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={addTransaction}
-                  className="btn-primary"
-                >
-                  Add Transaction
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Transactions List */}
-        <div className="space-y-3">
-          {upcomingTransactions.map(t => {
-            const income = t.amount >= 0;
-            const isEditing = editingId === t.id;
-            return (
-              <div key={t.id} className="flex items-center justify-between p-4 bg-brand-gray-50 rounded-2xl hover:bg-brand-gray-100 transition-colors duration-200">
-                <div className="flex items-center space-x-4">
-                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${ income ? 'bg-brand-green-100 text-brand-green-600' : 'bg-red-100 text-red-600'}`}>{income ? '💰' : '💸'}</div>
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      {isEditing ? (
-                        <input value={editDraft.description||''} onChange={e=>setEditDraft(d=>({...d, description:e.target.value}))} className="input-field py-1" />
-                      ) : (
-                        <h4 className="font-semibold text-brand-gray-900">{t.description}</h4>
-                      )}
-                      {t.recurring && <span className="text-xs px-2 py-0.5 rounded-full bg-brand-green-100 text-brand-green-700 font-semibold">Recurring</span>}
-                    </div>
-                    <div className="flex items-center space-x-2 text-sm text-brand-gray-600">
-                      <Calendar className="w-3 h-3" />
-                      {isEditing ? (
-                        <input type="date" value={(editDraft as any).dueDate?.slice(0,10) || (t as any).dueDate?.slice(0,10)} onChange={e=>setEditDraft(d=>({...d, dueDate:e.target.value}))} className="input-field py-1" />
-                      ) : (
-                        <span>{new Date((t as any).dueDate).toLocaleDateString()}</span>
-                      )}
-                      <span className="bg-brand-blue-100 text-brand-blue-700 px-2 py-0.5 rounded-full text-xs font-semibold">{t.status}</span>
-                      {isEditing && (
-                        <label className="flex items-center space-x-1 ml-2 text-xs">
-                          <input type="checkbox" checked={!!editDraft.recurring} onChange={e=>setEditDraft(d=>({...d, recurring:e.target.checked}))} />
-                          <span>Recurring</span>
-                        </label>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-3">
-                  {isEditing ? (
-                    <>
-                      <input type="number" value={editDraft.amount?.toString() || t.amount.toString()} onChange={e=>setEditDraft(d=>({...d, amount: parseFloat(e.target.value)}))} className="input-field py-1 w-28" />
-                      <select value={editDraft.flowType || t.flowType || (t.amount>=0?'INCOME':'EXPENSE')} onChange={e=>setEditDraft(d=>({...d, flowType: e.target.value as any}))} className="input-field py-1 w-28">
-                        <option value="INCOME">Income</option>
-                        <option value="EXPENSE">Expense</option>
-                      </select>
-                      <button onClick={saveEdit} className="btn-primary !px-3"><Save className="w-4 h-4" /></button>
-                      <button onClick={cancelEdit} className="btn-secondary !px-3"><X className="w-4 h-4" /></button>
-                    </>
-                  ) : (<>
-                    <p className={`text-lg font-bold ${ income ? 'text-brand-green-600' : 'text-red-600'}`}>{income? '+' : ''}{formatCurrency(Math.abs(t.amount), undefined, preferences)}</p>
-                    {t.flowType && <span className="text-xs font-semibold text-brand-gray-500">{t.flowType}</span>}
-                    <button onClick={()=>startEdit(t)} className="btn-secondary !px-3"><Edit3 className="w-4 h-4" /></button>
-                    <button onClick={()=>remove(t.id)} className="btn-secondary !px-3"><Trash2 className="w-4 h-4" /></button>
-                  </>)}
-                </div>
-              </div>
-            );
-          })}
         </div>
       </div>
 
