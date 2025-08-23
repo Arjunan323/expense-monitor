@@ -22,6 +22,8 @@ public class Subscription {
     private String status; // ACTIVE, EXPIRED, CANCELLED
     private String razorpayPaymentId;
     private String razorpayOrderId;
+    // MONTHLY | YEARLY (derived from plan selected); null for legacy free users
+    private String billingPeriod;
 
     @OneToOne
     @JoinColumn(name = "user_id", unique = true)
@@ -41,6 +43,8 @@ public class Subscription {
     public void setRazorpayPaymentId(String razorpayPaymentId) { this.razorpayPaymentId = razorpayPaymentId; }
     public String getRazorpayOrderId() { return razorpayOrderId; }
     public void setRazorpayOrderId(String razorpayOrderId) { this.razorpayOrderId = razorpayOrderId; }
+    public String getBillingPeriod() { return billingPeriod; }
+    public void setBillingPeriod(String billingPeriod) { this.billingPeriod = billingPeriod; }
     public User getUser() { return user; }
     public void setUser(User user) { this.user = user; }
 }

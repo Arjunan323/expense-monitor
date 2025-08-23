@@ -34,7 +34,7 @@ interface Plan {
   name: string;
   price: number;          // raw price (already divided by 100 for display)
   currency: string;       // ISO code (INR | USD)
-  period: string;
+  period: string; // month or year (UI)
   description: string;
   statementsLimit: string;
   pagesPerStatement: string;
@@ -122,11 +122,15 @@ export const BillingScreen: React.FC = () => {
   const [upgrading, setUpgrading] = useState<string | null>(null);
   const [plans, setPlans] = useState<Plan[]>(FALLBACK_PLANS);
   const [plansLoading, setPlansLoading] = useState(false);
+  const [billingPeriod, setBillingPeriod] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
 
   useEffect(() => {
     fetchUsageStats();
-    fetchPlans();
   }, []);
+
+  useEffect(() => {
+    fetchPlans();
+  }, [billingPeriod]);
 
   const fetchUsageStats = async () => {
     try {
@@ -159,27 +163,32 @@ export const BillingScreen: React.FC = () => {
       }
       const data = await apiCall<any[]>(
         'GET',
-        `/plans?region=${region}`
+        `/plans?region=${region}&billingPeriod=${billingPeriod}`
       );
       const normalizeCurrency = (c: string) => {
         if (c === '₹' || c === 'INR') return 'INR';
         if (c === '$' || c === 'USD') return 'USD';
         return c; // leave others untouched
       };
-      const mapped: Plan[] = data.map(p => ({
-        id: p.planType,
-        name: p.planType === 'FREE' ? 'Free Plan' : p.planType === 'PRO' ? 'Pro Plan' : 'Premium Plan',
-        price: p.amount / 100,
-        currency: normalizeCurrency(p.currency),
-        period: 'month',
-        description: p.planType === 'FREE' ? 'Ideal for casual users or those wanting to try out the service' : p.planType === 'PRO' ? 'Perfect for power users tracking multiple accounts' : 'Best for business, heavy users, or those who want no limits',
-        statementsLimit: p.statementsPerMonth === -1 ? 'Unlimited' : String(p.statementsPerMonth),
-        pagesPerStatement: p.pagesPerStatement === -1 ? 'Unlimited' : String(p.pagesPerStatement),
-        features: (p.features || '').split(',').map((f: string) => f.trim()).filter((f: string) => !!f),
-        popular: p.planType === 'PRO',
-        buttonText: p.planType === 'FREE' ? 'Current Plan' : (p.planType === 'PRO' ? 'Upgrade to Pro' : 'Upgrade to Premium'),
-        buttonVariant: p.planType === 'FREE' ? 'secondary' : (p.planType === 'PRO' ? 'primary' : 'premium')
-      }));
+  let mapped: Plan[] = data.map(variant => {
+        const pt = variant.planType;
+        return {
+          id: pt,
+          name: pt === 'FREE' ? 'Free Plan' : pt === 'PRO' ? 'Pro Plan' : 'Premium Plan',
+          price: variant.amount / 100,
+          currency: normalizeCurrency(variant.currency),
+          period: billingPeriod === 'YEARLY' ? 'year' : 'month',
+          description: pt === 'FREE' ? 'Ideal for casual users or those wanting to try out the service' : pt === 'PRO' ? 'Perfect for power users tracking multiple accounts' : 'Best for business, heavy users, or those who want no limits',
+          statementsLimit: variant.statementsPerMonth === -1 ? 'Unlimited' : String(variant.statementsPerMonth),
+          pagesPerStatement: variant.pagesPerStatement === -1 ? 'Unlimited' : String(variant.pagesPerStatement),
+          features: (variant.features || '').split(',').map((f: string) => f.trim()).filter((f: string) => !!f),
+          popular: pt === 'PRO',
+          buttonText: pt === 'FREE' ? 'Current Plan' : (pt === 'PRO' ? 'Upgrade to Pro' : 'Upgrade to Premium'),
+          buttonVariant: pt === 'FREE' ? 'secondary' : (pt === 'PRO' ? 'primary' : 'premium')
+        };
+      });
+  const rank: Record<string, number> = { FREE: 0, PRO: 1, PREMIUM: 2 };
+  mapped = mapped.sort((a,b)=> (rank[a.id] ?? 99) - (rank[b.id] ?? 99));
       if (mapped.length) {
         const rank: Record<string, number> = { FREE: 0, PRO: 1, PREMIUM: 2 };
         mapped.sort((a,b)=> (rank[a.id] ?? 99) - (rank[b.id] ?? 99));
@@ -231,7 +240,7 @@ export const BillingScreen: React.FC = () => {
             try {
               setUpgrading(planId);
               // 1. Call backend to create Razorpay order
-              const resp = await apiCall<any>('POST', '/payment/order', { planType: planId });
+              const resp = await apiCall<any>('POST', '/payment/order', { planType: planId, billingPeriod });
               if (!resp || !resp.orderId) throw new Error('Order creation failed');
               if (isExpoGo || !RazorpayCheckout || typeof RazorpayCheckout.open !== 'function') {
                 // Simulate success flow inside Expo Go (no native module support)
@@ -247,7 +256,7 @@ export const BillingScreen: React.FC = () => {
               } else {
                 // 2. Open Razorpay native checkout
                 const options = {
-                  description: `${planId} Plan Subscription`,
+                  description: `${planId} Plan Subscription (${billingPeriod === 'YEARLY' ? 'Annual' : 'Monthly'})`,
                   image: 'https://yourdomain.com/logo.png',
                   currency: resp.currency,
                   key: resp.key,
@@ -387,6 +396,14 @@ export const BillingScreen: React.FC = () => {
       <View style={styles.plansSection}>
         <Text style={styles.plansTitle}>Choose Your Plan</Text>
         <Text style={styles.plansSubtitle}>Select the plan that best fits your needs</Text>
+        <View style={styles.toggleWrapper}>
+          {(['MONTHLY','YEARLY'] as const).map(p => (
+            <TouchableOpacity key={p} style={[styles.toggleOption, p===billingPeriod && styles.toggleOptionActive]} onPress={() => setBillingPeriod(p)}>
+              <Text style={[styles.toggleText, p===billingPeriod && styles.toggleTextActive]}>{p==='MONTHLY'?'Monthly':'Yearly'}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+  {billingPeriod === 'YEARLY' && <Text style={styles.discountNote}>Yearly plans ≈ 2 months free</Text>}
 
         {plans.map((plan) => (
           <View
@@ -415,7 +432,14 @@ export const BillingScreen: React.FC = () => {
               <Text style={styles.planName}>{plan.name}</Text>
               <View style={styles.planPrice}>
                 <Text style={styles.planPriceAmount}>{currencySymbol(plan.currency)}{plan.price}</Text>
-                {Number(plan.price) > 0 && <Text style={styles.planPricePeriod}>/{plan.period}</Text>}
+                {Number(plan.price) > 0 && (
+                  <>
+                    <Text style={styles.planPricePeriod}>/{plan.period}</Text>
+                    {plan.period === 'year' && (
+                      <Text style={styles.yearlyBadge}>2 months free</Text>
+                    )}
+                  </>
+                )}
               </View>
               <Text style={styles.planDescription}>{plan.description}</Text>
             </View>
@@ -704,6 +728,45 @@ const styles = StyleSheet.create({
   planPricePeriod: {
     fontSize: 16,
     color: '#6b7280',
+  },
+  toggleWrapper: {
+    flexDirection: 'row',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 12,
+    marginTop: 16,
+    overflow: 'hidden'
+  },
+  toggleOption: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: 'transparent'
+  },
+  toggleOptionActive: {
+    backgroundColor: '#0ea5e9'
+  },
+  toggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#475569'
+  },
+  toggleTextActive: {
+    color: '#fff'
+  },
+  discountNote: {
+    marginTop: 6,
+    fontSize: 12,
+    color: '#059669',
+    textAlign: 'center'
+  },
+  yearlyBadge: {
+    marginLeft: 8,
+    backgroundColor: '#d1fae5',
+    color: '#065f46',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    fontSize: 10,
+    overflow: 'hidden'
   },
   planDescription: {
     fontSize: 14,

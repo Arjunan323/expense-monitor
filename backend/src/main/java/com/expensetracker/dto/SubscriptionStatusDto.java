@@ -1,6 +1,5 @@
 package com.expensetracker.dto;
 
-import com.expensetracker.model.Subscription;
 import java.time.LocalDateTime;
 
 public class SubscriptionStatusDto {
@@ -14,8 +13,9 @@ public class SubscriptionStatusDto {
     private int pageLimit;
     private boolean canUpload;
     private String upgradeUrl;
+    private String billingPeriod;
 
-    public SubscriptionStatusDto(String planType, LocalDateTime startDate, LocalDateTime endDate, String status, int statementsUsed, int statementLimit, int pagesUsed, int pageLimit, boolean canUpload, String upgradeUrl) {
+    public SubscriptionStatusDto(String planType, LocalDateTime startDate, LocalDateTime endDate, String status, int statementsUsed, int statementLimit, int pagesUsed, int pageLimit, boolean canUpload, String upgradeUrl, String billingPeriod) {
         this.planType = planType;
         this.startDate = startDate;
         this.endDate = endDate;
@@ -26,6 +26,7 @@ public class SubscriptionStatusDto {
         this.pageLimit = pageLimit;
         this.canUpload = canUpload;
         this.upgradeUrl = upgradeUrl;
+        this.billingPeriod = billingPeriod;
     }
 
     public String getPlanType() { return planType; }
@@ -48,4 +49,6 @@ public class SubscriptionStatusDto {
     public void setCanUpload(boolean canUpload) { this.canUpload = canUpload; }
     public String getUpgradeUrl() { return upgradeUrl; }
     public void setUpgradeUrl(String upgradeUrl) { this.upgradeUrl = upgradeUrl; }
+    public String getBillingPeriod() { return billingPeriod; }
+    public void setBillingPeriod(String billingPeriod) { this.billingPeriod = billingPeriod; }
 }

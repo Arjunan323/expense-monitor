@@ -31,7 +31,7 @@ public class SubscriptionController {
         LocalDateTime startDate = null;
         LocalDateTime endDate = null;
         int statementLimit = 3, pageLimit = 30;
-        if (sub != null) {
+    if (sub != null) {
             planType = sub.getPlanType().name();
             status = sub.getStatus();
             startDate = sub.getStartDate();
@@ -54,6 +54,7 @@ public class SubscriptionController {
         }
         boolean canUpload = (statementLimit == Integer.MAX_VALUE || statementsUsed < statementLimit);
         String upgradeUrl = "/subscription/upgrade";
-        return new SubscriptionStatusDto(planType, startDate, endDate, status, statementsUsed, statementLimit, pagesUsed, pageLimit, canUpload, upgradeUrl);
+    String billingPeriod = sub != null ? sub.getBillingPeriod() : null;
+    return new SubscriptionStatusDto(planType, startDate, endDate, status, statementsUsed, statementLimit, pagesUsed, pageLimit, canUpload, upgradeUrl, billingPeriod);
     }
 }

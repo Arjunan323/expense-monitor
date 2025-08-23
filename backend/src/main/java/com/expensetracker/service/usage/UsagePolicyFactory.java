@@ -25,16 +25,21 @@ public class UsagePolicyFactory {
                 ? sub.getPlanType().name()
                 : "FREE";
         String currency = user.getCurrency() != null ? user.getCurrency() : "USD";
-        Plan plan = findCached(planKey, currency);
+        // Prefer monthly plan if subscription is monthly, else yearly
+        String billingPeriod = (sub != null && sub.getEndDate() != null && sub.getStartDate() != null && sub.getEndDate().isAfter(sub.getStartDate().plusMonths(2))) ? "YEARLY" : "MONTHLY";
+        Plan plan = findCached(planKey, currency, billingPeriod);
+        if (plan == null && "YEARLY".equals(billingPeriod)) {
+            plan = findCached(planKey, currency, "MONTHLY");
+        }
         if (plan == null) {
             return defaults.map().getOrDefault(planKey, defaults.free());
         }
         return fromPlan(plan, sub);
     }
 
-    @Cacheable(cacheNames = "plans:byTypeCurrency", key = "#planType + ':' + #currency", unless = "#result == null")
-    public Plan findCached(String planType, String currency) {
-        return planRepository.findByPlanTypeAndCurrency(planType, currency).orElse(null);
+    @Cacheable(cacheNames = "plans:byTypeCurrency", key = "#planType + ':' + #currency + ':' + #billingPeriod", unless = "#result == null")
+    public Plan findCached(String planType, String currency, String billingPeriod) {
+        return planRepository.findByPlanTypeAndCurrencyAndBillingPeriod(planType, currency, billingPeriod).orElse(null);
     }
 
     private UsagePolicy fromPlan(Plan plan, Subscription sub) {

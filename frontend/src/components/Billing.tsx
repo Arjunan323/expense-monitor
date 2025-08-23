@@ -69,8 +69,9 @@ interface ApiPlan {
   amount: number;
   statementsPerMonth: number;
   pagesPerStatement: number;
-  features: string; // comma-separated or JSON string
-  currency: string; // e.g. '₹', '$', '€'
+  features: string;
+  currency: string;
+  billingPeriod: 'MONTHLY' | 'YEARLY';
 }
 
 type UiPlan = ApiPlan & {
@@ -128,6 +129,7 @@ export const Billing: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [upgrading, setUpgrading] = useState<string | null>(null);
   const [plans, setPlans] = useState<UiPlan[]>([]);
+  const [billingPeriod, setBillingPeriod] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
 
   // Helper: fetchUsageStats
   const fetchUsageStats = async () => {
@@ -164,7 +166,7 @@ export const Billing: React.FC = () => {
   useEffect(() => {
     fetchUsageStats();
     fetchPlans();
-  }, []);
+  }, [billingPeriod]);
 
   const fetchPlans = async () => {
     try {
@@ -175,28 +177,28 @@ export const Billing: React.FC = () => {
       }
       const data = await apiCall<ApiPlan[]>(
         'GET',
-        `/plans?region=${region}`
+        `/plans?region=${region}&billingPeriod=${billingPeriod}`
       );
       const normalizeCurrency = (c: string) => {
         if (c === '₹' || c === 'INR') return 'INR';
         if (c === '$' || c === 'USD') return 'USD';
         return c; // leave others unchanged
       };
-      const merged: UiPlan[] = data.map((plan) => {
-        const label = PLAN_LABELS[plan.planType] || {};
+      const merged: UiPlan[] = data.map(variant => {
+        const label = PLAN_LABELS[variant.planType] || {};
         return {
-          ...plan,
-            ...label,
-            price: plan.amount, // keep backend smallest unit to preserve current rendering logic (divide later)
-            currency: normalizeCurrency(plan.currency || 'INR'),
-            statementsLimit: plan.statementsPerMonth === -1 ? 'unlimited' : String(plan.statementsPerMonth),
-            pagesPerStatementUi: plan.pagesPerStatement === -1 ? 'unlimited' : String(plan.pagesPerStatement),
-            featuresUi: parseFeatures(plan.features)
-        };
+          ...variant,
+          ...label,
+          price: variant.amount,
+          currency: normalizeCurrency(variant.currency || 'INR'),
+          statementsLimit: variant.statementsPerMonth === -1 ? 'unlimited' : String(variant.statementsPerMonth),
+          pagesPerStatementUi: variant.pagesPerStatement === -1 ? 'unlimited' : String(variant.pagesPerStatement),
+          featuresUi: parseFeatures(variant.features)
+        } as UiPlan;
       });
   const rank: Record<string, number> = { FREE: 0, PRO: 1, PREMIUM: 2 };
-  merged.sort((a,b)=> (rank[a.planType] ?? 99) - (rank[b.planType] ?? 99));
-  setPlans(merged);
+  merged.sort((a, b) => (rank[a.planType] ?? 99) - (rank[b.planType] ?? 99));
+      setPlans(merged);
     } catch (error) {
       toast.error('Failed to load plans');
     }
@@ -243,7 +245,8 @@ export const Billing: React.FC = () => {
       await loadRazorpayScript();
       // Call backend to create Razorpay order
       const response = await apiCall<any>('POST', '/payment/order', {
-        planType: planId
+        planType: planId,
+        billingPeriod
       });
       if (response && response.orderId && response.key && response.amount && response.currency) {
         const options = {
@@ -251,7 +254,7 @@ export const Billing: React.FC = () => {
           amount: response.amount,
           currency: response.currency,
           name: 'CutTheSpend',
-          description: `${planId} Plan Subscription`,
+          description: `${planId} Plan Subscription (${billingPeriod === 'YEARLY' ? 'Annual' : 'Monthly'})`,
           order_id: response.orderId,
           handler: function (rzpResponse: any) {
             toast.success('Payment successful!');
@@ -312,6 +315,23 @@ export const Billing: React.FC = () => {
         <p className="text-gray-600">
           Choose the plan that fits your needs. Upgrade or downgrade anytime.
         </p>
+        <div className="mt-6 inline-flex rounded-lg border border-gray-300 overflow-hidden">
+          {(['MONTHLY','YEARLY'] as const).map(p => (
+            <button
+              key={p}
+              onClick={() => {
+                setBillingPeriod(p);
+                fetchPlans();
+              }}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${p===billingPeriod? 'bg-primary-600 text-white':'bg-white text-gray-600 hover:bg-gray-100'}`}
+            >
+              {p === 'MONTHLY' ? 'Monthly' : 'Yearly'}
+            </button>
+          ))}
+        </div>
+        {billingPeriod === 'YEARLY' && (
+          <div className="mt-2 text-xs text-green-600">Yearly plans ≈ 2 months free (10× monthly price)</div>
+        )}
       </div>
 
       {/* Current Usage Overview */}
@@ -330,7 +350,7 @@ export const Billing: React.FC = () => {
             <div className="text-right">
               <div className="text-sm font-medium text-gray-900">{currentPlan?.name}</div>
               <div className="text-xs text-gray-500">
-                {Number(currentPlan?.price) > 0 ? `${currencySymbol(currentPlan?.currency)}${(currentPlan?.price/100).toFixed(0)}/${currentPlan?.period}` : 'Free'}
+                {Number(currentPlan?.price) > 0 ? `${currencySymbol(currentPlan?.currency)}${(currentPlan?.price/100).toFixed(0)}/${billingPeriod === 'YEARLY' ? 'year' : currentPlan?.period}` : 'Free'}
               </div>
             </div>
           </div>
@@ -443,7 +463,10 @@ export const Billing: React.FC = () => {
                 <h3 className="text-xl font-bold text-gray-900 mb-2">{plan.name}</h3>
                 <div className="mb-2">
                   <span className="text-3xl font-bold text-gray-900">{currencySymbol(plan.currency)}{(plan.price / 100).toFixed(0)}</span>
-                  {Number(plan.price) > 0 && <span className="text-gray-500">/{plan.period}</span>}
+                  {Number(plan.price) > 0 && <span className="text-gray-500">/{billingPeriod === 'YEARLY' ? 'year' : plan.period}</span>}
+                  {Number(plan.price) > 0 && billingPeriod === 'YEARLY' && (
+                    <span className="ml-2 inline-block text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">2 months free</span>
+                  )}
                 </div>
                 <p className="text-sm text-gray-600">{plan.description}</p>
               </div>

@@ -45,9 +45,16 @@ public class PaymentService {
     }
 
     public ResponseEntity<RazorpayOrderResponseDto> createOrder(RazorpayOrderRequestDto req, String authHeader) {
-    String planType = req.getPlanType();
-    User user = authenticationFacade.currentUser();
-        Plan plan = planRepository.findByPlanTypeAndCurrency(planType, user.getCurrency()).orElse(null);
+        String planType = req.getPlanType();
+        if (planType == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        String billingPeriod = req.getBillingPeriod() != null ? req.getBillingPeriod().toUpperCase() : "MONTHLY";
+        if (!billingPeriod.equals("MONTHLY") && !billingPeriod.equals("YEARLY")) {
+            return ResponseEntity.badRequest().build();
+        }
+        User user = authenticationFacade.currentUser();
+        Plan plan = planRepository.findByPlanTypeAndCurrencyAndBillingPeriod(planType, user.getCurrency(), billingPeriod).orElse(null);
         if (plan == null) {
             return ResponseEntity.badRequest().build();
         }
@@ -66,19 +73,20 @@ public class PaymentService {
         } catch (RazorpayException e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
-        Subscription sub = subscriptionRepository.findByUserId(user.getId()).orElse(null);
+    Subscription sub = subscriptionRepository.findByUserId(user.getId()).orElse(null);
         if (sub == null) {
             sub = new Subscription();
             sub.setUser(user);
         }
         sub.setPlanType(Subscription.PlanType.valueOf(planType));
         sub.setStatus(AppConstants.STATUS_PENDING);
-        sub.setRazorpayOrderId(orderId);
+    sub.setRazorpayOrderId(orderId);
         sub.setRazorpayPaymentId(null);
         sub.setStartDate(null);
         sub.setEndDate(null);
+    sub.setBillingPeriod(billingPeriod);
         subscriptionRepository.save(sub);
-    RazorpayOrderResponseDto resp = new RazorpayOrderResponseDto(orderId, razorpayKey, amount, currency, planType);
+    RazorpayOrderResponseDto resp = new RazorpayOrderResponseDto(orderId, razorpayKey, amount, currency, planType, billingPeriod);
         return ResponseEntity.ok(resp);
     }
 
@@ -113,9 +121,10 @@ public class PaymentService {
                 sub.setStatus(AppConstants.STATUS_ACTIVE);
                 sub.setRazorpayPaymentId(finalPaymentId);
                 sub.setStartDate(LocalDateTime.now());
-                if (sub.getPlanType() == Subscription.PlanType.PRO) {
-                    sub.setEndDate(LocalDateTime.now().plusMonths(1));
-                } else if (sub.getPlanType() == Subscription.PlanType.PREMIUM) {
+                // Determine duration based on billingPeriod (default monthly)
+                if ("YEARLY".equalsIgnoreCase(sub.getBillingPeriod())) {
+                    sub.setEndDate(LocalDateTime.now().plusYears(1));
+                } else {
                     sub.setEndDate(LocalDateTime.now().plusMonths(1));
                 }
                 subscriptionRepository.save(sub);

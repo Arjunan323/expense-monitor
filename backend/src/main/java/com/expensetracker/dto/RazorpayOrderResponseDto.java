@@ -6,13 +6,15 @@ public class RazorpayOrderResponseDto {
     private int amount;
     private String currency;
     private String planType;
+    private String billingPeriod; // MONTHLY | YEARLY
 
-    public RazorpayOrderResponseDto(String orderId, String key, int amount, String currency, String planType) {
+    public RazorpayOrderResponseDto(String orderId, String key, int amount, String currency, String planType, String billingPeriod) {
         this.orderId = orderId;
         this.key = key;
         this.amount = amount;
         this.currency = currency;
         this.planType = planType;
+        this.billingPeriod = billingPeriod;
     }
 
     public String getOrderId() { return orderId; }
@@ -25,4 +27,6 @@ public class RazorpayOrderResponseDto {
     public void setCurrency(String currency) { this.currency = currency; }
     public String getPlanType() { return planType; }
     public void setPlanType(String planType) { this.planType = planType; }
+    public String getBillingPeriod() { return billingPeriod; }
+    public void setBillingPeriod(String billingPeriod) { this.billingPeriod = billingPeriod; }
 }

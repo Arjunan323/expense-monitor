@@ -43,7 +43,8 @@ public class UsagePolicyFactoryTest {
         plan.setStatementsPerMonth(77);
         plan.setCombinedBank(9);
 
-        Mockito.when(planRepository.findByPlanTypeAndCurrency("PRO", "USD")).thenReturn(Optional.of(plan));
+        // Factory will query with billingPeriod based on inferred duration; with no dates set it defaults to MONTHLY
+        Mockito.when(planRepository.findByPlanTypeAndCurrencyAndBillingPeriod("PRO", "USD", "MONTHLY")).thenReturn(Optional.of(plan));
 
         UsagePolicy policy = factory.forUser(user);
         assertEquals("PRO", policy.plan());

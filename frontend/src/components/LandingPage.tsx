@@ -48,6 +48,8 @@ export const LandingPage: React.FC = () => {
   const [plans, setPlans] = useState<any[]>([]);
   const [plansLoading, setPlansLoading] = useState(false);
   const [plansError, setPlansError] = useState<string | null>(null);
+  // Pricing toggle (Monthly / Yearly)
+  const [billingPeriod, setBillingPeriod] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
 
   const [emailStatus, setEmailStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [emailError, setEmailError] = useState<string | null>(null);
@@ -83,7 +85,8 @@ export const LandingPage: React.FC = () => {
           region = navigator.language.split('-')[1].toUpperCase();
         }
         if (!region) region = 'IN';
-        const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/public/plans?region=${region}`);
+        const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+        const res = await fetch(`${apiBase}/public/plans?region=${region}&billingPeriod=${billingPeriod}`);
         if (!res.ok) throw new Error('Failed to load plans');
         const data = await res.json();
         const rank: Record<string, number> = { FREE: 0, PRO: 1, PREMIUM: 2 };
@@ -96,7 +99,7 @@ export const LandingPage: React.FC = () => {
       }
     };
     fetchPlans();
-  }, []);
+  }, [billingPeriod]);
 
   return (
     <div className="min-h-screen bg-white">
@@ -529,6 +532,24 @@ export const LandingPage: React.FC = () => {
             </p>
           </div>
 
+          {/* Billing Period Toggle */}
+          <div className="flex justify-center mb-10">
+            <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden shadow-sm">
+              {(['MONTHLY','YEARLY'] as const).map(p => (
+                <button
+                  key={p}
+                  onClick={() => setBillingPeriod(p)}
+                  className={`px-5 py-2 text-sm font-medium transition-colors ${p===billingPeriod ? 'bg-primary-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'}`}
+                >
+                  {p==='MONTHLY' ? 'Monthly' : 'Yearly'}
+                </button>
+              ))}
+            </div>
+          </div>
+          {billingPeriod === 'YEARLY' && (
+            <p className="text-center text-xs text-emerald-600 -mt-6 mb-8">Yearly plans ≈ 2 months free (10× monthly price)</p>
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {plansLoading && <div className="col-span-3 text-center text-gray-500">Loading plans...</div>}
             {plansError && <div className="col-span-3 text-center text-red-600 text-sm">{plansError}</div>}
@@ -550,7 +571,10 @@ export const LandingPage: React.FC = () => {
                   <div className="flex items-end justify-center mb-6">
                     <span className="text-4xl font-extrabold text-gray-900">{p.currency === 'INR' ? '₹' : p.currency === 'USD' ? '$' : p.currency}</span>
                     <span className="text-5xl font-extrabold text-gray-900 ml-1">{price}</span>
-                    <span className="text-gray-500 ml-2 mb-2">/month</span>
+                    <span className="text-gray-500 ml-2 mb-2">/{billingPeriod === 'YEARLY' ? 'year' : 'month'}</span>
+                    {billingPeriod === 'YEARLY' && p.planType !== 'FREE' && (
+                      <span className="ml-2 mb-3 inline-block text-emerald-700 bg-emerald-100 text-[10px] font-semibold px-2 py-1 rounded-full">2 months free</span>
+                    )}
                   </div>
                   <ul className="space-y-2 mb-6 flex-1">
                     <li className="text-sm text-gray-700">{statements} statements / month</li>
