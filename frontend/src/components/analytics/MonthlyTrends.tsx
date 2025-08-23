@@ -84,7 +84,7 @@ export const MonthlyTrends: React.FC = () => {
       setTrendData(chart);
       if(includeBanksActive){
         const keys = new Set<string>();
-  chart.forEach(m => m.banks?.forEach((b: { name: string; outflow: number }) => keys.add(b.name)));
+        chart.forEach(m => m.banks?.forEach((b: { name: string; outflow: number }) => keys.add(b.name)));
         setBankKeys(Array.from(keys).sort());
       } else {
         setBankKeys([]);
@@ -92,7 +92,7 @@ export const MonthlyTrends: React.FC = () => {
       // derive top categories overall (sum across months)
       if(viewMode==='category'){
         const catTotals: Record<string, number> = {};
-  chart.forEach(m => m.categories?.forEach((c: { name: string; outflow: number }) => { catTotals[c.name] = (catTotals[c.name]||0)+c.outflow; }));
+        chart.forEach(m => m.categories?.forEach((c: { name: string; outflow: number }) => { catTotals[c.name] = (catTotals[c.name]||0)+c.outflow; }));
         const top = Object.entries(catTotals).sort((a,b)=>b[1]-a[1]).slice(0,6).map(e=>e[0]);
         setCategoryKeys(top);
       } else {
@@ -172,7 +172,7 @@ export const MonthlyTrends: React.FC = () => {
       {/* Header */}
       <div className="space-y-6">
         <div>
-          <h1 className="text-4xl font-heading font-bold gradient-text mb-3">Monthly Spending Trends</h1>
+          <h1 className="text-4xl font-heading font-bold gradient-text mb-3">📈 Monthly Spending Trends</h1>
           <p className="text-brand-gray-600 text-lg">Track and compare your spending patterns over time</p>
         </div>
 

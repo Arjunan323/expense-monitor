@@ -69,11 +69,11 @@ export const BudgetTracking: React.FC = () => {
     const newBudget = parseFloat(editValue);
     if (newBudget > 0) {
       try {
-  await budgetsApi.updateLimit(Number(id), newBudget);
+        await budgetsApi.updateLimit(Number(id), newBudget);
         // optimistic update
         setBudgets(prev => prev.map(b => b.id === Number(id) ? { ...b, monthlyBudget: newBudget, budget: newBudget } : b));
         // refresh summary silently
-  budgetsApi.summary(selectedMonth).then(s => { setSummary(s); setBudgets(s.categories.map(c => ({ ...c, budget: c.monthlyBudget }))); });
+        budgetsApi.summary(selectedMonth).then(s => { setSummary(s); setBudgets(s.categories.map(c => ({ ...c, budget: c.monthlyBudget }))); });
       } catch(e){ console.error(e); }
     }
     setEditingId(null);
@@ -84,7 +84,7 @@ export const BudgetTracking: React.FC = () => {
     if (newCategory.name && newCategory.budget) {
       try {
         await budgetsApi.create({ name: newCategory.name, monthlyBudget: parseFloat(newCategory.budget), icon: newCategory.icon, color: '#00B77D' });
-  const s = await budgetsApi.summary(selectedMonth);
+        const s = await budgetsApi.summary(selectedMonth);
         setSummary(s);
         setBudgets(s.categories.map(c => ({ ...c, budget: c.monthlyBudget })));
         setNewCategory({ name: '', budget: '', icon: '💰' });
@@ -112,7 +112,7 @@ export const BudgetTracking: React.FC = () => {
         <div>
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
             <div>
-              <h1 className="text-4xl font-heading font-bold gradient-text mb-3">Budget Tracking</h1>
+              <h1 className="text-4xl font-heading font-bold gradient-text mb-3">🎯 Budget Tracking</h1>
               <p className="text-brand-gray-600 text-lg">Set budgets by category and track your spending progress</p>
             </div>
             <div className="flex items-center space-x-3">
