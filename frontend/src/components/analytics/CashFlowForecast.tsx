@@ -274,11 +274,11 @@ export const CashFlowForecast: React.FC = () => {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h3 className="text-xl font-heading font-bold text-brand-gray-900">Upcoming Transactions</h3>
-            <p className="text-brand-gray-600">Add or adjust future transactions to update forecast</p>
+            <p className="text-brand-gray-600">Manage your expected income and expenses</p>
           </div>
           <button
             onClick={() => setShowAddForm(true)}
-            className="btn-primary flex items-center space-x-2"
+            className="bg-gradient-green text-white px-6 py-3 rounded-2xl font-semibold shadow-glow-green hover:scale-105 transition-all duration-300 flex items-center space-x-2"
           >
             <Plus className="w-4 h-4" />
             <span>Add Transaction</span>
@@ -287,41 +287,254 @@ export const CashFlowForecast: React.FC = () => {
 
         {/* Add Transaction Form */}
         {showAddForm && (
-          <div className="p-6 bg-gradient-to-br from-brand-green-50 to-brand-blue-50 border-2 border-brand-green-200 rounded-3xl mb-6">
+          <div className="p-8 bg-gradient-to-br from-brand-green-50 via-white to-brand-blue-50 border-2 border-brand-green-200 rounded-3xl mb-6 shadow-funky">
             <h4 className="text-lg font-heading font-bold text-brand-gray-900 mb-4">Add Upcoming Transaction</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-semibold text-brand-gray-700 mb-2">Description</label>
+                <label className="block text-sm font-bold text-brand-gray-700 mb-3">
+                  <span className="flex items-center space-x-2">
+                    <span>📝</span>
+                    <span>Description</span>
+                  </span>
+                </label>
                 <input
                   type="text"
                   value={newTransaction.description}
                   onChange={(e) => setNewTransaction(prev => ({ ...prev, description: e.target.value }))}
-                  className="input-field"
+                  className="input-field focus:ring-4 focus:ring-brand-green-200 focus:border-brand-green-400"
                   placeholder="e.g., Salary, Rent"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-brand-gray-700 mb-2">Amount</label>
+                <label className="block text-sm font-bold text-brand-gray-700 mb-3">
+                  <span className="flex items-center space-x-2">
+                    <span>💰</span>
+                    <span>Amount</span>
+                  </span>
+                </label>
                 <input
                   type="number"
                   value={newTransaction.amount}
                   onChange={(e) => setNewTransaction(prev => ({ ...prev, amount: e.target.value }))}
-                  className="input-field"
+                  className="input-field focus:ring-4 focus:ring-brand-green-200 focus:border-brand-green-400"
                   placeholder="5000"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-brand-gray-700 mb-2">Date</label>
+                <label className="block text-sm font-bold text-brand-gray-700 mb-3">
+                  <span className="flex items-center space-x-2">
+                    <span>📅</span>
+                    <span>Date</span>
+                  </span>
+                </label>
                 <input
                   type="date"
                   value={newTransaction.date}
                   onChange={(e) => setNewTransaction(prev => ({ ...prev, date: e.target.value }))}
-                  className="input-field"
+                  className="input-field focus:ring-4 focus:ring-brand-green-200 focus:border-brand-green-400"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-brand-gray-700 mb-2">Type</label>
-                <select
+                <label className="block text-sm font-bold text-brand-gray-700 mb-3">
+                  <span className="flex items-center space-x-2">
+                    <span>🏷️</span>
+                    <span>Type</span>
+                  </span>
+                </label>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setNewTransaction(prev => ({ ...prev, type: 'income' }))}
+                    className={`flex-1 px-4 py-3 rounded-2xl font-semibold text-sm transition-all duration-300 ${
+                      newTransaction.type === 'income'
+                        ? 'bg-gradient-green text-white shadow-glow-green'
+                        : 'bg-white border-2 border-brand-gray-200 text-brand-gray-700 hover:border-brand-green-400'
+                    }`}
+                  >
+                    💰 Income
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewTransaction(prev => ({ ...prev, type: 'expense' }))}
+                    className={`flex-1 px-4 py-3 rounded-2xl font-semibold text-sm transition-all duration-300 ${
+                      newTransaction.type === 'expense'
+                        ? 'bg-gradient-to-br from-red-400 to-red-600 text-white'
+                        : 'bg-white border-2 border-brand-gray-200 text-brand-gray-700 hover:border-red-400'
+                    }`}
+                  >
+                    💸 Expense
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex items-center justify-between mt-6 pt-6 border-t border-brand-gray-200">
+              <label className="flex items-center space-x-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={newTransaction.recurring}
+                  onChange={(e) => setNewTransaction(prev => ({ ...prev, recurring: e.target.checked }))}
+                  className="w-5 h-5 text-brand-green-600 rounded border-brand-gray-300 focus:ring-brand-green-500"
+                />
+                <span className="text-sm font-medium text-brand-gray-700">🔄 Recurring monthly</span>
+              </label>
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => setShowAddForm(false)}
+                  className="btn-secondary px-6 py-3"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={addTransaction}
+                  disabled={!newTransaction.description || !newTransaction.amount || !newTransaction.date}
+                  className="btn-primary px-6 py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Add Transaction
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Enhanced Transactions List */}
+        <div className="space-y-4">
+          {upcomingTransactions.map(t => {
+            const income = t.amount >= 0;
+            const isEditing = editingId === t.id;
+            return (
+              <div key={t.id} className="p-6 bg-gradient-to-r from-white to-brand-gray-50 rounded-3xl border-2 border-brand-gray-100 hover:border-brand-green-300 hover:shadow-funky transition-all duration-300">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4 flex-1">
+                    <div className={`w-16 h-16 rounded-3xl flex items-center justify-center text-2xl shadow-lg ${
+                      income 
+                        ? 'bg-gradient-green text-white shadow-glow-green' 
+                        : 'bg-gradient-to-br from-red-400 to-red-600 text-white'
+                    }`}>
+                      {income ? '💰' : '💸'}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-3 mb-2">
+                        {isEditing ? (
+                          <input
+                            value={editDraft.description || ''}
+                            onChange={e => setEditDraft(d => ({...d, description: e.target.value}))}
+                            className="input-field flex-1"
+                            placeholder="Transaction description"
+                          />
+                        ) : (
+                          <h4 className="text-lg font-heading font-bold text-brand-gray-900">{t.description}</h4>
+                        )}
+                        {t.recurring && (
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-brand-green-100 text-brand-green-700 border border-brand-green-200">
+                            🔄 Recurring
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center space-x-4 text-sm text-brand-gray-600">
+                        <div className="flex items-center space-x-1">
+                          <Calendar className="w-4 h-4" />
+                          {isEditing ? (
+                            <input
+                              type="date"
+                              value={(editDraft as any).dueDate?.slice(0,10) || (t as any).dueDate?.slice(0,10)}
+                              onChange={e => setEditDraft(d => ({...d, dueDate: e.target.value}))}
+                              className="input-field py-1 text-sm"
+                            />
+                          ) : (
+                            <span>{new Date((t as any).dueDate).toLocaleDateString()}</span>
+                          )}
+                        </div>
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                          t.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' :
+                          t.status === 'PAID' ? 'bg-brand-green-100 text-brand-green-700' :
+                          'bg-brand-gray-100 text-brand-gray-700'
+                        }`}>
+                          {t.status}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center space-x-4">
+                    {isEditing ? (
+                      <div className="flex items-center space-x-3">
+                        <input
+                          type="number"
+                          value={editDraft.amount?.toString() || t.amount.toString()}
+                          onChange={e => setEditDraft(d => ({...d, amount: parseFloat(e.target.value)}))}
+                          className="input-field w-32"
+                        />
+                        <select
+                          value={editDraft.flowType || t.flowType || (t.amount >= 0 ? 'INCOME' : 'EXPENSE')}
+                          onChange={e => setEditDraft(d => ({...d, flowType: e.target.value as any}))}
+                          className="input-field w-32"
+                        >
+                          <option value="INCOME">Income</option>
+                          <option value="EXPENSE">Expense</option>
+                        </select>
+                        <button
+                          onClick={saveEdit}
+                          className="bg-gradient-green text-white p-3 rounded-2xl hover:scale-105 transition-all duration-300 shadow-glow-green"
+                        >
+                          <CheckCircle className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={cancelEdit}
+                          className="bg-brand-gray-200 text-brand-gray-700 p-3 rounded-2xl hover:scale-105 transition-all duration-300"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center space-x-3">
+                        <div className="text-right">
+                          <p className={`text-2xl font-bold ${income ? 'text-brand-green-600' : 'text-red-600'}`}>
+                            {income ? '+' : ''}{formatCurrency(Math.abs(t.amount), undefined, preferences)}
+                          </p>
+                          {t.flowType && (
+                            <span className="text-xs font-semibold text-brand-gray-500 uppercase tracking-wide">
+                              {t.flowType}
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => startEdit(t)}
+                          className="bg-brand-blue-100 hover:bg-brand-blue-200 text-brand-blue-700 p-3 rounded-2xl transition-all duration-300 hover:scale-105"
+                        >
+                          <Edit3 className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={() => remove(t.id)}
+                          className="bg-red-100 hover:bg-red-200 text-red-700 p-3 rounded-2xl transition-all duration-300 hover:scale-105"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          
+          {upcomingTransactions.length === 0 && (
+            <div className="text-center py-12">
+              <div className="w-16 h-16 bg-brand-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Calendar className="w-8 h-8 text-brand-gray-400" />
+              </div>
+              <h4 className="text-lg font-semibold text-brand-gray-900 mb-2">No upcoming transactions</h4>
+              <p className="text-brand-gray-600 mb-4">Add your expected income and expenses to improve forecast accuracy</p>
+              <button
+                onClick={() => setShowAddForm(true)}
+                className="btn-primary"
+              >
+                Add Your First Transaction
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
                   value={newTransaction.type}
                   onChange={(e) => setNewTransaction(prev => ({ ...prev, type: e.target.value as 'income' | 'expense' }))}
                   className="input-field"

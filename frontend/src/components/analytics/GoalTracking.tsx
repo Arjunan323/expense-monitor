@@ -341,17 +341,48 @@ export const GoalTracking: React.FC = () => {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    {!isCompleted && !isEditing && (
-                      <button className="btn-secondary text-xs" onClick={()=>startEdit(goal)}>Edit</button>
-                    )}
-                    {isEditing && (
-                      <>
-                        <button className="btn-primary text-xs" onClick={saveEdit}>Save</button>
-                        <button className="btn-secondary text-xs" onClick={cancelEdit}>Cancel</button>
-                      </>
-                    )}
-                    {!isEditing && (
-                      <button className="text-xs text-red-600 hover:underline" onClick={()=>deleteGoal(goal.id as any)}>Delete</button>
+                    <div className="flex items-center space-x-2">
+                      {!isCompleted && !isEditing && (
+                        <button 
+                          onClick={() => startEdit(goal)}
+                          className="bg-brand-blue-100 hover:bg-brand-blue-200 text-brand-blue-700 px-4 py-2 rounded-2xl font-semibold text-sm transition-all duration-300 hover:scale-105 flex items-center space-x-2"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                          <span>Edit</span>
+                        </button>
+                      )}
+                      {isEditing && (
+                        <>
+                          <button 
+                            onClick={saveEdit}
+                            className="bg-gradient-green text-white px-4 py-2 rounded-2xl font-semibold text-sm shadow-glow-green hover:scale-105 transition-all duration-300 flex items-center space-x-2"
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                            <span>Save</span>
+                          </button>
+                          <button 
+                            onClick={cancelEdit}
+                            className="bg-brand-gray-200 hover:bg-brand-gray-300 text-brand-gray-700 px-4 py-2 rounded-2xl font-semibold text-sm transition-all duration-300 hover:scale-105 flex items-center space-x-2"
+                          >
+                            <X className="w-4 h-4" />
+                            <span>Cancel</span>
+                          </button>
+                        </>
+                      )}
+                      {!isEditing && (
+                        <button 
+                          onClick={() => {
+                            if (confirm(`Are you sure you want to delete the goal "${goal.title}"? This action cannot be undone.`)) {
+                              deleteGoal(goal.id as any);
+                            }
+                          }}
+                          className="bg-red-100 hover:bg-red-200 text-red-700 px-4 py-2 rounded-2xl font-semibold text-sm transition-all duration-300 hover:scale-105 flex items-center space-x-2 group"
+                        >
+                          <Trash2 className="w-4 h-4 group-hover:animate-wiggle" />
+                          <span>Delete</span>
+                        </button>
+                      )}
+                    </div>
                     )}
                   </div>
                 </div>
@@ -453,21 +484,38 @@ export const GoalTracking: React.FC = () => {
 
                 {/* Quick Actions */}
                 {!isCompleted && !isEditing && (
-                  <div className="flex flex-wrap gap-2">
-                    {[1000,5000,10000].map(v => {
-                      const label = formatCurrency(v, undefined, preferences).replace(/\.00$/, '');
-                      const baseClass = v===1000? 'bg-brand-green-100 hover:bg-brand-green-200 text-brand-green-700' : v===5000? 'bg-brand-blue-100 hover:bg-brand-blue-200 text-brand-blue-700' : 'bg-accent-100 hover:bg-accent-200 text-accent-700';
-                      return (
-                        <button key={v} onClick={()=>addContribution(goal.id as any, v)} className={`${baseClass} px-4 py-2 rounded-2xl font-semibold text-sm transition-all duration-300 hover:scale-105`}>+{label}</button>
-                      );
-                    })}
+                  <div className="space-y-4">
+                    <h5 className="text-sm font-semibold text-brand-gray-700">Quick Contributions</h5>
+                    <div className="grid grid-cols-3 gap-3">
+                      {[1000, 5000, 10000].map(v => {
+                        const label = formatCurrency(v, undefined, preferences).replace(/\.00$/, '');
+                        const colors = {
+                          1000: 'bg-gradient-green text-white shadow-glow-green',
+                          5000: 'bg-gradient-blue text-white shadow-glow-blue',
+                          10000: 'bg-gradient-yellow text-brand-gray-900 shadow-glow-yellow'
+                        };
+                        return (
+                          <button
+                            key={v}
+                            onClick={() => addContribution(goal.id as any, v)}
+                            className={`${colors[v as keyof typeof colors]} px-4 py-3 rounded-2xl font-bold text-sm transition-all duration-300 hover:scale-105 active:scale-95 flex items-center justify-center space-x-2`}
+                          >
+                            <span>+{label}</span>
+                            <span className="text-lg">🚀</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 
                 {isCompleted && (
-                  <div className="text-center p-4 bg-gradient-green rounded-2xl">
-                    <Trophy className="w-8 h-8 text-white mx-auto mb-2" />
-                    <p className="text-white font-bold">🎉 Goal Achieved! 🎉</p>
+                  <div className="text-center p-6 bg-gradient-green rounded-3xl shadow-glow-green">
+                    <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Trophy className="w-8 h-8 text-white animate-bounce-gentle" />
+                    </div>
+                    <h4 className="text-xl font-bold text-white mb-2">🎉 Goal Achieved! 🎉</h4>
+                    <p className="text-white/90">Congratulations on reaching your target!</p>
                   </div>
                 )}
               </div>
