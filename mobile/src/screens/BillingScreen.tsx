@@ -123,6 +123,7 @@ export const BillingScreen: React.FC = () => {
   const [plans, setPlans] = useState<Plan[]>(FALLBACK_PLANS);
   const [plansLoading, setPlansLoading] = useState(false);
   const [billingPeriod, setBillingPeriod] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
+  const [billingPeriod, setBillingPeriod] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
 
   useEffect(() => {
     fetchUsageStats();
@@ -396,6 +397,36 @@ export const BillingScreen: React.FC = () => {
       <View style={styles.plansSection}>
         <Text style={styles.plansTitle}>Choose Your Plan</Text>
         <Text style={styles.plansSubtitle}>Select the plan that best fits your needs</Text>
+        
+        {/* Enhanced Billing Period Toggle */}
+        <View style={styles.toggleWrapper}>
+          {(['MONTHLY','YEARLY'] as const).map(p => (
+            <TouchableOpacity 
+              key={p} 
+              style={[styles.toggleOption, p===billingPeriod && styles.toggleOptionActive]} 
+              onPress={() => setBillingPeriod(p)}
+              activeOpacity={0.8}
+            >
+              <View style={styles.toggleContent}>
+                <Text style={styles.toggleEmoji}>{p==='MONTHLY'?'📅':'🎯'}</Text>
+                <Text style={[styles.toggleText, p===billingPeriod && styles.toggleTextActive]}>
+                  {p==='MONTHLY'?'Monthly':'Yearly'}
+                </Text>
+                {p === 'YEARLY' && (
+                  <View style={styles.savingsBadge}>
+                    <Text style={styles.savingsBadgeText}>Save 17%</Text>
+                  </View>
+                )}
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+        
+        {billingPeriod === 'YEARLY' && (
+          <View style={styles.yearlyHighlight}>
+            <Text style={styles.yearlyHighlightText}>🎉 Yearly plans = 2 months FREE! 💰</Text>
+          </View>
+        )}
         <View style={styles.toggleWrapper}>
           {(['MONTHLY','YEARLY'] as const).map(p => (
             <TouchableOpacity key={p} style={[styles.toggleOption, p===billingPeriod && styles.toggleOptionActive]} onPress={() => setBillingPeriod(p)}>
@@ -731,32 +762,80 @@ const styles = StyleSheet.create({
   },
   toggleWrapper: {
     flexDirection: 'row',
-    backgroundColor: '#f1f5f9',
-    borderRadius: 12,
-    marginTop: 16,
-    overflow: 'hidden'
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    marginVertical: 20,
+    padding: 4,
+    shadowColor: '#00B77D',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
   },
   toggleOption: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    backgroundColor: 'transparent'
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    backgroundColor: 'transparent',
+    borderRadius: 16,
+    alignItems: 'center',
   },
   toggleOptionActive: {
-    backgroundColor: '#0ea5e9'
+    backgroundColor: '#00B77D',
+    shadowColor: '#00B77D',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  toggleContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    position: 'relative',
   },
   toggleText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#475569'
+    color: '#6B7280',
   },
   toggleTextActive: {
-    color: '#fff'
+    color: '#FFFFFF',
   },
-  discountNote: {
-    marginTop: 6,
-    fontSize: 12,
-    color: '#059669',
-    textAlign: 'center'
+  toggleEmoji: {
+    fontSize: 16,
+  },
+  savingsBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#FFD60A',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  savingsBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  yearlyHighlight: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#F59E0B',
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  yearlyHighlightText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#92400E',
   },
   yearlyBadge: {
     marginLeft: 8,

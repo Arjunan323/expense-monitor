@@ -340,23 +340,23 @@ export const Billing: React.FC = () => {
 
       {/* Current Usage Overview */}
       {usage && (
-        <div className="card-funky bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
+        <div className="card-funky bg-gradient-to-br from-brand-blue-50 via-white to-brand-green-50 border-brand-blue-200">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 bg-gradient-blue rounded-2xl flex items-center justify-center shadow-glow-blue">
-                <BarChart3 className="w-5 h-5 text-blue-600" />
+              <div className="w-16 h-16 bg-gradient-funky rounded-3xl flex items-center justify-center shadow-glow-green animate-float">
+                <BarChart3 className="w-8 h-8 text-white" />
               </div>
               <div>
-                <h2 className="text-xl font-heading font-bold text-gray-900">💳 Current Usage</h2>
-                <p className="text-sm text-gray-600">Your activity this month</p>
+                <h2 className="text-2xl font-heading font-bold gradient-text">💳 Current Usage</h2>
+                <p className="text-sm text-brand-gray-600">Your activity this month</p>
               </div>
             </div>
             <div className="text-right">
-              <div className="inline-flex items-center bg-white/80 backdrop-blur-sm px-3 py-1 rounded-full border border-brand-gray-200">
-                <div className="w-2 h-2 bg-brand-green-500 rounded-full mr-2"></div>
-                <span className="text-sm font-semibold text-gray-900">{currentPlan?.name}</span>
+              <div className="inline-flex items-center bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full border-2 border-brand-gray-200 shadow-funky">
+                <div className="w-3 h-3 bg-brand-green-500 rounded-full mr-2 animate-pulse"></div>
+                <span className="text-sm font-bold text-brand-gray-900">{currentPlan?.name}</span>
               </div>
-              <div className="text-xs text-gray-500">
+              <div className="text-xs text-brand-gray-500 mt-1">
                 {Number(currentPlan?.price) > 0 ? `${currencySymbol(currentPlan?.currency)}${(currentPlan?.price/100).toFixed(0)}/${billingPeriod === 'YEARLY' ? 'year' : currentPlan?.period}` : 'Free'}
               </div>
             </div>
@@ -430,13 +430,51 @@ export const Billing: React.FC = () => {
       {/* Plans Comparison */}
       <div>
         <div className="text-center mb-8">
-          <h2 className="text-3xl font-heading font-bold gradient-text mb-4">💰 Choose Your Plan</h2>
+          <h2 className="text-4xl font-heading font-bold gradient-text mb-4">💰 Choose Your Plan</h2>
           <p className="text-brand-gray-600 text-lg">Select the plan that best fits your needs</p>
           
-          <div className="mt-6 flex justify-center">
+          {/* Enhanced Billing Period Toggle */}
+          <div className="mt-8 flex justify-center">
+            <div className="relative inline-flex rounded-3xl border-2 border-brand-gray-200 overflow-hidden shadow-funky bg-white p-2">
+              <div className="absolute inset-0 bg-gradient-funky opacity-10 rounded-3xl"></div>
+              {(['MONTHLY','YEARLY'] as const).map(p => (
+                <button
+                  key={p}
+                  onClick={() => setBillingPeriod(p)}
+                  className={`relative z-10 px-8 py-4 text-sm font-bold rounded-2xl transition-all duration-300 ${
+                    p === billingPeriod 
+                      ? 'bg-gradient-green text-white shadow-glow-green transform scale-105 shadow-xl' 
+                      : 'text-brand-gray-600 hover:text-brand-green-600 hover:bg-brand-green-50 hover:scale-102'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2">
+                    <span className="text-lg">{p === 'MONTHLY' ? '📅' : '🎯'}</span>
+                    <span>{p === 'MONTHLY' ? 'Monthly' : 'Yearly'}</span>
+                  </div>
+                  {p === 'YEARLY' && (
+                    <div className="absolute -top-2 -right-2 bg-accent-500 text-brand-gray-900 text-xs px-2 py-1 rounded-full font-bold animate-pulse">
+                      Save 17% 🎉
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Savings Highlight */}
+          {billingPeriod === 'YEARLY' && (
+            <div className="mt-6 animate-fade-in">
+              <div className="inline-flex items-center bg-gradient-to-r from-accent-100 to-brand-green-100 border border-accent-300 text-accent-800 px-6 py-3 rounded-full text-sm font-bold shadow-glow-yellow">
+                <Sparkles className="w-4 h-4 mr-2 animate-wiggle" />
+                <span>🎉 Yearly plans = 2 months FREE! Save 17% instantly! 💰</span>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-8 flex justify-center">
             <button
               onClick={() => setShowPlanComparison(!showPlanComparison)}
-              className="btn-secondary flex items-center space-x-2"
+              className="btn-secondary flex items-center space-x-2 shadow-funky hover:shadow-funky-lg"
             >
               <BarChart3 className="w-4 h-4" />
               <span>{showPlanComparison ? 'Hide' : 'Show'} Feature Comparison</span>
@@ -446,7 +484,7 @@ export const Billing: React.FC = () => {
 
         {/* Feature Comparison Table */}
         {showPlanComparison && (
-          <div className="mb-12">
+          <div className="mb-12 animate-slide-up">
             <div className="card-funky overflow-hidden">
               <div className="bg-gradient-funky text-white p-6 text-center">
                 <h3 className="text-2xl font-heading font-bold mb-2">📊 Feature Comparison</h3>
@@ -465,17 +503,18 @@ export const Billing: React.FC = () => {
                     </thead>
                     <tbody>
                       {[
-                        { feature: 'AI Parsing & Categorization', free: true, pro: true, premium: true },
-                        { feature: 'Basic Dashboard', free: true, pro: false, premium: false },
-                        { feature: 'Advanced Analytics (12mo)', free: false, pro: true, premium: true },
-                        { feature: 'Budget Tracking & Alerts', free: false, pro: true, premium: true },
-                        { feature: 'Forecasting', free: false, pro: false, premium: true },
-                        { feature: 'Goal Tracking', free: false, pro: false, premium: true },
-                        { feature: 'Tax Categorization', free: false, pro: false, premium: true },
-                        { feature: 'Priority Support', free: false, pro: true, premium: true },
-                        { feature: 'Early Access', free: false, pro: false, premium: true },
+                        { feature: '🤖 AI Parsing & Categorization', free: true, pro: true, premium: true },
+                        { feature: '📊 Basic Dashboard (3mo)', free: true, pro: false, premium: false },
+                        { feature: '📈 Advanced Analytics (12mo)', free: false, pro: true, premium: true },
+                        { feature: '🎯 Budget Tracking & Alerts', free: false, pro: true, premium: true },
+                        { feature: '📉 Spending Trends', free: true, pro: true, premium: true },
+                        { feature: '🔮 Cash Flow Forecasting', free: false, pro: false, premium: true },
+                        { feature: '🏆 Goal Tracking', free: false, pro: false, premium: true },
+                        { feature: '📋 Tax Categorization', free: false, pro: false, premium: true },
+                        { feature: '⚡ Priority Support', free: false, pro: true, premium: true },
+                        { feature: '🚀 Early Access Features', free: false, pro: false, premium: true },
                       ].map((row, index) => (
-                        <tr key={index} className="border-b border-brand-gray-100 hover:bg-brand-gray-50">
+                        <tr key={index} className="border-b border-brand-gray-100 hover:bg-brand-gray-50 transition-colors duration-200">
                           <td className="py-4 px-4 font-medium text-brand-gray-900">{row.feature}</td>
                           <td className="text-center py-4 px-4">
                             {row.free ? (
@@ -493,7 +532,7 @@ export const Billing: React.FC = () => {
                           </td>
                           <td className="text-center py-4 px-4">
                             {row.premium ? (
-                              <CheckCircle className="w-5 h-5 text-purple-500 mx-auto" />
+                              <CheckCircle className="w-5 h-5 text-purple-600 mx-auto" />
                             ) : (
                               <X className="w-5 h-5 text-brand-gray-300 mx-auto" />
                             )}
@@ -519,6 +558,13 @@ export const Billing: React.FC = () => {
                   : 'border-brand-gray-200 hover:border-brand-green-300 hover:shadow-funky-lg'
               }`}
             >
+              {/* Savings Badge for Yearly */}
+              {billingPeriod === 'YEARLY' && plan.planType !== 'FREE' && (
+                <div className="absolute -top-3 -right-3 bg-gradient-to-r from-accent-400 to-accent-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-glow-yellow animate-pulse z-20">
+                  2 Months FREE! 🎁
+                </div>
+              )}
+
               {/* Popular Badge */}
               {plan.popular && (
                 <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-green text-white text-sm font-bold px-4 py-2 rounded-full shadow-glow-green animate-bounce-gentle">
@@ -536,28 +582,36 @@ export const Billing: React.FC = () => {
               )}
 
               <div className="text-center mb-6">
-                <div className="w-16 h-16 bg-gradient-funky rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-glow-green">
+                <div className="w-20 h-20 bg-gradient-funky rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-glow-green animate-float">
                   {plan.planType === 'FREE' && <Zap className="w-8 h-8 text-white" />}
                   {plan.planType === 'PRO' && <Target className="w-8 h-8 text-white" />}
                   {plan.planType === 'PREMIUM' && <Crown className="w-8 h-8 text-white" />}
                 </div>
-                <h3 className="text-2xl font-heading font-bold text-brand-gray-900 mb-2">{plan.name}</h3>
+                <h3 className="text-3xl font-heading font-bold text-brand-gray-900 mb-3">{plan.name}</h3>
                 <p className="text-brand-gray-600">{plan.description}</p>
               </div>
 
               <div className="text-center mb-6">
                 <div className="mb-2">
                   <div className="flex items-end justify-center mb-2">
-                    <span className="text-2xl font-bold text-brand-gray-600">{currencySymbol(plan.currency)}</span>
-                    <span className="text-5xl font-heading font-bold text-brand-gray-900 ml-1">{(plan.price / 100).toFixed(0)}</span>
+                    <span className="text-3xl font-bold text-brand-gray-600">{currencySymbol(plan.currency)}</span>
+                    <span className="text-6xl font-heading font-bold text-brand-gray-900 ml-1">{(plan.price / 100).toFixed(0)}</span>
                     <span className="text-brand-gray-500 ml-2 mb-2">/{billingPeriod === 'YEARLY' ? 'year' : plan.period}</span>
                   </div>
-                  {billingPeriod === 'YEARLY' && plan.planType !== 'FREE' && (
-                    <div className="inline-flex items-center bg-accent-100 text-accent-800 px-3 py-1 rounded-full text-xs font-bold">
-                      <Sparkles className="w-3 h-3 mr-1" />
-                      2 months free
-                    </div>
-                  )}
+                  <div className="space-y-2">
+                    {billingPeriod === 'YEARLY' && plan.planType !== 'FREE' && (
+                      <div className="inline-flex items-center bg-gradient-to-r from-accent-100 to-brand-green-100 text-accent-800 px-4 py-2 rounded-full text-sm font-bold border border-accent-200 shadow-glow-yellow">
+                        <Sparkles className="w-4 h-4 mr-2 animate-wiggle" />
+                        <span>2 months FREE! 🎉</span>
+                      </div>
+                    )}
+                    {plan.planType === 'FREE' && (
+                      <div className="inline-flex items-center bg-brand-green-100 text-brand-green-800 px-4 py-2 rounded-full text-sm font-bold">
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        <span>Forever Free 💚</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 

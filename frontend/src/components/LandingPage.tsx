@@ -512,21 +512,120 @@ export const LandingPage: React.FC = () => {
 
           {/* Enhanced Billing Period Toggle */}
           <div className="flex justify-center mb-10">
-            <div className="inline-flex rounded-2xl border-2 border-brand-gray-200 overflow-hidden shadow-funky bg-white p-1">
+            <div className="relative inline-flex rounded-3xl border-2 border-brand-gray-200 overflow-hidden shadow-funky bg-white p-2">
+              <div className="absolute inset-0 bg-gradient-funky opacity-10 rounded-3xl"></div>
               {(['MONTHLY','YEARLY'] as const).map(p => (
                 <button
                   key={p}
                   onClick={() => setBillingPeriod(p)}
-                  className={`px-6 py-3 text-sm font-semibold rounded-xl transition-all duration-300 ${
+                  className={`relative z-10 px-8 py-4 text-sm font-bold rounded-2xl transition-all duration-300 ${
                     p === billingPeriod 
-                      ? 'bg-gradient-green text-white shadow-glow-green transform scale-105' 
-                      : 'text-brand-gray-600 hover:text-brand-green-600 hover:bg-brand-green-50'
+                      ? 'bg-gradient-green text-white shadow-glow-green transform scale-105 shadow-xl' 
+                      : 'text-brand-gray-600 hover:text-brand-green-600 hover:bg-brand-green-50 hover:scale-102'
                   }`}
                 >
-                  {p === 'MONTHLY' ? '📅 Monthly' : '🎯 Yearly'}
+                  <div className="flex items-center space-x-2">
+                    <span className="text-lg">{p === 'MONTHLY' ? '📅' : '🎯'}</span>
+                    <span>{p === 'MONTHLY' ? 'Monthly' : 'Yearly'}</span>
+                  </div>
                   {p === 'YEARLY' && (
-                    <span className="ml-2 bg-accent-500 text-brand-gray-900 text-xs px-2 py-0.5 rounded-full font-bold">
-                      Save 17%
+                    <div className="absolute -top-2 -right-2 bg-accent-500 text-brand-gray-900 text-xs px-2 py-1 rounded-full font-bold animate-pulse">
+                      Save 17% 🎉
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Savings Highlight for Yearly */}
+          {billingPeriod === 'YEARLY' && (
+            <div className="text-center mb-8 animate-fade-in">
+              <div className="inline-flex items-center bg-gradient-to-r from-accent-100 to-brand-green-100 border border-accent-300 text-accent-800 px-6 py-3 rounded-full text-sm font-bold shadow-glow-yellow">
+                <Sparkles className="w-4 h-4 mr-2 animate-wiggle" />
+                <span>🎉 Yearly plans include 2 months FREE! That's like getting 17% off! 💰</span>
+              </div>
+            </div>
+          )}
+
+          {/* Feature Comparison Toggle */}
+          <div className="text-center mb-8">
+            <button
+              onClick={() => setShowPlanComparison(!showPlanComparison)}
+              className="btn-secondary flex items-center space-x-2 mx-auto"
+            >
+              <BarChart3 className="w-4 h-4" />
+              <span>{showPlanComparison ? 'Hide' : 'Show'} Feature Comparison</span>
+            </button>
+          </div>
+
+          {/* Feature Comparison Table */}
+          {showPlanComparison && (
+            <div className="mb-12 animate-slide-up">
+              <div className="card-funky overflow-hidden">
+                <div className="bg-gradient-funky text-white p-6 text-center">
+                  <h3 className="text-2xl font-heading font-bold mb-2">📊 Feature Comparison</h3>
+                  <p className="text-white/90">See what's included in each plan</p>
+                </div>
+                <div className="p-6">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-brand-gray-200">
+                          <th className="text-left py-4 px-4 font-semibold text-brand-gray-900">Features</th>
+                          <th className="text-center py-4 px-4 font-semibold text-brand-gray-900">Free</th>
+                          <th className="text-center py-4 px-4 font-semibold text-brand-green-600">Pro</th>
+                          <th className="text-center py-4 px-4 font-semibold text-purple-600">Premium</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[
+                          { feature: 'AI Parsing & Categorization', free: true, pro: true, premium: true },
+                          { feature: 'Basic Dashboard (3mo)', free: true, pro: false, premium: false },
+                          { feature: 'Advanced Analytics (12mo)', free: false, pro: true, premium: true },
+                          { feature: 'Budget Tracking & Alerts', free: false, pro: true, premium: true },
+                          { feature: 'Spending Trends', free: true, pro: true, premium: true },
+                          { feature: 'Cash Flow Forecasting', free: false, pro: false, premium: true },
+                          { feature: 'Goal Tracking', free: false, pro: false, premium: true },
+                          { feature: 'Tax Categorization', free: false, pro: false, premium: true },
+                          { feature: 'Priority Support', free: false, pro: true, premium: true },
+                          { feature: 'Early Access Features', free: false, pro: false, premium: true },
+                        ].map((row, index) => (
+                          <tr key={index} className="border-b border-brand-gray-100 hover:bg-brand-gray-50 transition-colors duration-200">
+                            <td className="py-4 px-4 font-medium text-brand-gray-900">{row.feature}</td>
+                            <td className="text-center py-4 px-4">
+                              {row.free ? (
+                                <CheckCircle className="w-5 h-5 text-brand-green-500 mx-auto" />
+                              ) : (
+                                <X className="w-5 h-5 text-brand-gray-300 mx-auto" />
+                              )}
+                            </td>
+                            <td className="text-center py-4 px-4">
+                              {row.pro ? (
+                                <CheckCircle className="w-5 h-5 text-brand-green-500 mx-auto" />
+                              ) : (
+                                <X className="w-5 h-5 text-brand-gray-300 mx-auto" />
+                              )}
+                            </td>
+                            <td className="text-center py-4 px-4">
+                              {row.premium ? (
+                                <CheckCircle className="w-5 h-5 text-purple-500 mx-auto" />
+                              ) : (
+                                <X className="w-5 h-5 text-brand-gray-300 mx-auto" />
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Plans Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     </span>
                   )}
                 </button>
@@ -573,6 +672,13 @@ export const LandingPage: React.FC = () => {
                     : 'border-brand-gray-200 hover:border-brand-green-300 hover:shadow-funky-lg'
                 }`}
               >
+                {/* Savings Badge for Yearly */}
+                {billingPeriod === 'YEARLY' && plan.planType !== 'FREE' && (
+                  <div className="absolute -top-3 -right-3 bg-gradient-to-r from-accent-400 to-accent-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-glow-yellow animate-pulse">
+                    2 Months FREE! 🎁
+                  </div>
+                )}
+
                 {plan.popular && (
                   <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-green text-white text-sm font-bold px-4 py-2 rounded-full shadow-glow-green animate-bounce-gentle">
                     <Star className="w-4 h-4 mr-1 inline" />
@@ -596,12 +702,20 @@ export const LandingPage: React.FC = () => {
                     <span className="text-5xl font-heading font-bold text-brand-gray-900 ml-1">{plan.price}</span>
                     <span className="text-brand-gray-500 ml-2 mb-2">/{plan.period}</span>
                   </div>
-                  {billingPeriod === 'YEARLY' && plan.planType !== 'FREE' && (
-                    <div className="inline-flex items-center bg-accent-100 text-accent-800 px-3 py-1 rounded-full text-xs font-bold">
-                      <Sparkles className="w-3 h-3 mr-1" />
-                      2 months free
-                    </div>
-                  )}
+                  <div className="space-y-2">
+                    {billingPeriod === 'YEARLY' && plan.planType !== 'FREE' && (
+                      <div className="inline-flex items-center bg-gradient-to-r from-accent-100 to-brand-green-100 text-accent-800 px-4 py-2 rounded-full text-sm font-bold border border-accent-200">
+                        <Sparkles className="w-4 h-4 mr-2 animate-wiggle" />
+                        <span>2 months FREE included! 🎉</span>
+                      </div>
+                    )}
+                    {plan.planType === 'FREE' && (
+                      <div className="inline-flex items-center bg-brand-green-100 text-brand-green-800 px-4 py-2 rounded-full text-sm font-bold">
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        <span>Forever Free 💚</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Plan Limits */}
