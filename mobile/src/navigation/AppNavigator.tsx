@@ -9,6 +9,10 @@ import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 
 // Screens
 import { AuthScreen } from '../screens/AuthScreen';
+import { VerifyEmailScreen } from '../screens/VerifyEmailScreen';
+import { ForgotPasswordScreen } from '../screens/ForgotPasswordScreen';
+import { ResetPasswordScreen } from '../screens/ResetPasswordScreen';
+import { NotificationPreferencesScreen } from '../screens/NotificationPreferencesScreen';
 import { DashboardScreen } from '../screens/DashboardScreen';
 import { TransactionsScreen } from '../screens/TransactionsScreen';
 import { AnalyticsScreen } from '../screens/AnalyticsScreen';
@@ -243,6 +247,17 @@ const MainNavigator = () => {
           headerTintColor: '#00B77D',
         }}
       />
+      <Stack.Screen
+        name="NotificationPrefs"
+        component={NotificationPreferencesScreen}
+        options={{
+          headerShown: true,
+          title: 'Notifications',
+          headerStyle: { backgroundColor: '#FFFFFF' },
+          headerTitleStyle: { color: '#00B77D', fontWeight: 'bold' },
+          headerTintColor: '#00B77D',
+        }}
+      />
     </Stack.Navigator>
   );
 };
@@ -260,7 +275,12 @@ export const AppNavigator: React.FC = () => {
         {user ? (
           <Stack.Screen name="Main" component={MainNavigator} />
         ) : (
-          <Stack.Screen name="Auth" component={AuthScreen} />
+          <>
+            <Stack.Screen name="Auth" component={AuthScreen} />
+            <Stack.Screen name="VerifyEmail" component={VerifyEmailScreen} />
+            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+            <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
+          </>
         )}
       </Stack.Navigator>
     </NavigationContainer>

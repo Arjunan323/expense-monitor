@@ -285,4 +285,4 @@ meta: { types:[...]; severities:[...]; streamEvents:[...] }
 
 ---
 
-© 2025 Expense Monitor – Spending Alerts Module
+© 2025 CutTheSpend – Spending Alerts Module

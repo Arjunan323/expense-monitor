@@ -33,7 +33,7 @@ public class TaxDeductionRule {
     @Column(name = "active", nullable = false)
     private Boolean active = Boolean.TRUE;
 
-    @Column(name = "created_at", updatable = false, columnDefinition = "TIMESTAMP WITH TIME ZONE")
+    @Column(name = "created_at", updatable = false)
     private OffsetDateTime createdAt = OffsetDateTime.now();
 
     public enum MatchType { CATEGORY, MERCHANT, DESCRIPTION_REGEX, AMOUNT_RANGE }

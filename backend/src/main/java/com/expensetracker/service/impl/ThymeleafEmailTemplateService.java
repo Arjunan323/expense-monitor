@@ -73,7 +73,7 @@ public class ThymeleafEmailTemplateService implements EmailTemplateService {
     @Override
     public String renderWelcome(String firstName) {
         Map<String,Object> vars = Map.of("firstName", firstName);
-        return renderThemed("welcome", "Welcome to Expense Monitor", "WELCOME", vars);
+        return renderThemed("welcome", "Welcome to CutTheSpend", "WELCOME", vars);
     }
 
     @Override

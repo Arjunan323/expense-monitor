@@ -16,7 +16,7 @@ public class VerificationService {
     private final EmailService emailService;
     private final EmailTemplateService templateService;
     @Value("${app.mail.verification.ttl-seconds:3600}") private long ttl;
-    @Value("${app.mail.verification.base-url:http://localhost:5173}") private String baseUrl;
+    @Value("${app.mail.verification.base-url:http://localhost:3000}") private String baseUrl;
 
     public VerificationService(EmailVerificationTokenRepository tokenRepo, UserRepository userRepo, EmailService emailService, EmailTemplateService templateService){
         this.tokenRepo=tokenRepo; this.userRepo=userRepo; this.emailService=emailService; this.templateService = templateService;
@@ -33,8 +33,8 @@ public class VerificationService {
         EmailVerificationToken token = EmailVerificationToken.create(user, ttl);
         tokenRepo.save(token);
         String link = baseUrl+"/verify-email?token="+token.getToken();
-    String html = templateService.renderVerification(user.getFirstName()!=null? user.getFirstName(): "", link, (int)(ttl/60));
-    emailService.sendHtml(user.getEmail(), "Verify your email", html, "VERIFICATION");
+        String html = templateService.renderVerification(user.getFirstName()!=null? user.getFirstName(): "", link, (int)(ttl/60));
+        emailService.sendHtml(user.getEmail(), "Verify your email", html, "VERIFICATION");
     }
 
     public boolean verify(String tokenValue){
@@ -49,7 +49,7 @@ public class VerificationService {
         // send welcome email asynchronously
         try {
             String welcome = templateService.renderWelcome(user.getFirstName()!=null? user.getFirstName(): "");
-            emailService.sendHtml(user.getEmail(), "Welcome to Expense Monitor", welcome, "WELCOME");
+            emailService.sendHtml(user.getEmail(), "Welcome to CutTheSpend", welcome, "WELCOME");
         } catch(Exception ignored) {}
         return true;
     }

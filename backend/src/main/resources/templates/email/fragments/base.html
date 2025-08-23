@@ -2,7 +2,7 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8" />
-    <title th:text="${subject}">Expense Monitor</title>
+    <title th:text="${subject}">CutTheSpend</title>
     <style>
         body { font-family: Arial, sans-serif; background:#f5f7fa; margin:0; padding:0; }
         .container { max-width:600px; margin:0 auto; background:#ffffff; border-radius:8px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,.08); }
@@ -19,12 +19,12 @@
 <body>
 <div class="container">
     <div class="header">
-        <h2 style="margin:0;">Expense Monitor</h2>
+        <h2 style="margin:0;">CutTheSpend</h2>
         <div th:if="${tag}" class="pill" th:text="${tag}"></div>
     </div>
     <div class="content" th:utext="${body}"></div>
     <div class="footer">
-        <p>&copy; <span th:text="${#dates.format(#dates.createNow(),'yyyy')}"></span> Expense Monitor. All rights reserved.</p>
+        <p>&copy; <span th:text="${#dates.format(#dates.createNow(),'yyyy')}"></span> CutTheSpend. All rights reserved.</p>
         <p>If you didn’t request this email you can safely ignore it.</p>
     </div>
 </div>

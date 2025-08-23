@@ -5,6 +5,9 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Layout } from './components/layout/Layout';
 import { Auth } from './components/Auth';
 import { Dashboard } from './components/Dashboard';
+import { VerifyEmail } from './components/auth/VerifyEmail';
+import { ForgotPassword } from './components/auth/ForgotPassword';
+import { ResetPassword } from './components/auth/ResetPassword';
 import { Transactions } from './components/Transactions';
 import { PdfUpload } from './components/PdfUpload';
 import { Analytics } from './components/Analytics';
@@ -60,6 +63,9 @@ const AppRoutes: React.FC = () => {
             </PublicRoute>
           }
         />
+  <Route path="/verify-email" element={<VerifyEmail />} />
+  <Route path="/forgot-password" element={<ForgotPassword />} />
+  <Route path="/reset-password" element={<ResetPassword />} />
         <Route
           path="/dashboard"
           element={
