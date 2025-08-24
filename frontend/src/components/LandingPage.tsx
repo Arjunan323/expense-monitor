@@ -71,6 +71,7 @@ export const LandingPage: React.FC = () => {
   // Enhanced subscription toggle
   const [billingPeriod, setBillingPeriod] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
+  const [showPlanComparison, setShowPlanComparison] = useState(false);
 
   const [emailStatus, setEmailStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [emailError, setEmailError] = useState<string | null>(null);
@@ -520,7 +521,7 @@ export const LandingPage: React.FC = () => {
                   onClick={() => setBillingPeriod(p)}
                   className={`relative z-10 px-8 py-4 text-sm font-bold rounded-2xl transition-all duration-300 ${
                     p === billingPeriod 
-                      ? 'bg-gradient-green text-white shadow-glow-green transform scale-105 shadow-xl' 
+                      ? 'bg-gradient-green text-white shadow-glow-green transform scale-105' 
                       : 'text-brand-gray-600 hover:text-brand-green-600 hover:bg-brand-green-50 hover:scale-102'
                   }`}
                 >
@@ -625,13 +626,6 @@ export const LandingPage: React.FC = () => {
           )}
 
           {/* Plans Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
 
           {billingPeriod === 'YEARLY' && (
             <div className="text-center mb-8">

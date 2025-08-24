@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Target, Plus, Trophy, Calendar, TrendingUp, PiggyBank, Home, Plane, GraduationCap } from 'lucide-react';
+import { Target, Plus, Trophy, Calendar, TrendingUp, PiggyBank, Home, Plane, GraduationCap, Edit3, CheckCircle, Trash2, X } from 'lucide-react';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { formatCurrency } from '../../utils/formatters';
@@ -383,7 +383,6 @@ export const GoalTracking: React.FC = () => {
                         </button>
                       )}
                     </div>
-                    )}
                   </div>
                 </div>
 

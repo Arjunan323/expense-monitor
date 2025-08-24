@@ -3,7 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import { ApiResponse, PaginatedResponse } from '../types';
 import { authEvents } from './eventBus';
 
-const API_BASE_URL = 'https://macaw-deciding-hermit.ngrok-free.app'; // Update for production
+const API_BASE_URL = 'https://koala-large-moderately.ngrok-free.app'; // Update for production
 
 export const api = axios.create({
   baseURL: API_BASE_URL,

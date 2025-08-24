@@ -32,7 +32,11 @@ import {
   X,
   AlertTriangle,
   FileText,
-  TrendingUp
+  TrendingUp,
+  CheckCircle,
+  Sparkles,
+  Target,
+  ArrowRight
 } from 'lucide-react';
 import { LoadingSpinner } from './ui/LoadingSpinner';
 import { UsageStats } from '../types';
@@ -443,7 +447,7 @@ export const Billing: React.FC = () => {
                   onClick={() => setBillingPeriod(p)}
                   className={`relative z-10 px-8 py-4 text-sm font-bold rounded-2xl transition-all duration-300 ${
                     p === billingPeriod 
-                      ? 'bg-gradient-green text-white shadow-glow-green transform scale-105 shadow-xl' 
+                      ? 'bg-gradient-green text-white shadow-glow-green transform scale-105' 
                       : 'text-brand-gray-600 hover:text-brand-green-600 hover:bg-brand-green-50 hover:scale-102'
                   }`}
                 >
@@ -670,48 +674,31 @@ export const Billing: React.FC = () => {
                     : plan.buttonVariant === 'premium'
                     ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-glow-blue hover:scale-105 active:scale-95'
                     : 'bg-brand-gray-100 text-brand-gray-700 hover:bg-brand-gray-200'
-                className={`px-6 py-3 text-sm font-semibold rounded-xl transition-all duration-300 flex items-center space-x-2 ${
-                  p === billingPeriod 
-                    ? 'bg-gradient-green text-white shadow-glow-green transform scale-105' 
-                    : 'text-brand-gray-600 hover:text-brand-green-600 hover:bg-brand-green-50'
-                }`}
+                } ${upgrading === plan.planType || currentPlan.planType === plan.planType ? 'cursor-default' : 'cursor-pointer'}`}
               >
                 {upgrading === plan.planType ? (
-                  <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
+                  <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" />
                 ) : currentPlan.planType === plan.planType ? (
                   <>
                     <Check className="w-5 h-5" />
                     <span>Current Plan</span>
                   </>
-                ) : plan.planType === 'PREMIUM' ? (
-                  <>
-                    <Crown className="w-5 h-5" />
-                    <span>{plan.buttonText}</span>
-                  </>
-                ) : plan.planType === 'PRO' ? (
-                  <>
-                    <Target className="w-5 h-5" />
-                    <span>{plan.buttonText}</span>
-                  </>
                 ) : (
                   <>
-                    <Sparkles className="w-5 h-5" />
+                    {plan.planType === 'PREMIUM' && <Crown className="w-5 h-5" />}
+                    {plan.planType === 'PRO' && <Target className="w-5 h-5" />}
+                    {plan.planType === 'FREE' && <Sparkles className="w-5 h-5" />}
                     <span>{plan.buttonText}</span>
+                    <ArrowRight className="w-5 h-5" />
                   </>
-                <span>{p === 'MONTHLY' ? '📅 Monthly' : '🎯 Yearly'}</span>
-                {p === 'YEARLY' && (
-                  <span className="bg-accent-500 text-brand-gray-900 text-xs px-2 py-0.5 rounded-full font-bold">
-                    Save 17%
-                  </span>
                 )}
-                <ArrowRight className="w-5 h-5" />
               </button>
             </div>
           ))}
         </div>
-      </div>
+  </div>
 
-      {/* FAQ Section */}
+  {/* FAQ Section */}
       <div className="card-funky">
         <div className="bg-gradient-funky text-white p-6 rounded-t-3xl">
           <h3 className="text-2xl font-heading font-bold mb-2">❓ Frequently Asked Questions</h3>
@@ -768,8 +755,9 @@ export const Billing: React.FC = () => {
               Yearly plans include 2 months free (10× monthly price)
             </div>
           </div>
-        
-      </div>
+        </div>{/* end space-y-4 */}
+      </div>{/* end FAQ card */}
+    </div>{/* end outer spacing container */}
     </div>
   );
 };
