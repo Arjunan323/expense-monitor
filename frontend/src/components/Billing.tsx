@@ -344,7 +344,7 @@ export const Billing: React.FC = () => {
 
       {/* Current Usage Overview */}
       {usage && (
-        <div className="card-funky bg-gradient-to-br from-brand-blue-50 via-white to-brand-green-50 border-brand-blue-200">
+        <div className="card-funky bg-gradient-to-br from-brand-blue-50 via-white to-brand-green-50 border-brand-blue-200 my-6">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center space-x-3">
               <div className="w-16 h-16 bg-gradient-funky rounded-3xl flex items-center justify-center shadow-glow-green animate-float">
@@ -440,7 +440,7 @@ export const Billing: React.FC = () => {
           {/* Enhanced Billing Period Toggle */}
           <div className="mt-8 flex justify-center">
             <div className="relative inline-flex rounded-3xl border-2 border-brand-gray-200 overflow-hidden shadow-funky bg-white p-2">
-              <div className="absolute inset-0 bg-gradient-funky opacity-10 rounded-3xl"></div>
+              <div className="absolute inset-0 bg-gradient-funky opacity-10 rounded-3xl p-2"></div>
               {(['MONTHLY','YEARLY'] as const).map(p => (
                 <button
                   key={p}
@@ -699,7 +699,7 @@ export const Billing: React.FC = () => {
   </div>
 
   {/* FAQ Section */}
-      <div className="card-funky">
+      <div className="card-funky mt-4">
         <div className="bg-gradient-funky text-white p-6 rounded-t-3xl">
           <h3 className="text-2xl font-heading font-bold mb-2">❓ Frequently Asked Questions</h3>
           <p className="text-white/90">Everything you need to know about CutTheSpend</p>

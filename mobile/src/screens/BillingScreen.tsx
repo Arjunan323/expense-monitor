@@ -123,7 +123,6 @@ export const BillingScreen: React.FC = () => {
   const [plans, setPlans] = useState<Plan[]>(FALLBACK_PLANS);
   const [plansLoading, setPlansLoading] = useState(false);
   const [billingPeriod, setBillingPeriod] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
-  const [billingPeriod, setBillingPeriod] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
 
   useEffect(() => {
     fetchUsageStats();
