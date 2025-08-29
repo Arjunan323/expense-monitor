@@ -581,16 +581,16 @@ export const LandingPage: React.FC = () => {
                       </thead>
                       <tbody>
                         {[
-                          { feature: 'AI Parsing & Categorization', free: true, pro: true, premium: true },
-                          { feature: 'Basic Dashboard (3mo)', free: true, pro: false, premium: false },
-                          { feature: 'Advanced Analytics (12mo)', free: false, pro: true, premium: true },
-                          { feature: 'Budget Tracking & Alerts', free: false, pro: true, premium: true },
-                          { feature: 'Spending Trends', free: true, pro: true, premium: true },
-                          { feature: 'Cash Flow Forecasting', free: false, pro: false, premium: true },
-                          { feature: 'Goal Tracking', free: false, pro: false, premium: true },
-                          { feature: 'Tax Categorization', free: false, pro: false, premium: true },
-                          { feature: 'Priority Support', free: false, pro: true, premium: true },
-                          { feature: 'Early Access Features', free: false, pro: false, premium: true },
+                          { feature: '🤖 AI Parsing & Categorization', free: true, pro: true, premium: true },
+                        { feature: '📊 Basic Dashboard (3mo)', free: true, pro: true, premium: false },
+                        { feature: '📈 Advanced Analytics (12mo)', free: false, pro: true, premium: true },
+                        { feature: '🎯 Budget Tracking & Alerts', free: false, pro: true, premium: true },
+                        { feature: '📉 Spending Trends', free: true, pro: true, premium: true },
+                        { feature: '🔮 Cash Flow Forecasting', free: false, pro: false, premium: true },
+                        { feature: '🏆 Goal Tracking', free: false, pro: false, premium: true },
+                        { feature: '📋 Tax Categorization', free: false, pro: false, premium: true },
+                        { feature: '⚡ Priority Support', free: false, pro: true, premium: true },
+                        { feature: '🚀 Early Access Features', free: false, pro: false, premium: true },
                         ].map((row, index) => (
                           <tr key={index} className="border-b border-brand-gray-100 hover:bg-brand-gray-50 transition-colors duration-200">
                             <td className="py-4 px-4 font-medium text-brand-gray-900">{row.feature}</td>
@@ -792,15 +792,16 @@ export const LandingPage: React.FC = () => {
                     </thead>
                     <tbody>
                       {[
-                        { feature: 'AI Parsing & Categorization', free: true, pro: true, premium: true },
-                        { feature: 'Basic Dashboard', free: true, pro: false, premium: false },
-                        { feature: 'Advanced Analytics (12mo)', free: false, pro: true, premium: true },
-                        { feature: 'Budget Tracking & Alerts', free: false, pro: true, premium: true },
-                        { feature: 'Forecasting', free: false, pro: false, premium: true },
-                        { feature: 'Goal Tracking', free: false, pro: false, premium: true },
-                        { feature: 'Tax Categorization', free: false, pro: false, premium: true },
-                        { feature: 'Priority Support', free: false, pro: true, premium: true },
-                        { feature: 'Early Access', free: false, pro: false, premium: true },
+                        { feature: '🤖 AI Parsing & Categorization', free: true, pro: true, premium: true },
+                        { feature: '📊 Basic Dashboard (3mo)', free: true, pro: false, premium: false },
+                        { feature: '📈 Advanced Analytics (12mo)', free: false, pro: true, premium: true },
+                        { feature: '🎯 Budget Tracking & Alerts', free: false, pro: true, premium: true },
+                        { feature: '📉 Spending Trends', free: true, pro: true, premium: true },
+                        { feature: '🔮 Cash Flow Forecasting', free: false, pro: false, premium: true },
+                        { feature: '🏆 Goal Tracking', free: false, pro: false, premium: true },
+                        { feature: '📋 Tax Categorization', free: false, pro: false, premium: true },
+                        { feature: '⚡ Priority Support', free: false, pro: true, premium: true },
+                        { feature: '🚀 Early Access Features', free: false, pro: false, premium: true },
                       ].map((row, index) => (
                         <tr key={index} className="border-b border-brand-gray-100 hover:bg-brand-gray-50">
                           <td className="py-4 px-4 font-medium text-brand-gray-900">{row.feature}</td>

@@ -508,7 +508,7 @@ export const Billing: React.FC = () => {
                     <tbody>
                       {[
                         { feature: '🤖 AI Parsing & Categorization', free: true, pro: true, premium: true },
-                        { feature: '📊 Basic Dashboard (3mo)', free: true, pro: false, premium: false },
+                        { feature: '📊 Basic Dashboard (3mo)', free: true, pro: true, premium: false },
                         { feature: '📈 Advanced Analytics (12mo)', free: false, pro: true, premium: true },
                         { feature: '🎯 Budget Tracking & Alerts', free: false, pro: true, premium: true },
                         { feature: '📉 Spending Trends', free: true, pro: true, premium: true },
