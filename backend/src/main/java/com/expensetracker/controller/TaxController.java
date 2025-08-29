@@ -18,9 +18,13 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
+import com.expensetracker.security.RequiresPlan;
+import com.expensetracker.security.PlanTier;
+
 @RestController
 @RequestMapping("/analytics/taxes")
 @Tag(name = "Tax Tracking", description = "Endpoints for tax deductible tracking & insights")
+@RequiresPlan(level = PlanTier.PREMIUM)
 public class TaxController {
     private final TaxService service;
     private final TaxRuleService ruleService;

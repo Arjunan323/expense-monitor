@@ -9,7 +9,7 @@ import { fetchMonthlySpendingSeries } from '../../api/analyticsTrends';
 import { fetchBanks } from '../../utils/api';
 import { usePreferences } from '../../contexts/PreferencesContext';
 
-export const MonthlyTrends: React.FC = () => {
+export const MonthlyTrends: React.FC<{ planType: string }> = ({ planType }) => {
   const { preferences } = usePreferences();
   const [loading, setLoading] = useState(true);
   const STORAGE_KEY = 'monthlyTrendsPrefs';
@@ -73,7 +73,7 @@ export const MonthlyTrends: React.FC = () => {
     if(!dateRange.start || !dateRange.end) return;
     setLoading(true); setError(null);
     try {
-      const includeBanksActive = (showPerBank || viewMode==='bank');
+  const includeBanksActive = (showPerBank || viewMode==='bank') && planType === 'PREMIUM';
       const resp = await fetchMonthlySpendingSeries({ from: dateRange.start, to: dateRange.end, includeBanks: includeBanksActive, includePrevYear: viewMode==='previous', banks: selectedBanks.length ? selectedBanks : undefined });
       const chart = resp.monthly.map((p: any) => ({
         month: labelMonth(p.month),
@@ -90,7 +90,7 @@ export const MonthlyTrends: React.FC = () => {
         setBankKeys([]);
       }
       // derive top categories overall (sum across months)
-      if(viewMode==='category'){
+  if(viewMode==='category'){
         const catTotals: Record<string, number> = {};
         chart.forEach(m => m.categories?.forEach((c: { name: string; outflow: number }) => { catTotals[c.name] = (catTotals[c.name]||0)+c.outflow; }));
         const top = Object.entries(catTotals).sort((a,b)=>b[1]-a[1]).slice(0,6).map(e=>e[0]);
@@ -110,6 +110,14 @@ export const MonthlyTrends: React.FC = () => {
   }, [dateRange.start, dateRange.end, showPerBank, viewMode, selectedBanks]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Downgrade protections: if user not premium, force-disable advanced modes
+  useEffect(() => {
+    if(planType !== 'PREMIUM'){
+      if(viewMode !== 'category') setViewMode('category');
+      if(showPerBank) setShowPerBank(false);
+    }
+  }, [planType, viewMode, showPerBank]);
 
   const labelMonth = (ym: string) => {
     const [y,m] = ym.split('-');
@@ -246,8 +254,8 @@ export const MonthlyTrends: React.FC = () => {
             <div className="flex flex-wrap gap-2">
               {[
                 { key: 'category', label: 'By Category', icon: '📊' },
-                { key: 'bank', label: 'By Bank Account', icon: '🏦', disabled: bankOptions.length===0 },
-                { key: 'previous', label: 'Previous Year', icon: '📅' }
+                { key: 'bank', label: 'By Bank Account', icon: '🏦', disabled: bankOptions.length===0 || planType !== 'PREMIUM' },
+                { key: 'previous', label: 'Previous Year', icon: '📅', disabled: planType !== 'PREMIUM' }
               ].map(mode => (
                 <button
                   key={mode.key}
@@ -345,9 +353,9 @@ export const MonthlyTrends: React.FC = () => {
             <p className="text-brand-gray-600">Monthly expenditure patterns</p>
           </div>
           <button
-            disabled={bankOptions.length===0}
+            disabled={bankOptions.length===0 || planType !== 'PREMIUM'}
             onClick={() => setShowPerBank(!showPerBank)}
-            className={`flex items-center space-x-2 text-sm transition-colors duration-300 ${bankOptions.length===0 ? 'text-brand-gray-300 cursor-not-allowed' : 'text-brand-gray-600 hover:text-brand-green-600'}`}
+            className={`flex items-center space-x-2 text-sm transition-colors duration-300 ${(bankOptions.length===0 || planType !== 'PREMIUM') ? 'text-brand-gray-300 cursor-not-allowed' : 'text-brand-gray-600 hover:text-brand-green-600'}`}
           >
             {showPerBank ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             <span>{showPerBank ? 'Hide' : 'Show'} bank breakdown</span>
@@ -461,8 +469,14 @@ export const MonthlyTrends: React.FC = () => {
           ) : (
             <div className="space-y-3">
               <div className="flex items-start space-x-3"><div className="w-2 h-2 bg-brand-green-500 rounded-full mt-2" /><p className="text-sm text-brand-gray-700">Switch to "By Category" to see category composition stacked.</p></div>
-              <div className="flex items-start space-x-3"><div className="w-2 h-2 bg-brand-blue-500 rounded-full mt-2" /><p className="text-sm text-brand-gray-700">Use bank breakdown for per-account performance.</p></div>
-              <div className="flex items-start space-x-3"><div className="w-2 h-2 bg-accent-500 rounded-full mt-2" /><p className="text-sm text-brand-gray-700">Previous Year mode gives YoY context.</p></div>
+              {planType === 'PREMIUM' ? (
+                <>
+                  <div className="flex items-start space-x-3"><div className="w-2 h-2 bg-brand-blue-500 rounded-full mt-2" /><p className="text-sm text-brand-gray-700">Use bank breakdown for per-account performance.</p></div>
+                  <div className="flex items-start space-x-3"><div className="w-2 h-2 bg-accent-500 rounded-full mt-2" /><p className="text-sm text-brand-gray-700">Previous Year mode gives YoY context.</p></div>
+                </>
+              ) : (
+                <div className="flex items-start space-x-3"><div className="w-2 h-2 bg-brand-blue-500 rounded-full mt-2" /><p className="text-sm text-brand-gray-700">Upgrade to Premium for bank breakdown & YoY comparison.</p></div>
+              )}
             </div>
           )}
         </div>

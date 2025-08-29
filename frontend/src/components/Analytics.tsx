@@ -10,6 +10,8 @@ import { SpendingAlerts } from './analytics/SpendingAlerts';
 import { CashFlowForecast } from './analytics/CashFlowForecast';
 import { GoalTracking } from './analytics/GoalTracking';
 import { TaxTracker } from './analytics/TaxTracker';
+import api from '../utils/api';
+import { UsageStats } from '../types';
 
 type AnalyticsView = 'overview' | 'trends' | 'budget' | 'alerts' | 'forecast' | 'goals' | 'tax';
 
@@ -21,36 +23,44 @@ export const Analytics: React.FC = () => {
   const [goalsProgressPct, setGoalsProgressPct] = useState<number | null>(null);
   const [loadingStats, setLoadingStats] = useState<boolean>(false);
 
+  const [usage, setUsage] = useState<UsageStats | null>(null);
+  const [loadingUsage, setLoadingUsage] = useState<boolean>(true);
+
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
         setLoadingStats(true);
+        setLoadingUsage(true);
         const now = new Date();
         const to = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
         const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
         const from = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
-        const [trends, budgetSummary, alertSummary, goalStats] = await Promise.all([
+        const [trends, budgetSummary, alertSummary, goalStats, usageResp] = await Promise.all([
           fetchMonthlySpendingSeries({ from, to }),
           budgetsApi.summary().catch(()=>null),
             spendingAlertsApi.summary().catch(()=>null),
-          goalsApi.stats().catch(()=>null)
+          goalsApi.stats().catch(()=>null),
+          api.get<UsageStats>('/user/usage').then(r=>r.data).catch(()=>null)
         ]);
         if(!mounted) return;
         setSpendingTrendPct(typeof trends.summary.momChangePct === 'number' ? Math.round(trends.summary.momChangePct) : null);
         if(budgetSummary) setBudgetAdherence(Math.round(budgetSummary.history.thisMonthAdherence));
         if(alertSummary) setActiveAlerts(alertSummary.total);
         if(goalStats) setGoalsProgressPct(Math.round(goalStats.averageProgressPercent));
+        if(usageResp) setUsage(usageResp);
       } catch(err){
         // eslint-disable-next-line no-console
         console.error('Failed loading quick stats', err);
       } finally {
         if(mounted) setLoadingStats(false);
+        if(mounted) setLoadingUsage(false);
       }
     })();
     return () => { mounted = false; };
   }, []);
 
+  const planRank = (p: string | undefined) => p === 'PREMIUM' ? 2 : p === 'PRO' ? 1 : 0;
   const analyticsMenuItems = [
     {
       id: 'trends' as AnalyticsView,
@@ -58,7 +68,8 @@ export const Analytics: React.FC = () => {
       description: 'Track and compare spending patterns over time',
       icon: TrendingUp,
       color: 'from-brand-green-400 to-brand-green-600',
-      emoji: '📈'
+      emoji: '📈',
+      required: 'FREE'
     },
     {
       id: 'budget' as AnalyticsView,
@@ -66,7 +77,8 @@ export const Analytics: React.FC = () => {
       description: 'Set budgets by category and monitor progress',
       icon: Target,
       color: 'from-brand-blue-400 to-brand-blue-600',
-      emoji: '🎯'
+      emoji: '🎯',
+      required: 'PRO'
     },
     {
       id: 'alerts' as AnalyticsView,
@@ -74,7 +86,8 @@ export const Analytics: React.FC = () => {
       description: 'Get notified of unusual spending patterns',
       icon: AlertTriangle,
       color: 'from-yellow-400 to-yellow-600',
-      emoji: '🚨'
+      emoji: '🚨',
+      required: 'PRO'
     },
     {
       id: 'forecast' as AnalyticsView,
@@ -82,7 +95,8 @@ export const Analytics: React.FC = () => {
       description: 'Predict future financial position',
       icon: BarChart3,
       color: 'from-purple-400 to-purple-600',
-      emoji: '🔮'
+      emoji: '🔮',
+      required: 'PREMIUM'
     },
     {
       id: 'goals' as AnalyticsView,
@@ -90,7 +104,8 @@ export const Analytics: React.FC = () => {
       description: 'Track savings goals and debt reduction',
       icon: DollarSign,
       color: 'from-pink-400 to-pink-600',
-      emoji: '🏆'
+      emoji: '🏆',
+      required: 'PREMIUM'
     },
     {
       id: 'tax' as AnalyticsView,
@@ -98,9 +113,12 @@ export const Analytics: React.FC = () => {
       description: 'Maximize tax savings with smart categorization',
       icon: Calculator,
       color: 'from-indigo-400 to-indigo-600',
-      emoji: '📊'
+      emoji: '📊',
+      required: 'PREMIUM'
     }
   ];
+
+  const currentRank = planRank(usage?.planType);
 
   if (currentView !== 'overview') {
     return (
@@ -117,12 +135,30 @@ export const Analytics: React.FC = () => {
         </div>
 
         {/* Render Selected View */}
-        {currentView === 'trends' && <MonthlyTrends />}
-        {currentView === 'budget' && <BudgetTracking />}
-        {currentView === 'alerts' && <SpendingAlerts />}
-        {currentView === 'forecast' && <CashFlowForecast />}
-        {currentView === 'goals' && <GoalTracking />}
-        {currentView === 'tax' && <TaxTracker />}
+        {(() => {
+          const selected = analyticsMenuItems.find(i=>i.id===currentView);
+          if(!selected) return null;
+          const requiredRank = planRank(selected.required as any);
+          if(currentRank < requiredRank){
+            return (
+              <div className="p-6 bg-yellow-50 border-2 border-yellow-300 rounded-3xl space-y-3">
+                <h3 className="text-xl font-bold text-yellow-700">Upgrade Required</h3>
+                <p className="text-sm text-yellow-700">This feature requires {selected.required} plan or higher.</p>
+                <a href="/billing" className="inline-block bg-gradient-green text-white px-5 py-2 rounded-2xl font-semibold shadow-glow-green hover:scale-105 transition-all duration-300">View Plans</a>
+              </div>
+            );
+          }
+          return (
+            <>
+              {currentView === 'trends' && <MonthlyTrends planType={usage?.planType || 'FREE'} />}
+              {currentView === 'budget' && <BudgetTracking />}
+              {currentView === 'alerts' && <SpendingAlerts />}
+              {currentView === 'forecast' && <CashFlowForecast />}
+              {currentView === 'goals' && <GoalTracking />}
+              {currentView === 'tax' && <TaxTracker />}
+            </>
+          );
+        })()}
       </div>
     );
   }
@@ -196,11 +232,14 @@ export const Analytics: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {analyticsMenuItems.map(item => (
+          {analyticsMenuItems.map(item => {
+            const locked = currentRank < planRank(item.required as any);
+            return (
             <button
               key={item.id}
-              onClick={() => setCurrentView(item.id)}
-              className="group text-left p-6 bg-white border-2 border-brand-gray-200 rounded-3xl hover:border-brand-green-400 hover:shadow-funky transition-all duration-300 hover:scale-105"
+              onClick={() => !locked && setCurrentView(item.id)}
+              disabled={locked}
+              className={`group text-left p-6 bg-white border-2 rounded-3xl transition-all duration-300 ${locked ? 'border-brand-gray-200 opacity-50 cursor-not-allowed' : 'border-brand-gray-200 hover:border-brand-green-400 hover:shadow-funky hover:scale-105'}`}
             >
               <div className="flex items-start justify-between mb-4">
                 <div className={`w-16 h-16 bg-gradient-to-br ${item.color} rounded-3xl flex items-center justify-center group-hover:shadow-glow-green transition-all duration-300`}>
@@ -216,17 +255,23 @@ export const Analytics: React.FC = () => {
                 {item.description}
               </p>
               
-              <div className="mt-4 flex items-center text-brand-green-600 group-hover:text-brand-green-700 transition-colors duration-300">
-                <span className="text-sm font-semibold">Explore</span>
-                <ArrowLeft className="w-4 h-4 ml-2 rotate-180 group-hover:translate-x-1 transition-transform duration-300" />
-              </div>
+              {locked ? (
+                <div className="mt-4 flex items-center text-brand-gray-500 text-sm font-semibold">
+                  {item.required === 'PRO' ? 'Pro+' : 'Premium'} required
+                </div>
+              ) : (
+                <div className="mt-4 flex items-center text-brand-green-600 group-hover:text-brand-green-700 transition-colors duration-300">
+                  <span className="text-sm font-semibold">Explore</span>
+                  <ArrowLeft className="w-4 h-4 ml-2 rotate-180 group-hover:translate-x-1 transition-transform duration-300" />
+                </div>
+              )}
             </button>
-          ))}
+          );})}
         </div>
       </div>
 
       {/* Coming Soon Features */}
-      <div className="card bg-gradient-funky text-white">
+  <div className="card bg-gradient-funky text-white">
         <div className="text-center py-8">
           <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-6">
             <BarChart3 className="w-10 h-10 text-white" />

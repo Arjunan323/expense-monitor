@@ -12,8 +12,12 @@ import java.util.List;
 /**
  * REST endpoints for budget category CRUD.
  */
+import com.expensetracker.security.RequiresPlan;
+import com.expensetracker.security.PlanTier;
+
 @RestController
 @RequestMapping("/analytics/budgets")
+@RequiresPlan(level = PlanTier.PRO)
 public class BudgetController {
 	private final BudgetService service;
 	public BudgetController(BudgetService s){this.service=s;}

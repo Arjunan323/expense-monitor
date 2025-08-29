@@ -111,7 +111,8 @@ const AppRoutes: React.FC = () => {
           element={
             <ProtectedRoute>
               <Layout>
-                <MonthlyTrends />
+                {/* Default to FREE when embedding standalone; component will self-adapt once centralized analytics page is preferred */}
+                <MonthlyTrends planType="FREE" />
               </Layout>
             </ProtectedRoute>
           }

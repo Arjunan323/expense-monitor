@@ -49,7 +49,7 @@ api.interceptors.response.use(
 );
 
 export const apiCall = async <T>(
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
   url: string,
   data?: any,
   config?: any
@@ -170,6 +170,9 @@ export const spendingAlertsApi = {
   whitelist: () => apiCall<string[]>('GET', '/analytics/spending-alerts/whitelist'),
   addWhitelist: (merchant: string) => apiCall('POST', '/analytics/spending-alerts/whitelist', { merchant }),
   removeWhitelist: (merchant: string) => apiCall('DELETE', `/analytics/spending-alerts/whitelist/${encodeURIComponent(merchant)}`),
+  muted: () => apiCall<{ id: number; category: string; muteUntil?: string | null }[]>('GET', '/analytics/spending-alerts/mute-category'),
+  mute: (category: string, until?: string) => apiCall('POST', '/analytics/spending-alerts/mute-category', { category, until }),
+  unmute: (category: string) => apiCall('DELETE', `/analytics/spending-alerts/mute-category/${encodeURIComponent(category)}`),
   recommendations: (month?: string) => apiCall<any>('GET', `/analytics/spending-alerts/recommendations${month ? `?month=${month}` : ''}`),
   recompute: (month?: string) => apiCall('POST', `/analytics/spending-alerts/recompute${month ? `?month=${month}` : ''}`, null)
 };
@@ -235,7 +238,11 @@ export const taxApi = {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
   },
-  downloadReceipt: (id: number) => apiCall('GET', `/analytics/taxes/${id}/receipt`, null, { responseType: 'arraybuffer' }),
+  // Explicitly type as ArrayBuffer for binary download
+  downloadReceipt: (id: number) => apiCall<ArrayBuffer>('GET', `/analytics/taxes/${id}/receipt`, null, { responseType: 'arraybuffer' }),
+  classifyRange: (start: string, end: string) => apiCall<{ created: number }>('POST', '/analytics/taxes/classify', null, { params: { start, end } }),
+  testRule: (params: { matchType: string; matchValue: string; description?: string; amount?: number; category?: string; merchant?: string }) => 
+    apiCall<{ matched: boolean }>('POST', '/analytics/taxes/rules/test', null, { params }),
   listRules: () => apiCall<any[]>('GET', '/analytics/taxes/rules'),
   createRule: (rule: any) => apiCall<any>('POST', '/analytics/taxes/rules', rule),
   updateRule: (id: number, rule: any) => apiCall<any>('PUT', `/analytics/taxes/rules/${id}`, rule),

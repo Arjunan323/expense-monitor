@@ -117,4 +117,10 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(build(HttpStatus.INTERNAL_SERVER_ERROR,
                 "Unexpected error occurred", "INTERNAL_ERROR", req.getRequestURI(), null));
     }
+
+        @ExceptionHandler(FeatureLockedException.class)
+        public ResponseEntity<ErrorResponse> handleFeatureLocked(FeatureLockedException ex, HttpServletRequest req) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                                .body(build(HttpStatus.FORBIDDEN, ex.getMessage(), "FEATURE_LOCKED", req.getRequestURI(), null));
+        }
 }

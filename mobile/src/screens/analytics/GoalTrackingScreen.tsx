@@ -212,7 +212,8 @@ export const GoalTrackingScreen: React.FC = () => {
       <View style={styles.summaryGrid}>
         <View style={[styles.summaryCard, { backgroundColor: '#E0F2FE' }]}>
           <View style={[styles.summaryIcon, { backgroundColor: '#0077B6' }]}>
-            <Ionicons name="target" size={20} color="#FFFFFF" />
+            {/* 'target' not available; using 'locate' icon */}
+            <Ionicons name="locate" size={20} color="#FFFFFF" />
           </View>
           <Text style={styles.summaryLabel}>Active Goals</Text>
           <Text style={[styles.summaryValue, { color: '#0077B6' }]}>

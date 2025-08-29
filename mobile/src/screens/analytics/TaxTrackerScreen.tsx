@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, Platform, TextInput, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, Platform, TextInput, RefreshControl, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { apiCall, taxApi } from '../../utils/api';
 import { usePreferences } from '../../contexts/PreferencesContext';
@@ -8,6 +8,7 @@ import api from '../../utils/api';
 import * as FileSystem from 'expo-file-system';
 // @ts-ignore - types may be missing for expo-sharing in this template
 import * as Sharing from 'expo-sharing';
+import Toast from 'react-native-toast-message';
 
 // Types mirrored from web client minimal subset
 interface TaxTransactionDto {
@@ -48,9 +49,14 @@ export const TaxTrackerScreen: React.FC = () => {
   const [uploadingId, setUploadingId] = useState<number|null>(null);
   const [rules, setRules] = useState<ClassificationRule[]>([]);
   const [showRules, setShowRules] = useState(false);
+  const [showAIClassify, setShowAIClassify] = useState(false);
+  const [classifyRange, setClassifyRange] = useState({ start: '', end: '' });
+  const [classifyProgress, setClassifyProgress] = useState<number | null>(null);
   const [newRule, setNewRule] = useState<ClassificationRule>({ matchType:'DESCRIPTION_REGEX', matchValue:'', taxCategoryCode:'80C', priority:0, autoMarkDeductible:true, active:true });
   const [editingRuleId, setEditingRuleId] = useState<number|null>(null);
   const [editingRule, setEditingRule] = useState<ClassificationRule|null>(null);
+  const [testRule, setTestRule] = useState({ description: '', amount: '', category: '', merchant: '' });
+  const [testResult, setTestResult] = useState<any>(null);
   const RULE_TYPES = ['DESCRIPTION_REGEX','CATEGORY','MERCHANT','AMOUNT_RANGE'] as const;
   const fyYear = (fy:string)=> parseInt(fy.substring(0,4),10);
 
@@ -123,8 +129,8 @@ export const TaxTrackerScreen: React.FC = () => {
   const viewReceipt = async (id:number) => {
     try {
       setUploadingId(id); // reuse spinner state
-      const response = await taxApi.downloadReceipt(id);
-      const base64 = arrayBufferToBase64(response.data);
+  const response = await taxApi.downloadReceipt(id); // typed as ArrayBuffer
+  const base64 = arrayBufferToBase64(response as ArrayBuffer);
       const fileUri = FileSystem.cacheDirectory + `receipt-${id}.pdf`;
       await FileSystem.writeAsStringAsync(fileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
       if(await Sharing.isAvailableAsync()) {
@@ -136,6 +142,61 @@ export const TaxTrackerScreen: React.FC = () => {
     finally { setUploadingId(null); }
   };
 
+  const runAIClassification = async () => {
+    if (!classifyRange.start || !classifyRange.end) {
+      Toast.show({ type: 'error', text1: 'Please select both start and end dates' });
+      return;
+    }
+    
+    try {
+      setClassifyProgress(0);
+      
+      // Simulate progress for better UX
+      const progressInterval = setInterval(() => {
+        setClassifyProgress(prev => prev !== null && prev < 90 ? prev + 10 : prev);
+      }, 300);
+      
+      const result = await taxApi.classifyRange(classifyRange.start, classifyRange.end);
+      
+      clearInterval(progressInterval);
+      setClassifyProgress(100);
+      
+      Toast.show({ 
+        type: 'success', 
+        text1: `Successfully classified ${result.created || 0} transactions` 
+      });
+      
+      setTimeout(() => {
+        setClassifyProgress(null);
+        setShowAIClassify(false);
+        loadAll();
+      }, 1000);
+    } catch (e: any) {
+      setClassifyProgress(null);
+      Toast.show({ type: 'error', text1: 'Classification failed' });
+    }
+  };
+
+  const testRuleLogic = async () => {
+    if (!newRule.matchValue.trim()) {
+      Toast.show({ type: 'error', text1: 'Please enter a match value to test' });
+      return;
+    }
+    
+    try {
+      const result = await taxApi.testRule({
+        matchType: newRule.matchType,
+        matchValue: newRule.matchValue,
+        description: testRule.description,
+        amount: testRule.amount ? parseFloat(testRule.amount) : undefined,
+        category: testRule.category,
+        merchant: testRule.merchant
+      });
+      setTestResult(result);
+    } catch (e: any) {
+      Toast.show({ type: 'error', text1: 'Failed to test rule' });
+    }
+  };
   // Rules CRUD
   const loadRules = useCallback(async ()=> {
     try {
@@ -153,7 +214,6 @@ export const TaxTrackerScreen: React.FC = () => {
   const startEditRule = (r:ClassificationRule) => { setEditingRuleId(r.id!); setEditingRule({...r}); };
   const cancelEditRule = () => { setEditingRuleId(null); setEditingRule(null); };
   const saveRule = async () => { if(!editingRule) return; try { await apiCall('PUT', `/analytics/taxes/rules/${editingRule.id}`, editingRule); cancelEditRule(); loadRules(); } catch(e:any){ Alert.alert('Error', e.message||'Update failed'); } };
-  const updateRule = async () => { if(!editingRule) return; try { await taxApi.updateRule(editingRule.id!, editingRule); cancelEditRule(); loadRules(); } catch(e:any){ Alert.alert('Error', e.message||'Update failed'); } };
   const deleteRule = async (id:number) => { Alert.alert('Delete Rule','Are you sure?',[{text:'Cancel',style:'cancel'},{text:'Delete',style:'destructive', onPress: async()=>{ try{ await taxApi.deleteRule(id); loadRules(); } catch{} }}]); };
 
   const categoryIcon: Record<string,string> = { '80C':'💰','80D':'🏥','80G':'❤️','24(b)':'🏠','80E':'📚','80TTA':'🏦' };
@@ -173,12 +233,24 @@ export const TaxTrackerScreen: React.FC = () => {
       <View style={styles.header}> 
         <Text style={styles.title}>Tax Benefit Tracker</Text>
         <Text style={styles.subtitle}>Optimize deductions & stay compliant</Text>
-        <View style={styles.fySwitch}>
-          {fyOptions.map(fy=> (
-            <TouchableOpacity key={fy} style={[styles.fyChip, fy===selectedFy && styles.fyChipActive]} onPress={()=> setSelectedFy(fy)}>
-              <Text style={[styles.fyChipText, fy===selectedFy && styles.fyChipTextActive]}>{fy}</Text>
+        <View style={styles.headerControls}>
+          <View style={styles.fySwitch}>
+            {fyOptions.map(fy=> (
+              <TouchableOpacity key={fy} style={[styles.fyChip, fy===selectedFy && styles.fyChipActive]} onPress={()=> setSelectedFy(fy)}>
+                <Text style={[styles.fyChipText, fy===selectedFy && styles.fyChipTextActive]}>{fy}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={styles.aiButton}
+              onPress={() => setShowAIClassify(true)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.aiButtonText}>🤖 AI Classify</Text>
             </TouchableOpacity>
-          ))}
+          </View>
         </View>
       </View>
 
@@ -402,6 +474,43 @@ export const TaxTrackerScreen: React.FC = () => {
                   onChangeText={txt=> setNewRule(prev=> ({...prev, priority: parseInt(txt||'0',10)}))}
                 />
               </View>
+              
+              {/* Test Rule Section */}
+              <View style={styles.testRuleSection}>
+                <Text style={styles.testRuleTitle}>Test Rule</Text>
+                <View style={styles.testInputs}>
+                  <TextInput
+                    style={styles.testInput}
+                    placeholder="Test description"
+                    value={testRule.description}
+                    onChangeText={txt => setTestRule(prev => ({ ...prev, description: txt }))}
+                  />
+                  <TextInput
+                    style={styles.testInput}
+                    placeholder="Test amount"
+                    value={testRule.amount}
+                    onChangeText={txt => setTestRule(prev => ({ ...prev, amount: txt }))}
+                    keyboardType="numeric"
+                  />
+                </View>
+                <View style={styles.testActions}>
+                  <TouchableOpacity
+                    style={styles.testButton}
+                    onPress={testRuleLogic}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.testButtonText}>Test Rule</Text>
+                  </TouchableOpacity>
+                  {testResult && (
+                    <View style={[styles.testResult, testResult.matched ? styles.testResultMatch : styles.testResultNoMatch]}>
+                      <Text style={styles.testResultText}>
+                        {testResult.matched ? '✅ Match' : '❌ No Match'}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+              
               <TouchableOpacity onPress={createRule} style={styles.addRuleBtn}><Text style={styles.addRuleBtnText}>Create Rule</Text></TouchableOpacity>
             </View>
           </View>
@@ -418,6 +527,98 @@ export const TaxTrackerScreen: React.FC = () => {
           ))}
         </View>
       )}
+
+      {/* AI Classification Modal */}
+      <Modal
+        visible={showAIClassify}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowAIClassify(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.aiModal}>
+            <View style={styles.aiModalHeader}>
+              <Text style={styles.aiModalTitle}>🤖 AI Classification</Text>
+              <TouchableOpacity onPress={() => setShowAIClassify(false)}>
+                <Ionicons name="close" size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.aiModalContent}>
+              <Text style={styles.aiDescription}>
+                Our AI will analyze your transactions and automatically categorize potential tax deductions 
+                based on your rules and patterns.
+              </Text>
+              
+              <View style={styles.dateRangeSection}>
+                <View style={styles.dateInput}>
+                  <Text style={styles.dateLabel}>Start Date</Text>
+                  <TextInput
+                    style={styles.dateInputField}
+                    value={classifyRange.start}
+                    onChangeText={(text) => setClassifyRange(prev => ({ ...prev, start: text }))}
+                    placeholder="YYYY-MM-DD"
+                  />
+                </View>
+                
+                <View style={styles.dateInput}>
+                  <Text style={styles.dateLabel}>End Date</Text>
+                  <TextInput
+                    style={styles.dateInputField}
+                    value={classifyRange.end}
+                    onChangeText={(text) => setClassifyRange(prev => ({ ...prev, end: text }))}
+                    placeholder="YYYY-MM-DD"
+                  />
+                </View>
+              </View>
+
+              {classifyProgress !== null && (
+                <View style={styles.progressSection}>
+                  <View style={styles.progressHeader}>
+                    <Text style={styles.progressLabel}>Classification Progress</Text>
+                    <Text style={styles.progressPercentage}>{classifyProgress}%</Text>
+                  </View>
+                  <View style={styles.progressBar}>
+                    <View
+                      style={[
+                        styles.progressFill,
+                        { width: `${classifyProgress}%`, backgroundColor: '#8B5CF6' }
+                      ]}
+                    />
+                  </View>
+                </View>
+              )}
+            </View>
+            
+            <View style={styles.aiModalActions}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setShowAIClassify(false)}
+                disabled={classifyProgress !== null}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.classifyButton,
+                  (!classifyRange.start || !classifyRange.end || classifyProgress !== null) && styles.classifyButtonDisabled
+                ]}
+                onPress={runAIClassification}
+                disabled={!classifyRange.start || !classifyRange.end || classifyProgress !== null}
+                activeOpacity={0.8}
+              >
+                {/* 'brain' icon not in Ionicons set; using 'sparkles' to convey AI */}
+                <Ionicons name="sparkles" size={16} color="#FFFFFF" />
+                <Text style={styles.classifyButtonText}>
+                  {classifyProgress !== null ? 'Classifying...' : 'Start Classification'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -429,7 +630,31 @@ const styles = StyleSheet.create({
   header:{ paddingTop:60, paddingHorizontal:24, paddingBottom:24, backgroundColor:'#6366F1', borderBottomLeftRadius:28, borderBottomRightRadius:28 },
   title:{ fontSize:26, fontWeight:'bold', color:'#FFFFFF', marginBottom:4 },
   subtitle:{ fontSize:14, color:'rgba(255,255,255,0.85)' },
+  headerControls: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 16,
+  },
   fySwitch:{ flexDirection:'row', marginTop:16, flexWrap:'wrap', gap:8 },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  aiButton: {
+    backgroundColor: 'rgba(139, 92, 246, 0.9)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    gap: 6,
+  },
+  aiButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   fyChip:{ paddingHorizontal:12, paddingVertical:6, backgroundColor:'rgba(255,255,255,0.15)', borderRadius:18 },
   fyChipActive:{ backgroundColor:'#FFFFFF' },
   fyChipText:{ color:'#F3F4F6', fontWeight:'600', fontSize:12 },
@@ -504,6 +729,39 @@ const styles = StyleSheet.create({
   ,newRuleValue:{ fontSize:11, color:'#6B7280' }
   ,addRuleBtn:{ marginTop:8, backgroundColor:'#10B981', paddingVertical:8, borderRadius:10, alignItems:'center' }
   ,addRuleBtnText:{ fontSize:12, fontWeight:'700', color:'#FFFFFF' }
+  ,testRuleSection: { marginTop: 12, padding: 12, backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB' }
+  ,testRuleTitle: { fontSize: 12, fontWeight: '600', color: '#374151', marginBottom: 8 }
+  ,testInputs: { flexDirection: 'row', gap: 8, marginBottom: 8 }
+  ,testInput: { flex: 1, borderWidth: 1, borderColor: '#E5E7EB', backgroundColor: '#FFFFFF', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, fontSize: 11, color: '#111827' }
+  ,testActions: { flexDirection: 'row', alignItems: 'center', gap: 8 }
+  ,testButton: { backgroundColor: '#0077B6', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }
+  ,testButtonText: { fontSize: 11, fontWeight: '600', color: '#FFFFFF' }
+  ,testResult: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }
+  ,testResultMatch: { backgroundColor: '#ECFDF5' }
+  ,testResultNoMatch: { backgroundColor: '#FEE2E2' }
+  ,testResultText: { fontSize: 10, fontWeight: '600' }
+  ,modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' }
+  ,aiModal: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 25, borderTopRightRadius: 25, maxHeight: '80%', paddingBottom: Platform.OS === 'ios' ? 34 : 20 }
+  ,aiModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 24, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' }
+  ,aiModalTitle: { fontSize: 20, fontWeight: 'bold', color: '#1F2937' }
+  ,aiModalContent: { padding: 24 }
+  ,aiDescription: { fontSize: 14, color: '#6B7280', lineHeight: 20, marginBottom: 20 }
+  ,dateRangeSection: { flexDirection: 'row', gap: 12, marginBottom: 20 }
+  ,dateInput: { flex: 1 }
+  ,dateLabel: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 }
+  ,dateInputField: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16, color: '#1F2937', backgroundColor: '#FFFFFF' }
+  ,progressSection: { marginBottom: 20 }
+  ,progressHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }
+  ,progressLabel: { fontSize: 14, fontWeight: '500', color: '#6B7280' }
+  ,progressPercentage: { fontSize: 14, fontWeight: 'bold', color: '#8B5CF6' }
+  ,progressBar: { height: 12, backgroundColor: '#F3F4F6', borderRadius: 6, overflow: 'hidden' }
+  ,progressFill: { height: '100%', borderRadius: 6 }
+  ,aiModalActions: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#F3F4F6', gap: 12 }
+  ,cancelButton: { flex: 1, backgroundColor: '#F3F4F6', paddingVertical: 12, borderRadius: 12, alignItems: 'center' }
+  ,cancelButtonText: { fontSize: 16, fontWeight: '600', color: '#6B7280' }
+  ,classifyButton: { flex: 1, backgroundColor: '#8B5CF6', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 12, gap: 6 }
+  ,classifyButtonDisabled: { opacity: 0.5 }
+  ,classifyButtonText: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' }
 });
 
 export default TaxTrackerScreen;

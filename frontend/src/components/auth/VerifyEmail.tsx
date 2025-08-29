@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, Navigate, Link } from 'react-router-dom';
-import { CheckCircle, AlertCircle, Mail, ArrowLeft, RefreshCcw } from 'lucide-react';
+import { CheckCircle, AlertCircle, Mail, ArrowLeft, RefreshCcw, ArrowRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { verifyEmailToken, resendVerification } from '../../api/authExtras';
 import { useAuth } from '../../contexts/AuthContext';

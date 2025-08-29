@@ -2,11 +2,14 @@ package com.expensetracker.controller;
 
 import com.expensetracker.dto.*;
 import com.expensetracker.service.SpendingAlertService;
+import com.expensetracker.security.RequiresPlan;
+import com.expensetracker.security.PlanTier;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
 @RequestMapping("/analytics/spending-alerts")
+@RequiresPlan(level = PlanTier.PRO)
 public class SpendingAlertController {
     private final SpendingAlertService service;
     private final com.expensetracker.stream.SpendingAlertStreamPublisher publisher;

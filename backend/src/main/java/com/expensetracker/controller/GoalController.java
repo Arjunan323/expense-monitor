@@ -4,6 +4,8 @@ import com.expensetracker.dto.GoalDto;
 import com.expensetracker.dto.GoalContributionRequest;
 import com.expensetracker.dto.GoalStatsDto;
 import com.expensetracker.service.GoalService;
+import com.expensetracker.security.RequiresPlan;
+import com.expensetracker.security.PlanTier;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -12,6 +14,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/analytics/goals")
+@RequiresPlan(level = PlanTier.PREMIUM)
 public class GoalController {
 	private final GoalService service; public GoalController(GoalService s){this.service=s;}
 	@GetMapping public List<GoalDto> list(){return service.list();}

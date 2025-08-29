@@ -8,13 +8,15 @@ import {
   Dimensions,
   Platform,
   RefreshControl,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { LineChart } from 'react-native-chart-kit';
 import { formatCurrency } from '../../utils/formatters';
-import { apiCall } from '../../utils/api';
+import { apiCall, fetchMonthlySpendingSeriesMobile } from '../../utils/api';
 import { usePreferences } from '../../contexts/PreferencesContext';
+import Toast from 'react-native-toast-message';
 
 const { width } = Dimensions.get('window');
 
@@ -24,8 +26,16 @@ export const MonthlyTrendsScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [chartType, setChartType] = useState<'line' | 'bar'>('line');
   const [viewMode, setViewMode] = useState<'category' | 'bank' | 'previous'>('category');
+  const [selectedBanks, setSelectedBanks] = useState<string[]>([]);
+  const [availableBanks, setAvailableBanks] = useState<string[]>([]);
+  const [showBankSelector, setShowBankSelector] = useState(false);
+  const [dateRange, setDateRange] = useState({ start: '', end: '' });
 
-  const [chartData, setChartData] = useState({ labels: [] as string[], datasets: [{ data: [] as number[], color: (o=1)=>`rgba(0,183,125,${o})`, strokeWidth:3 }]});
+  const [chartData, setChartData] = useState({ 
+    labels: [] as string[], 
+    datasets: [{ data: [] as number[], color: (o=1)=>`rgba(0,183,125,${o})`, strokeWidth:3 }]
+  });
+  const [stackedData, setStackedData] = useState<any[]>([]);
   const [summaryStats, setSummaryStats] = useState({
     highestMonth: { month: '', amount: 0 },
     lowestMonth: { month: '', amount: 0 },
@@ -42,22 +52,60 @@ export const MonthlyTrendsScreen: React.FC = () => {
     return { from: fmt(start), to: fmt(end) };
   };
 
+  // Initialize date range
+  useEffect(() => {
+    const range = computeRange();
+    setDateRange({ start: range.from, end: range.to });
+  }, []);
   const load = useCallback(async ()=>{
-    setLoading(true); setError(null);
+    if (!dateRange.start || !dateRange.end) return;
+    setLoading(true); 
+    setError(null);
     try {
-      const r = await apiCall<any>('GET', `/analytics/trends/spending/monthly-series?from=${computeRange().from}&to=${computeRange().to}&includePrevYear=${viewMode==='previous'}&includeBanks=${viewMode==='bank'}`);
+      const includeBanks = viewMode === 'bank';
+      const includePrevYear = viewMode === 'previous';
+      const topCategories = viewMode === 'category' ? 6 : undefined;
+      
+      const r = await fetchMonthlySpendingSeriesMobile(
+        dateRange.start, 
+        dateRange.end, 
+        { 
+          includeBanks, 
+          includePrevYear, 
+          topCategories 
+        }
+      );
+      
       const labels = r.monthly.map((m:any)=>{ const [y,mo]=m.month.split('-'); return new Date(Number(y), Number(mo)-1,1).toLocaleString(undefined,{month:'short'}); });
       const data = r.monthly.map((m:any)=> Number(m.totalOutflow));
       setChartData({ labels, datasets:[{ data, color:(o=1)=>`rgba(0,183,125,${o})`, strokeWidth:3 }]});
+      
+      // Set stacked data for category/bank breakdown
+      if (viewMode === 'category' && r.monthly[0]?.categories) {
+        const categoryKeys = new Set<string>();
+        r.monthly.forEach((m: any) => m.categories?.forEach((c: any) => categoryKeys.add(c.category)));
+        setStackedData(Array.from(categoryKeys).slice(0, 6));
+      } else if (viewMode === 'bank' && r.monthly[0]?.banks) {
+        const bankKeys = new Set<string>();
+        r.monthly.forEach((m: any) => m.banks?.forEach((b: any) => bankKeys.add(b.bank)));
+        setStackedData(Array.from(bankKeys));
+        setAvailableBanks(Array.from(bankKeys));
+      } else {
+        setStackedData([]);
+      }
+      
       setSummaryStats({
         highestMonth: { month: r.summary.highest.month, amount: Number(r.summary.highest.amount) },
         lowestMonth: { month: r.summary.lowest.month, amount: Number(r.summary.lowest.amount) },
         averageSpending: Number(r.summary.averageOutflow),
         momChange: r.summary.momChangePct? Number(r.summary.momChangePct):0
       });
-    } catch(e:any){ setError(e.message||'Failed'); }
+    } catch(e:any){ 
+      setError(e.message||'Failed to load trends data'); 
+      Toast.show({ type: 'error', text1: 'Failed to load trends data' });
+    }
     finally { setLoading(false); }
-  }, [viewMode]);
+  }, [viewMode, dateRange.start, dateRange.end]);
 
   useEffect(()=>{ load(); }, [load]);
 
@@ -66,6 +114,13 @@ export const MonthlyTrendsScreen: React.FC = () => {
     load().finally(() => setRefreshing(false));
   };
 
+  const toggleBankSelection = (bank: string) => {
+    setSelectedBanks(prev => 
+      prev.includes(bank) 
+        ? prev.filter(b => b !== bank)
+        : [...prev, bank]
+    );
+  };
   if (loading) {
     return <LoadingSpinner />;
   }
@@ -151,32 +206,54 @@ export const MonthlyTrendsScreen: React.FC = () => {
         <View style={styles.toggleButtons}>
           {[
             { key: 'category', label: 'By Category', icon: 'pie-chart' },
-            { key: 'bank', label: 'By Bank', icon: 'business' },
+            { key: 'bank', label: 'By Bank', icon: 'business', disabled: availableBanks.length === 0 },
             { key: 'previous', label: 'Previous Year', icon: 'calendar' }
           ].map(mode => (
             <TouchableOpacity
               key={mode.key}
-              onPress={() => setViewMode(mode.key as any)}
+              onPress={() => !mode.disabled && setViewMode(mode.key as any)}
+              disabled={mode.disabled}
               style={[
                 styles.toggleButton,
-                viewMode === mode.key && styles.toggleButtonActive
+                viewMode === mode.key && styles.toggleButtonActive,
+                mode.disabled && styles.toggleButtonDisabled
               ]}
               activeOpacity={0.8}
             >
               <Ionicons 
                 name={mode.icon as any} 
                 size={16} 
-                color={viewMode === mode.key ? '#FFFFFF' : '#6B7280'} 
+                color={mode.disabled ? '#D1D5DB' : viewMode === mode.key ? '#FFFFFF' : '#6B7280'} 
               />
               <Text style={[
                 styles.toggleButtonText,
-                viewMode === mode.key && styles.toggleButtonTextActive
+                viewMode === mode.key && styles.toggleButtonTextActive,
+                mode.disabled && styles.toggleButtonTextDisabled
               ]}>
                 {mode.label}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
+        
+        {/* Bank Filter for Bank View */}
+        {viewMode === 'bank' && availableBanks.length > 0 && (
+          <View style={styles.bankFilterSection}>
+            <TouchableOpacity
+              style={styles.bankFilterButton}
+              onPress={() => setShowBankSelector(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="business" size={16} color="#0077B6" />
+              <Text style={styles.bankFilterText}>
+                {selectedBanks.length === 0 ? 'All Banks' : 
+                 selectedBanks.length === 1 ? selectedBanks[0] : 
+                 `${selectedBanks.length} Banks Selected`}
+              </Text>
+              <Ionicons name="chevron-down" size={16} color="#6B7280" />
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       {/* Chart */}
@@ -232,6 +309,63 @@ export const MonthlyTrendsScreen: React.FC = () => {
           </View>
         </View>
       </View>
+
+      {/* Bank Selector Modal */}
+      <Modal
+        visible={showBankSelector}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowBankSelector(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.bankSelectorModal}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Banks</Text>
+              <TouchableOpacity onPress={() => setShowBankSelector(false)}>
+                <Ionicons name="close" size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.modalContent}>
+              {availableBanks.map(bank => (
+                <TouchableOpacity
+                  key={bank}
+                  style={styles.bankOption}
+                  onPress={() => toggleBankSelection(bank)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons 
+                    name={selectedBanks.includes(bank) ? "checkbox" : "square-outline"} 
+                    size={20} 
+                    color={selectedBanks.includes(bank) ? "#0077B6" : "#6B7280"} 
+                  />
+                  <Text style={styles.bankOptionText}>{bank}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.selectAllButton}
+                onPress={() => setSelectedBanks(availableBanks)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.selectAllButtonText}>Select All</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.applyButton}
+                onPress={() => {
+                  setShowBankSelector(false);
+                  load();
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.applyButtonText}>Apply</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -375,6 +509,32 @@ const styles = StyleSheet.create({
   toggleButtonTextActive: {
     color: '#FFFFFF',
   },
+  toggleButtonDisabled: {
+    opacity: 0.5,
+  },
+  toggleButtonTextDisabled: {
+    color: '#D1D5DB',
+  },
+  bankFilterSection: {
+    marginTop: 16,
+  },
+  bankFilterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#0077B6',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 20,
+    gap: 8,
+  },
+  bankFilterText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0077B6',
+  },
   chartCard: {
     backgroundColor: '#FFFFFF',
     marginHorizontal: 24,
@@ -437,5 +597,78 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#374151',
     lineHeight: 20,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  bankSelectorModal: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 25,
+    borderTopRightRadius: 25,
+    maxHeight: '70%',
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  modalContent: {
+    padding: 24,
+    gap: 16,
+  },
+  bankOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    gap: 12,
+  },
+  bankOptionText: {
+    fontSize: 16,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    gap: 12,
+  },
+  selectAllButton: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  selectAllButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  applyButton: {
+    flex: 1,
+    backgroundColor: '#00B77D',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  applyButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });

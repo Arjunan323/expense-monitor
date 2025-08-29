@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,227 +8,306 @@ import {
   TextInput,
   Modal,
   Platform,
-  Alert,
+  RefreshControl,
   Switch,
+  Alert,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { LineChart } from 'react-native-chart-kit';
-import { formatCurrency } from '../../utils/formatters';
+import { formatCurrency, formatDate } from '../../utils/formatters';
 import { usePreferences } from '../../contexts/PreferencesContext';
-import { Dimensions } from 'react-native';
+import { apiCall, forecastApi } from '../../utils/api';
+import Toast from 'react-native-toast-message';
 
 const { width } = Dimensions.get('window');
+
+interface ForecastData {
+  month: string;
+  actual?: number;
+  predicted?: number;
+  isActual: boolean;
+}
 
 interface UpcomingTransaction {
   id: number;
   description: string;
   amount: number;
   dueDate: string;
-  type: 'income' | 'expense';
+  category?: string;
+  status: string;
   recurring: boolean;
-  status: 'pending' | 'paid' | 'cancelled';
+  flowType?: 'INCOME' | 'EXPENSE';
+}
+
+interface ForecastSummary {
+  averageNet: number;
+  lastMonthNet: number;
+  projectedNextMonth: number;
+  projectedPeriodTotal: number;
+  historyMonths: number;
+  futureMonths: number;
 }
 
 export const CashFlowForecastScreen: React.FC = () => {
   const { preferences } = usePreferences();
   const [loading, setLoading] = useState(true);
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [sensitivityFactor, setSensitivityFactor] = useState(0);
+  const [editDraft, setEditDraft] = useState<Partial<UpcomingTransaction>>({});
   
   const [newTransaction, setNewTransaction] = useState({
     description: '',
     amount: '',
     date: '',
     type: 'expense' as 'income' | 'expense',
-    recurring: false
+    recurring: false,
+    category: ''
   });
 
-  const [upcomingTransactions, setUpcomingTransactions] = useState<UpcomingTransaction[]>([
-    {
-      id: 1,
-      description: 'Monthly Salary',
-      amount: 75000,
-      dueDate: '2025-02-01',
-      type: 'income',
-      recurring: true,
-      status: 'pending'
-    },
-    {
-      id: 2,
-      description: 'Rent Payment',
-      amount: -25000,
-      dueDate: '2025-02-05',
-      type: 'expense',
-      recurring: true,
-      status: 'pending'
-    },
-    {
-      id: 3,
-      description: 'Utility Bills',
-      amount: -8000,
-      dueDate: '2025-02-10',
-      type: 'expense',
-      recurring: true,
-      status: 'pending'
-    }
-  ]);
-
+  const [forecastData, setForecastData] = useState<ForecastData[]>([]);
+  const [upcomingTransactions, setUpcomingTransactions] = useState<UpcomingTransaction[]>([]);
   const [chartData, setChartData] = useState({
-    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-    datasets: [{
-      data: [45000, 52000, 48000, 61000, 55000, 67000],
-      color: (opacity = 1) => `rgba(0, 183, 125, ${opacity})`,
-      strokeWidth: 3
-    }]
+    labels: [] as string[],
+    datasets: [
+      { data: [] as number[], color: (o = 1) => `rgba(0, 183, 125, ${o})`, strokeWidth: 3 },
+      { data: [] as number[], color: (o = 1) => `rgba(0, 119, 182, ${o})`, strokeWidth: 3, strokeDashArray: [5, 5] }
+    ]
+  });
+  
+  const [summaryStats, setSummaryStats] = useState<ForecastSummary>({
+    averageNet: 0,
+    lastMonthNet: 0,
+    projectedNextMonth: 0,
+    projectedPeriodTotal: 0,
+    historyMonths: 0,
+    futureMonths: 0
   });
 
-  const [summaryStats, setSummaryStats] = useState({
-    predictedBalance: 67000,
-    potentialShortfall: 0,
-    expectedSurplus: 15000
-  });
-
-  useEffect(() => {
-    setTimeout(() => setLoading(false), 800);
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [forecast, upcoming] = await Promise.all([
+        forecastApi.get(6),
+        forecastApi.upcoming.list()
+      ]);
+      
+      transformForecast(forecast);
+      setUpcomingTransactions(upcoming);
+      setSummaryStats(forecast.summary);
+    } catch (e: any) {
+      console.error('Failed to load forecast:', e);
+      Toast.show({ type: 'error', text1: 'Failed to load forecast data' });
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, []);
 
-  const addTransaction = () => {
-    if (newTransaction.description && newTransaction.amount && newTransaction.date) {
+  const transformForecast = (forecast: any) => {
+    const actuals: ForecastData[] = forecast.actuals.map((a: any) => ({
+      month: prettyMonth(a.month),
+      actual: a.projectedNet,
+      predicted: a.projectedNet,
+      isActual: true
+    }));
+    
+    const projections: ForecastData[] = forecast.projections.map((p: any) => ({
+      month: prettyMonth(p.month),
+      predicted: p.projectedNet,
+      isActual: false
+    }));
+    
+    const combined = [...actuals, ...projections];
+    setForecastData(combined);
+    
+    // Prepare chart data
+    const labels = combined.map(item => item.month);
+    const actualData = combined.map(item => item.actual || 0);
+    const predictedData = combined.map(item => item.predicted || 0);
+    
+    setChartData({
+      labels,
+      datasets: [
+        { data: actualData, color: (o = 1) => `rgba(0, 183, 125, ${o})`, strokeWidth: 3 },
+        { data: predictedData, color: (o = 1) => `rgba(0, 119, 182, ${o})`, strokeWidth: 3 }
+      ]
+    });
+  };
+
+  const prettyMonth = (ym: string) => {
+    const [year, month] = ym.split('-').map(Number);
+    const date = new Date(year, month - 1, 1);
+    return date.toLocaleString('default', { month: 'short', year: 'numeric' });
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadData();
+  };
+
+  const addTransaction = async () => {
+    if (!newTransaction.description || !newTransaction.amount || !newTransaction.date) {
+      Toast.show({ type: 'error', text1: 'Please fill in all required fields' });
+      return;
+    }
+
+    try {
       const amount = newTransaction.type === 'expense' 
-        ? -Math.abs(parseFloat(newTransaction.amount))
+        ? -Math.abs(parseFloat(newTransaction.amount)) 
         : Math.abs(parseFloat(newTransaction.amount));
       
-      const transaction: UpcomingTransaction = {
-        id: Date.now(),
+      const flowType = amount >= 0 ? 'INCOME' : 'EXPENSE';
+      
+      const created = await forecastApi.upcoming.create({
         description: newTransaction.description,
         amount,
         dueDate: newTransaction.date,
-        type: newTransaction.type,
+        category: newTransaction.category || newTransaction.type,
+        status: 'PENDING',
         recurring: newTransaction.recurring,
-        status: 'pending'
-      };
+        flowType
+      });
       
-      setUpcomingTransactions(prev => [...prev, transaction]);
-      setNewTransaction({ description: '', amount: '', date: '', type: 'expense', recurring: false });
-      setShowAddModal(false);
-      Alert.alert('Success', 'Transaction added successfully');
+      setUpcomingTransactions(prev => [...prev, created]);
+      setNewTransaction({ 
+        description: '', 
+        amount: '', 
+        date: '', 
+        type: 'expense', 
+        recurring: false, 
+        category: '' 
+      });
+      setShowAddForm(false);
+      Toast.show({ type: 'success', text1: 'Upcoming transaction added' });
+      
+      // Refresh forecast data
+      loadData();
+    } catch (e: any) {
+      Toast.show({ type: 'error', text1: 'Failed to add transaction' });
     }
   };
 
-  const deleteTransaction = (id: number) => {
+  const startEdit = (t: UpcomingTransaction) => {
+    setEditingId(t.id);
+    setEditDraft({ ...t });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditDraft({});
+  };
+
+  const saveEdit = async () => {
+    if (editingId == null) return;
+    try {
+      const updated = await forecastApi.upcoming.update(editingId, editDraft);
+      setUpcomingTransactions(list => list.map(l => l.id === editingId ? updated : l));
+      setEditingId(null);
+      setEditDraft({});
+      Toast.show({ type: 'success', text1: 'Transaction updated' });
+      loadData();
+    } catch (e: any) {
+      Toast.show({ type: 'error', text1: 'Update failed' });
+    }
+  };
+
+  const removeTransaction = async (id: number) => {
     Alert.alert(
       'Delete Transaction',
-      'Are you sure you want to delete this transaction?',
+      'Are you sure you want to delete this upcoming transaction?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
-            setUpcomingTransactions(prev => prev.filter(t => t.id !== id));
-            Alert.alert('Success', 'Transaction deleted');
+          onPress: async () => {
+            try {
+              await forecastApi.upcoming.delete(id);
+              setUpcomingTransactions(list => list.filter(l => l.id !== id));
+              Toast.show({ type: 'success', text1: 'Transaction deleted' });
+              loadData();
+            } catch (e: any) {
+              Toast.show({ type: 'error', text1: 'Delete failed' });
+            }
           }
         }
       ]
     );
   };
 
-  const adjustedChartData = {
-    ...chartData,
-    datasets: [{
-      ...chartData.datasets[0],
-      data: chartData.datasets[0].data.map(value => value + (value * sensitivityFactor / 100))
-    }]
-  };
-
-  if (loading) {
+  if (loading && !refreshing) {
     return <LoadingSpinner />;
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      {/* Enhanced Header */}
+    <ScrollView 
+      style={styles.container} 
+      contentContainerStyle={styles.contentContainer}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+    >
+      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Cash Flow Forecast</Text>
-        <Text style={styles.headerSubtitle}>Predict your future financial position</Text>
+        <Text style={styles.headerTitle}>🔮 Cash Flow Forecast</Text>
+        <Text style={styles.headerSubtitle}>Predict your future financial position and plan ahead</Text>
       </View>
 
-      {/* Enhanced Summary Cards */}
+      {/* Summary Cards */}
       <View style={styles.summaryGrid}>
         <View style={[styles.summaryCard, { backgroundColor: '#E0F2FE' }]}>
           <View style={[styles.summaryIcon, { backgroundColor: '#0077B6' }]}>
-            <Ionicons name="trending-up" size={20} color="#FFFFFF" />
+            {/* 'target' not in Ionicons set; using 'locate' as closest visual metaphor */}
+            <Ionicons name="locate" size={20} color="#FFFFFF" />
           </View>
           <Text style={styles.summaryLabel}>Predicted Balance</Text>
           <Text style={[styles.summaryValue, { color: '#0077B6' }]}>
-            {formatCurrency(summaryStats.predictedBalance, preferences)}
+            {formatCurrency(summaryStats.projectedNextMonth, preferences)}
           </Text>
-          <Text style={styles.summarySubtext}>End of month</Text>
+          <Text style={styles.summarySubtext}>End of next month</Text>
         </View>
 
-        <View style={[styles.summaryCard, { backgroundColor: '#FEE2E2' }]}>
-          <View style={[styles.summaryIcon, { backgroundColor: '#EF4444' }]}>
-            <Ionicons name="warning" size={20} color="#FFFFFF" />
+        <View style={[styles.summaryCard, { backgroundColor: summaryStats.projectedNextMonth < 0 ? '#FEE2E2' : '#ECFDF5' }]}>
+          <View style={[styles.summaryIcon, { backgroundColor: summaryStats.projectedNextMonth < 0 ? '#EF4444' : '#00B77D' }]}>
+            <Ionicons name={summaryStats.projectedNextMonth < 0 ? "alert-circle" : "trending-up"} size={20} color="#FFFFFF" />
           </View>
-          <Text style={styles.summaryLabel}>Potential Risk</Text>
-          <Text style={[styles.summaryValue, { color: '#EF4444' }]}>
-            {formatCurrency(summaryStats.potentialShortfall, preferences)}
+          <Text style={styles.summaryLabel}>
+            {summaryStats.projectedNextMonth < 0 ? 'Potential Shortfall' : 'Expected Surplus'}
           </Text>
-          <Text style={styles.summarySubtext}>If trends continue</Text>
+          <Text style={[styles.summaryValue, { color: summaryStats.projectedNextMonth < 0 ? '#EF4444' : '#00B77D' }]}>
+            {formatCurrency(Math.abs(summaryStats.projectedNextMonth), preferences)}
+          </Text>
+          <Text style={styles.summarySubtext}>
+            {summaryStats.projectedNextMonth < 0 ? 'If trends continue' : 'Available for savings'}
+          </Text>
         </View>
 
-        <View style={[styles.summaryCard, { backgroundColor: '#ECFDF5' }]}>
-          <View style={[styles.summaryIcon, { backgroundColor: '#00B77D' }]}>
-            <Ionicons name="trending-up" size={20} color="#FFFFFF" />
+        <View style={[styles.summaryCard, { backgroundColor: '#F3E8FF' }]}>
+          <View style={[styles.summaryIcon, { backgroundColor: '#8B5CF6' }]}>
+            <Ionicons name="analytics" size={20} color="#FFFFFF" />
           </View>
-          <Text style={styles.summaryLabel}>Expected Surplus</Text>
-          <Text style={[styles.summaryValue, { color: '#00B77D' }]}>
-            {formatCurrency(summaryStats.expectedSurplus, preferences)}
+          <Text style={styles.summaryLabel}>Average Net</Text>
+          <Text style={[styles.summaryValue, { color: '#8B5CF6' }]}>
+            {formatCurrency(summaryStats.averageNet, preferences)}
           </Text>
-          <Text style={styles.summarySubtext}>Available for savings</Text>
+          <Text style={styles.summarySubtext}>Historical average</Text>
         </View>
       </View>
 
-      {/* Enhanced Sensitivity Controls */}
-      <View style={styles.sensitivityCard}>
-        <Text style={styles.sensitivityTitle}>What-if Scenarios</Text>
-        <Text style={styles.sensitivitySubtitle}>Adjust spending to see impact on forecast</Text>
-        
-        <View style={styles.sensitivityButtons}>
-          {[-10, 0, 10].map(factor => (
-            <TouchableOpacity
-              key={factor}
-              onPress={() => setSensitivityFactor(factor)}
-              style={[
-                styles.sensitivityButton,
-                sensitivityFactor === factor && styles.sensitivityButtonActive,
-                factor === -10 && styles.sensitivityButtonGreen,
-                factor === 10 && styles.sensitivityButtonRed
-              ]}
-              activeOpacity={0.8}
-            >
-              <Text style={[
-                styles.sensitivityButtonText,
-                sensitivityFactor === factor && styles.sensitivityButtonTextActive
-              ]}>
-                {factor === 0 ? 'Normal' : `${factor > 0 ? '+' : ''}${factor}%`}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
-      {/* Enhanced Forecast Chart */}
+      {/* Forecast Chart */}
       <View style={styles.chartCard}>
         <View style={styles.chartHeader}>
-          <Text style={styles.chartTitle}>6-Month Projection</Text>
-          <Text style={styles.chartSubtitle}>Predicted cash flow based on patterns</Text>
+          <Text style={styles.chartTitle}>Cash Flow Projection</Text>
+          <Text style={styles.chartSubtitle}>Predicted balance over the next 6 months</Text>
         </View>
         
         <LineChart
-          data={adjustedChartData}
+          data={chartData}
           width={width - 48}
           height={250}
           chartConfig={{
@@ -240,7 +319,7 @@ export const CashFlowForecastScreen: React.FC = () => {
             labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
             style: { borderRadius: 16 },
             propsForDots: {
-              r: '6',
+              r: '4',
               strokeWidth: '2',
               stroke: '#00B77D'
             },
@@ -251,146 +330,228 @@ export const CashFlowForecastScreen: React.FC = () => {
           }}
           bezier
           style={styles.chart}
-          formatYLabel={(value) => `₹${(parseInt(value)/1000).toFixed(0)}K`}
+          formatYLabel={(value) => {
+            const num = parseInt(value);
+            return num >= 0 ? `+${(num/1000).toFixed(0)}K` : `${(num/1000).toFixed(0)}K`;
+          }}
         />
+        
+        <View style={styles.chartLegend}>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: '#00B77D' }]} />
+            <Text style={styles.legendText}>Actual</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: '#0077B6' }]} />
+            <Text style={styles.legendText}>Predicted</Text>
+          </View>
+        </View>
       </View>
 
-      {/* Enhanced Upcoming Transactions */}
+      {/* Upcoming Transactions */}
       <View style={styles.transactionsSection}>
         <View style={styles.transactionsHeader}>
           <Text style={styles.transactionsTitle}>Upcoming Transactions</Text>
           <TouchableOpacity
-            style={styles.addTransactionButton}
-            onPress={() => setShowAddModal(true)}
+            style={styles.addButton}
+            onPress={() => setShowAddForm(true)}
             activeOpacity={0.8}
           >
             <Ionicons name="add" size={20} color="#FFFFFF" />
-            <Text style={styles.addTransactionText}>Add</Text>
+            <Text style={styles.addButtonText}>Add</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.transactionsList}>
-          {upcomingTransactions.map(transaction => (
-            <View key={transaction.id} style={styles.transactionCard}>
-              <View style={styles.transactionHeader}>
-                <View style={[
-                  styles.transactionIcon,
-                  { backgroundColor: transaction.amount >= 0 ? '#00B77D' : '#EF4444' }
-                ]}>
-                  <Ionicons 
-                    name={transaction.amount >= 0 ? "trending-up" : "trending-down"} 
-                    size={20} 
-                    color="#FFFFFF" 
-                  />
-                </View>
-                
-                <View style={styles.transactionInfo}>
-                  <Text style={styles.transactionDescription}>{transaction.description}</Text>
-                  <View style={styles.transactionMeta}>
-                    <Text style={styles.transactionDate}>
-                      {new Date(transaction.dueDate).toLocaleDateString()}
-                    </Text>
-                    {transaction.recurring && (
-                      <View style={styles.recurringBadge}>
-                        <Ionicons name="refresh" size={12} color="#00B77D" />
-                        <Text style={styles.recurringText}>Recurring</Text>
+          {upcomingTransactions.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="calendar" size={48} color="#D1D5DB" />
+              <Text style={styles.emptyTitle}>No upcoming transactions</Text>
+              <Text style={styles.emptyText}>
+                Add your expected income and expenses to improve forecast accuracy
+              </Text>
+              <TouchableOpacity
+                style={styles.emptyButton}
+                onPress={() => setShowAddForm(true)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.emptyButtonText}>Add Your First Transaction</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            upcomingTransactions.map(transaction => {
+              const isIncome = transaction.amount >= 0;
+              const isEditing = editingId === transaction.id;
+              
+              return (
+                <View key={transaction.id} style={styles.transactionCard}>
+                  <View style={styles.transactionHeader}>
+                    <View style={styles.transactionInfo}>
+                      <View style={[styles.transactionIcon, { 
+                        backgroundColor: isIncome ? '#ECFDF5' : '#FEE2E2' 
+                      }]}>
+                        <Ionicons 
+                          name={isIncome ? "trending-up" : "trending-down"} 
+                          size={20} 
+                          color={isIncome ? '#00B77D' : '#EF4444'} 
+                        />
                       </View>
-                    )}
+                      <View style={styles.transactionDetails}>
+                        {isEditing ? (
+                          <TextInput
+                            style={styles.editInput}
+                            value={editDraft.description || ''}
+                            onChangeText={(text) => setEditDraft(prev => ({ ...prev, description: text }))}
+                            placeholder="Transaction description"
+                          />
+                        ) : (
+                          <Text style={styles.transactionTitle}>{transaction.description}</Text>
+                        )}
+                        
+                        <View style={styles.transactionMeta}>
+                          <Ionicons name="calendar" size={12} color="#6B7280" />
+                          {isEditing ? (
+                            <TextInput
+                              style={styles.editDateInput}
+                              value={editDraft.dueDate?.slice(0, 10) || transaction.dueDate?.slice(0, 10)}
+                              onChangeText={(text) => setEditDraft(prev => ({ ...prev, dueDate: text }))}
+                              placeholder="YYYY-MM-DD"
+                            />
+                          ) : (
+                            <Text style={styles.transactionDate}>
+                              {formatDate(transaction.dueDate)}
+                            </Text>
+                          )}
+                          
+                          {transaction.recurring && (
+                            <View style={styles.recurringBadge}>
+                              <Ionicons name="refresh" size={10} color="#00B77D" />
+                              <Text style={styles.recurringText}>Recurring</Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    </View>
+                    
+                    <View style={styles.transactionActions}>
+                      {isEditing ? (
+                        <View style={styles.editActions}>
+                          <TextInput
+                            style={styles.editAmountInput}
+                            value={editDraft.amount?.toString() || transaction.amount.toString()}
+                            onChangeText={(text) => setEditDraft(prev => ({ ...prev, amount: parseFloat(text) }))}
+                            keyboardType="numeric"
+                            placeholder="Amount"
+                          />
+                          <TouchableOpacity
+                            style={styles.saveButton}
+                            onPress={saveEdit}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.cancelButton}
+                            onPress={cancelEdit}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="close" size={16} color="#6B7280" />
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <View style={styles.transactionAmount}>
+                          <Text style={[styles.amountText, { 
+                            color: isIncome ? '#00B77D' : '#EF4444' 
+                          }]}>
+                            {isIncome ? '+' : ''}{formatCurrency(Math.abs(transaction.amount), preferences)}
+                          </Text>
+                          <View style={styles.actionButtons}>
+                            <TouchableOpacity
+                              style={styles.editButton}
+                              onPress={() => startEdit(transaction)}
+                              activeOpacity={0.8}
+                            >
+                              <Ionicons name="create-outline" size={16} color="#0077B6" />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.deleteButton}
+                              onPress={() => removeTransaction(transaction.id)}
+                              activeOpacity={0.8}
+                            >
+                              <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
+                    </View>
                   </View>
                 </View>
-                
-                <View style={styles.transactionActions}>
-                  <Text style={[
-                    styles.transactionAmount,
-                    { color: transaction.amount >= 0 ? '#00B77D' : '#EF4444' }
-                  ]}>
-                    {transaction.amount >= 0 ? '+' : ''}{formatCurrency(Math.abs(transaction.amount), preferences)}
-                  </Text>
-                  
-                  <TouchableOpacity
-                    onPress={() => deleteTransaction(transaction.id)}
-                    style={styles.deleteButton}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="trash-outline" size={16} color="#EF4444" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          ))}
+              );
+            })
+          )}
         </View>
       </View>
 
-      {/* Enhanced Add Transaction Modal */}
+      {/* Add Transaction Modal */}
       <Modal
-        visible={showAddModal}
+        visible={showAddForm}
         transparent={true}
         animationType="slide"
-        onRequestClose={() => setShowAddModal(false)}
+        onRequestClose={() => setShowAddForm(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.addModal}>
             <View style={styles.addModalHeader}>
               <Text style={styles.addModalTitle}>Add Upcoming Transaction</Text>
-              <TouchableOpacity onPress={() => setShowAddModal(false)}>
+              <TouchableOpacity onPress={() => setShowAddForm(false)}>
                 <Ionicons name="close" size={24} color="#6B7280" />
               </TouchableOpacity>
             </View>
             
             <ScrollView style={styles.addModalContent}>
               <View style={styles.formSection}>
-                <Text style={styles.formLabel}>📝 Description</Text>
+                <Text style={styles.formLabel}>Description</Text>
                 <TextInput
                   style={styles.formInput}
                   value={newTransaction.description}
                   onChangeText={(text) => setNewTransaction(prev => ({ ...prev, description: text }))}
-                  placeholder="e.g., Monthly Salary, Rent Payment"
-                  placeholderTextColor="#9CA3AF"
+                  placeholder="e.g., Salary, Rent"
                 />
               </View>
 
               <View style={styles.formSection}>
-                <Text style={styles.formLabel}>💰 Amount</Text>
+                <Text style={styles.formLabel}>Amount</Text>
                 <TextInput
                   style={styles.formInput}
                   value={newTransaction.amount}
                   onChangeText={(text) => setNewTransaction(prev => ({ ...prev, amount: text }))}
-                  placeholder="Enter amount"
-                  placeholderTextColor="#9CA3AF"
+                  placeholder="5000"
                   keyboardType="numeric"
                 />
               </View>
 
               <View style={styles.formSection}>
-                <Text style={styles.formLabel}>📅 Date</Text>
-                <TouchableOpacity style={styles.dateButton}>
-                  <TextInput
-                    style={styles.dateInput}
-                    value={newTransaction.date}
-                    onChangeText={(text) => setNewTransaction(prev => ({ ...prev, date: text }))}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor="#9CA3AF"
-                  />
-                  <Ionicons name="calendar" size={20} color="#6B7280" />
-                </TouchableOpacity>
+                <Text style={styles.formLabel}>Date</Text>
+                <TextInput
+                  style={styles.formInput}
+                  value={newTransaction.date}
+                  onChangeText={(text) => setNewTransaction(prev => ({ ...prev, date: text }))}
+                  placeholder="YYYY-MM-DD"
+                />
               </View>
 
               <View style={styles.formSection}>
-                <Text style={styles.formLabel}>🏷️ Type</Text>
-                <View style={styles.typeButtons}>
+                <Text style={styles.formLabel}>Type</Text>
+                <View style={styles.typeSelector}>
                   <TouchableOpacity
-                    onPress={() => setNewTransaction(prev => ({ ...prev, type: 'income' }))}
                     style={[
                       styles.typeButton,
-                      newTransaction.type === 'income' && styles.typeButtonActiveIncome
+                      newTransaction.type === 'income' && styles.typeButtonActive
                     ]}
+                    onPress={() => setNewTransaction(prev => ({ ...prev, type: 'income' }))}
                     activeOpacity={0.8}
                   >
-                    <Ionicons 
-                      name="trending-up" 
-                      size={16} 
-                      color={newTransaction.type === 'income' ? "#FFFFFF" : "#00B77D"} 
-                    />
+                    <Ionicons name="trending-up" size={16} color={newTransaction.type === 'income' ? '#FFFFFF' : '#00B77D'} />
                     <Text style={[
                       styles.typeButtonText,
                       newTransaction.type === 'income' && styles.typeButtonTextActive
@@ -400,21 +561,17 @@ export const CashFlowForecastScreen: React.FC = () => {
                   </TouchableOpacity>
                   
                   <TouchableOpacity
-                    onPress={() => setNewTransaction(prev => ({ ...prev, type: 'expense' }))}
                     style={[
                       styles.typeButton,
                       newTransaction.type === 'expense' && styles.typeButtonActiveExpense
                     ]}
+                    onPress={() => setNewTransaction(prev => ({ ...prev, type: 'expense' }))}
                     activeOpacity={0.8}
                   >
-                    <Ionicons 
-                      name="trending-down" 
-                      size={16} 
-                      color={newTransaction.type === 'expense' ? "#FFFFFF" : "#EF4444"} 
-                    />
+                    <Ionicons name="trending-down" size={16} color={newTransaction.type === 'expense' ? '#FFFFFF' : '#EF4444'} />
                     <Text style={[
                       styles.typeButtonText,
-                      newTransaction.type === 'expense' && styles.typeButtonTextActive
+                      newTransaction.type === 'expense' && styles.typeButtonTextActiveExpense
                     ]}>
                       Expense
                     </Text>
@@ -424,10 +581,7 @@ export const CashFlowForecastScreen: React.FC = () => {
 
               <View style={styles.formSection}>
                 <View style={styles.recurringRow}>
-                  <View style={styles.recurringInfo}>
-                    <Text style={styles.recurringLabel}>🔄 Recurring Monthly</Text>
-                    <Text style={styles.recurringSubtext}>Repeat this transaction every month</Text>
-                  </View>
+                  <Text style={styles.formLabel}>Recurring Monthly</Text>
                   <Switch
                     value={newTransaction.recurring}
                     onValueChange={(value) => setNewTransaction(prev => ({ ...prev, recurring: value }))}
@@ -440,29 +594,71 @@ export const CashFlowForecastScreen: React.FC = () => {
             
             <View style={styles.addModalActions}>
               <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={() => setShowAddModal(false)}
+                style={styles.cancelModalButton}
+                onPress={() => setShowAddForm(false)}
                 activeOpacity={0.8}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <Text style={styles.cancelModalButtonText}>Cancel</Text>
               </TouchableOpacity>
               
               <TouchableOpacity
                 style={[
-                  styles.saveButton,
-                  (!newTransaction.description || !newTransaction.amount || !newTransaction.date) && styles.saveButtonDisabled
+                  styles.saveModalButton,
+                  (!newTransaction.description || !newTransaction.amount || !newTransaction.date) && styles.saveModalButtonDisabled
                 ]}
                 onPress={addTransaction}
                 disabled={!newTransaction.description || !newTransaction.amount || !newTransaction.date}
                 activeOpacity={0.8}
               >
                 <Ionicons name="checkmark" size={16} color="#FFFFFF" />
-                <Text style={styles.saveButtonText}>Add Transaction</Text>
+                <Text style={styles.saveModalButtonText}>Add Transaction</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
+
+      {/* Methodology Info */}
+      <View style={styles.methodologyCard}>
+        <Text style={styles.methodologyTitle}>📊 Forecast Methodology</Text>
+        <View style={styles.methodologyGrid}>
+          <View style={styles.methodologyItem}>
+            <Text style={styles.methodologyLabel}>How we predict:</Text>
+            <View style={styles.methodologyPoints}>
+              <View style={styles.methodologyPoint}>
+                <View style={[styles.methodologyDot, { backgroundColor: '#00B77D' }]} />
+                <Text style={styles.methodologyText}>Analyze your last {summaryStats.historyMonths} months of spending patterns</Text>
+              </View>
+              <View style={styles.methodologyPoint}>
+                <View style={[styles.methodologyDot, { backgroundColor: '#0077B6' }]} />
+                <Text style={styles.methodologyText}>Factor in seasonal trends and recurring transactions</Text>
+              </View>
+              <View style={styles.methodologyPoint}>
+                <View style={[styles.methodologyDot, { backgroundColor: '#FFD60A' }]} />
+                <Text style={styles.methodologyText}>Apply machine learning for improved accuracy</Text>
+              </View>
+            </View>
+          </View>
+          
+          <View style={styles.methodologyItem}>
+            <Text style={styles.methodologyLabel}>Accuracy factors:</Text>
+            <View style={styles.accuracyFactors}>
+              <View style={styles.accuracyFactor}>
+                <Text style={styles.accuracyLabel}>Historical data quality</Text>
+                <Text style={[styles.accuracyValue, { color: '#00B77D' }]}>High</Text>
+              </View>
+              <View style={styles.accuracyFactor}>
+                <Text style={styles.accuracyLabel}>Spending consistency</Text>
+                <Text style={[styles.accuracyValue, { color: '#0077B6' }]}>Medium</Text>
+              </View>
+              <View style={styles.accuracyFactor}>
+                <Text style={styles.accuracyLabel}>Forecast confidence</Text>
+                <Text style={[styles.accuracyValue, { color: '#FFD60A' }]}>85%</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+      </View>
     </ScrollView>
   );
 };
@@ -497,12 +693,14 @@ const styles = StyleSheet.create({
   },
   summaryGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     paddingHorizontal: 24,
     marginBottom: 24,
     gap: 12,
   },
   summaryCard: {
     flex: 1,
+    minWidth: '45%',
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 16,
@@ -532,62 +730,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     marginBottom: 2,
+    textAlign: 'center',
   },
   summarySubtext: {
     fontSize: 10,
     color: '#9CA3AF',
     textAlign: 'center',
-  },
-  sensitivityCard: {
-    backgroundColor: '#FFFFFF',
-    marginHorizontal: 24,
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  sensitivityTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginBottom: 4,
-  },
-  sensitivitySubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 16,
-  },
-  sensitivityButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  sensitivityButton: {
-    flex: 1,
-    backgroundColor: '#F3F4F6',
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  sensitivityButtonActive: {
-    backgroundColor: '#0077B6',
-  },
-  sensitivityButtonGreen: {
-    backgroundColor: '#00B77D',
-  },
-  sensitivityButtonRed: {
-    backgroundColor: '#EF4444',
-  },
-  sensitivityButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  sensitivityButtonTextActive: {
-    color: '#FFFFFF',
   },
   chartCard: {
     backgroundColor: '#FFFFFF',
@@ -617,8 +765,30 @@ const styles = StyleSheet.create({
   chart: {
     borderRadius: 16,
   },
+  chartLegend: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 16,
+    gap: 24,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  legendDot: {
+    width: 12,
+    height: 4,
+    borderRadius: 2,
+  },
+  legendText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
   transactionsSection: {
     paddingHorizontal: 24,
+    marginBottom: 24,
   },
   transactionsHeader: {
     flexDirection: 'row',
@@ -631,7 +801,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1F2937',
   },
-  addTransactionButton: {
+  addButton: {
     backgroundColor: '#00B77D',
     flexDirection: 'row',
     alignItems: 'center',
@@ -639,13 +809,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 16,
     gap: 4,
-    shadowColor: '#00B77D',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
   },
-  addTransactionText: {
+  addButtonText: {
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
@@ -653,36 +818,71 @@ const styles = StyleSheet.create({
   transactionsList: {
     gap: 12,
   },
-  transactionCard: {
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 40,
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
-    padding: 20,
-    borderLeftWidth: 4,
-    borderLeftColor: '#00B77D',
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 20,
+    paddingHorizontal: 20,
+  },
+  emptyButton: {
+    backgroundColor: '#00B77D',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  emptyButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  transactionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   transactionHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  transactionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
   transactionInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
   },
-  transactionDescription: {
+  transactionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  transactionDetails: {
+    flex: 1,
+  },
+  transactionTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
     color: '#1F2937',
     marginBottom: 4,
   },
@@ -699,10 +899,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#ECFDF5',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    gap: 2,
   },
   recurringText: {
     fontSize: 10,
@@ -713,12 +913,73 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   transactionAmount: {
+    alignItems: 'flex-end',
+  },
+  amountText: {
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 8,
   },
-  deleteButton: {
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  editButton: {
+    backgroundColor: '#E0F2FE',
     padding: 8,
+    borderRadius: 8,
+  },
+  deleteButton: {
+    backgroundColor: '#FEE2E2',
+    padding: 8,
+    borderRadius: 8,
+  },
+  editActions: {
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  editInput: {
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: '#1F2937',
+    backgroundColor: '#FFFFFF',
+  },
+  editDateInput: {
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    fontSize: 12,
+    color: '#1F2937',
+    backgroundColor: '#FFFFFF',
+    width: 100,
+  },
+  editAmountInput: {
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: '#1F2937',
+    backgroundColor: '#FFFFFF',
+    width: 100,
+    textAlign: 'right',
+  },
+  saveButton: {
+    backgroundColor: '#00B77D',
+    padding: 8,
+    borderRadius: 8,
+  },
+  cancelButton: {
+    backgroundColor: '#F3F4F6',
+    padding: 8,
+    borderRadius: 8,
   },
   modalOverlay: {
     flex: 1,
@@ -752,7 +1013,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   formLabel: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: '#374151',
     marginBottom: 8,
@@ -767,40 +1028,29 @@ const styles = StyleSheet.create({
     color: '#1F2937',
     backgroundColor: '#FFFFFF',
   },
-  dateButton: {
+  typeSelector: {
     flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-  },
-  dateInput: {
-    flex: 1,
-    fontSize: 16,
-    color: '#1F2937',
-  },
-  typeButtons: {
-    flexDirection: 'row',
-    gap: 12,
+    gap: 8,
   },
   typeButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
     paddingVertical: 12,
     borderRadius: 12,
     gap: 8,
   },
-  typeButtonActiveIncome: {
+  typeButtonActive: {
     backgroundColor: '#00B77D',
+    borderColor: '#00B77D',
   },
   typeButtonActiveExpense: {
     backgroundColor: '#EF4444',
+    borderColor: '#EF4444',
   },
   typeButtonText: {
     fontSize: 14,
@@ -810,26 +1060,13 @@ const styles = StyleSheet.create({
   typeButtonTextActive: {
     color: '#FFFFFF',
   },
+  typeButtonTextActiveExpense: {
+    color: '#FFFFFF',
+  },
   recurringRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-    padding: 16,
-    borderRadius: 12,
-  },
-  recurringInfo: {
-    flex: 1,
-  },
-  recurringLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 4,
-  },
-  recurringSubtext: {
-    fontSize: 12,
-    color: '#6B7280',
   },
   addModalActions: {
     flexDirection: 'row',
@@ -840,19 +1077,19 @@ const styles = StyleSheet.create({
     borderTopColor: '#F3F4F6',
     gap: 12,
   },
-  cancelButton: {
+  cancelModalButton: {
     flex: 1,
     backgroundColor: '#F3F4F6',
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: 'center',
   },
-  cancelButtonText: {
+  cancelModalButtonText: {
     fontSize: 16,
     fontWeight: '600',
     color: '#6B7280',
   },
-  saveButton: {
+  saveModalButton: {
     flex: 1,
     backgroundColor: '#00B77D',
     flexDirection: 'row',
@@ -861,18 +1098,77 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     gap: 6,
-    shadowColor: '#00B77D',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
   },
-  saveButtonDisabled: {
+  saveModalButtonDisabled: {
     opacity: 0.5,
   },
-  saveButtonText: {
+  saveModalButtonText: {
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
   },
+  methodologyCard: {
+    backgroundColor: '#F0FDF9',
+    borderWidth: 2,
+    borderColor: '#CCFBEF',
+    marginHorizontal: 24,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 24,
+  },
+  methodologyTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 16,
+  },
+  methodologyGrid: {
+    gap: 16,
+  },
+  methodologyItem: {
+    gap: 12,
+  },
+  methodologyLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  methodologyPoints: {
+    gap: 8,
+  },
+  methodologyPoint: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  methodologyDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginTop: 6,
+  },
+  methodologyText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#374151',
+    lineHeight: 18,
+  },
+  accuracyFactors: {
+    gap: 8,
+  },
+  accuracyFactor: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  accuracyLabel: {
+    fontSize: 12,
+    color: '#374151',
+  },
+  accuracyValue: {
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
 });
+
+export default CashFlowForecastScreen;

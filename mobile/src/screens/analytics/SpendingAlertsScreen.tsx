@@ -91,6 +91,9 @@ export const SpendingAlertsScreen: React.FC = () => {
   const [newMerchant, setNewMerchant] = useState('');
   const [tips, setTips] = useState<RecommendationDto[]>([]);
   const [suggestedLimits, setSuggestedLimits] = useState<RecommendationDto[]>([]);
+  const [mutedCategories, setMutedCategories] = useState<{ id: number; category: string; muteUntil?: string | null }[]>([]);
+  const [newMutedCategory, setNewMutedCategory] = useState('');
+  const [muteUntil, setMuteUntil] = useState('');
 
   const month = new Date().toISOString().slice(0, 7);
 
@@ -98,11 +101,12 @@ export const SpendingAlertsScreen: React.FC = () => {
     try {
       setLoading(true);
       const ackParam = showAcknowledged ? 'all' : 'false';
-      const [listResp, settingsData, whitelistData, recommendations] = await Promise.all([
+      const [listResp, settingsData, whitelistData, recommendations, mutedData] = await Promise.all([
         spendingAlertsApi.list({ month, type: filterType, acknowledged: ackParam, page: 0, size: 50 }),
         spendingAlertsApi.settings().catch(() => null),
         spendingAlertsApi.whitelist().catch(() => []),
-        spendingAlertsApi.recommendations(month).catch(() => ({ tips: [], suggestedLimits: [] }))
+        spendingAlertsApi.recommendations(month).catch(() => ({ tips: [], suggestedLimits: [] })),
+        spendingAlertsApi.muted().catch(() => [])
       ]);
       
       setAlerts(listResp.content || []);
@@ -111,6 +115,7 @@ export const SpendingAlertsScreen: React.FC = () => {
       setWhitelist(whitelistData);
       setTips(recommendations.tips || []);
       setSuggestedLimits(recommendations.suggestedLimits || []);
+      setMutedCategories(mutedData || []);
     } catch (e: any) {
       Toast.show({ type: 'error', text1: 'Failed to load alerts' });
     } finally {
@@ -198,6 +203,31 @@ export const SpendingAlertsScreen: React.FC = () => {
       Toast.show({ type: 'success', text1: 'Merchant removed' });
     } catch (e: any) {
       Toast.show({ type: 'error', text1: 'Failed to remove merchant' });
+    }
+  };
+
+  const muteCategory = async () => {
+    if (!newMutedCategory.trim()) return;
+    try {
+      await spendingAlertsApi.mute(newMutedCategory.trim(), muteUntil || undefined);
+      const updated = await spendingAlertsApi.muted();
+      setMutedCategories(updated);
+      setNewMutedCategory('');
+      setMuteUntil('');
+      Toast.show({ type: 'success', text1: 'Category muted' });
+    } catch (e: any) {
+      Toast.show({ type: 'error', text1: 'Failed to mute category' });
+    }
+  };
+
+  const unmuteCategory = async (category: string) => {
+    try {
+      await spendingAlertsApi.unmute(category);
+      const updated = await spendingAlertsApi.muted();
+      setMutedCategories(updated);
+      Toast.show({ type: 'success', text1: 'Category unmuted' });
+    } catch (e: any) {
+      Toast.show({ type: 'error', text1: 'Failed to unmute category' });
     }
   };
 
@@ -530,6 +560,105 @@ export const SpendingAlertsScreen: React.FC = () => {
                         keyboardType="numeric"
                       />
                     </View>
+                    
+                    <View style={styles.settingItem}>
+                      <Text style={styles.settingLabel}>Category Spike Multiplier</Text>
+                      <TextInput
+                        style={styles.settingInput}
+                        value={settings.catSpikeMultiplier.toString()}
+                        onChangeText={(text) => setSettings({
+                          ...settings,
+                          catSpikeMultiplier: parseFloat(text) || 0
+                        })}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                    
+                    <View style={styles.settingItem}>
+                      <Text style={styles.settingLabel}>Category Spike Lookback (Months)</Text>
+                      <TextInput
+                        style={styles.settingInput}
+                        value={settings.catSpikeLookbackMonths.toString()}
+                        onChangeText={(text) => setSettings({
+                          ...settings,
+                          catSpikeLookbackMonths: parseInt(text) || 0
+                        })}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                    
+                    <View style={styles.settingItem}>
+                      <Text style={styles.settingLabel}>New Merchant Min Amount</Text>
+                      <TextInput
+                        style={styles.settingInput}
+                        value={settings.newMerchantMinAmount.toString()}
+                        onChangeText={(text) => setSettings({
+                          ...settings,
+                          newMerchantMinAmount: parseFloat(text) || 0
+                        })}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                  </View>
+
+                  <View style={styles.settingsSection}>
+                    <Text style={styles.settingsSectionTitle}>Critical Alert Overrides</Text>
+                    
+                    <View style={styles.settingItem}>
+                      <Text style={styles.settingLabel}>Critical Large Amount (Absolute)</Text>
+                      <TextInput
+                        style={styles.settingInput}
+                        value={settings.criticalLargeAbsolute?.toString() || ''}
+                        onChangeText={(text) => setSettings({
+                          ...settings,
+                          criticalLargeAbsolute: text ? parseFloat(text) : null
+                        })}
+                        keyboardType="numeric"
+                        placeholder="Leave empty for default"
+                      />
+                    </View>
+                    
+                    <View style={styles.settingItem}>
+                      <Text style={styles.settingLabel}>Critical Category Spike Multiplier</Text>
+                      <TextInput
+                        style={styles.settingInput}
+                        value={settings.criticalCategorySpikeMultiplier?.toString() || ''}
+                        onChangeText={(text) => setSettings({
+                          ...settings,
+                          criticalCategorySpikeMultiplier: text ? parseFloat(text) : null
+                        })}
+                        keyboardType="numeric"
+                        placeholder="Leave empty for default"
+                      />
+                    </View>
+                    
+                    <View style={styles.settingItem}>
+                      <Text style={styles.settingLabel}>Critical Frequency Count</Text>
+                      <TextInput
+                        style={styles.settingInput}
+                        value={settings.criticalFrequencyCount?.toString() || ''}
+                        onChangeText={(text) => setSettings({
+                          ...settings,
+                          criticalFrequencyCount: text ? parseInt(text) : null
+                        })}
+                        keyboardType="numeric"
+                        placeholder="Leave empty for default"
+                      />
+                    </View>
+                    
+                    <View style={styles.settingItem}>
+                      <Text style={styles.settingLabel}>Critical New Merchant Amount</Text>
+                      <TextInput
+                        style={styles.settingInput}
+                        value={settings.criticalNewMerchantAbsolute?.toString() || ''}
+                        onChangeText={(text) => setSettings({
+                          ...settings,
+                          criticalNewMerchantAbsolute: text ? parseFloat(text) : null
+                        })}
+                        keyboardType="numeric"
+                        placeholder="Leave empty for default"
+                      />
+                    </View>
                   </View>
 
                   <View style={styles.settingsSection}>
@@ -558,6 +687,51 @@ export const SpendingAlertsScreen: React.FC = () => {
                           <Text style={styles.whitelistTagText}>{merchant}</Text>
                           <TouchableOpacity
                             onPress={() => removeFromWhitelist(merchant)}
+                            style={styles.removeTagButton}
+                          >
+                            <Ionicons name="close" size={12} color="#6B7280" />
+                          </TouchableOpacity>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+
+                  <View style={styles.settingsSection}>
+                    <Text style={styles.settingsSectionTitle}>Muted Categories</Text>
+                    
+                    <View style={styles.whitelistInput}>
+                      <TextInput
+                        style={styles.merchantInput}
+                        value={newMutedCategory}
+                        onChangeText={setNewMutedCategory}
+                        placeholder="Enter category name"
+                        placeholderTextColor="#9CA3AF"
+                      />
+                      <TextInput
+                        style={styles.dateInput}
+                        value={muteUntil}
+                        onChangeText={setMuteUntil}
+                        placeholder="YYYY-MM-DD"
+                        placeholderTextColor="#9CA3AF"
+                      />
+                      <TouchableOpacity
+                        style={styles.addMerchantButton}
+                        onPress={muteCategory}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="volume-mute" size={16} color="#FFFFFF" />
+                      </TouchableOpacity>
+                    </View>
+                    
+                    <View style={styles.whitelistTags}>
+                      {mutedCategories.map(muted => (
+                        <View key={muted.id} style={styles.mutedTag}>
+                          <Text style={styles.mutedTagText}>
+                            {muted.category}
+                            {muted.muteUntil && ` (until ${muted.muteUntil})`}
+                          </Text>
+                          <TouchableOpacity
+                            onPress={() => unmuteCategory(muted.category)}
                             style={styles.removeTagButton}
                           >
                             <Ionicons name="close" size={12} color="#6B7280" />
@@ -1037,6 +1211,31 @@ const styles = StyleSheet.create({
   },
   removeTagButton: {
     padding: 2,
+  },
+  dateInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#1F2937',
+    backgroundColor: '#FFFFFF',
+  },
+  mutedTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 6,
+  },
+  mutedTagText: {
+    fontSize: 12,
+    color: '#92400E',
+    fontWeight: '500',
   },
   settingsActions: {
     flexDirection: 'row',

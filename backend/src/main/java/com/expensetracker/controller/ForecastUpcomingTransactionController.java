@@ -2,6 +2,8 @@ package com.expensetracker.controller;
 
 import com.expensetracker.dto.UpcomingTransactionDto;
 import com.expensetracker.service.UpcomingTransactionService;
+import com.expensetracker.security.RequiresPlan;
+import com.expensetracker.security.PlanTier;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,6 +16,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/analytics/forecast/upcoming")
+@RequiresPlan(level = PlanTier.PREMIUM)
 public class ForecastUpcomingTransactionController {
     private final UpcomingTransactionService service;
     public ForecastUpcomingTransactionController(UpcomingTransactionService service){this.service=service;}
