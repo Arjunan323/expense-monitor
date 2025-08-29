@@ -1,6 +1,9 @@
 <div>
-  <h1>Projected Low Balance Warning</h1>
-  <p>Your projected balance for <strong th:text="${month}"></strong> may fall below your threshold of <strong th:text="${threshold}"></strong>.</p>
-  <p>Projected net: <strong th:text="${projectedNet}"></strong></p>
-  <p>Consider reducing discretionary spend or increasing income sources.</p>
+  <h1 style="margin:0 0 12px;font-size:22px;font-weight:600;color:#111827;">Projected Low Balance Alert ⚠️</h1>
+  <p style="margin:0 0 12px;font-size:14px;color:#374151;">Your projected balance for <strong th:text="${month}"></strong> may drop below your threshold of <strong th:text="${threshold}"></strong>.</p>
+  <p style="margin:0 0 16px;font-size:14px;color:#374151;">Projected Net: <strong th:text="${projectedNet}"></strong></p>
+  <p style="margin:0 0 18px;font-size:14px;color:#374151;">Review cash outflows and defer non-essential spending where possible.</p>
+  <p style="margin:0;">
+    <a th:href="${dashboardUrl}" class="btn" style="background:#2563eb;color:#fff !important;text-decoration:none;padding:10px 20px;border-radius:6px;font-weight:600;display:inline-block;font-size:14px;">Open Dashboard</a>
+  </p>
 </div>

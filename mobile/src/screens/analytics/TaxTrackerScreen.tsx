@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, Platform, TextInput } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, Platform, TextInput, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { apiCall } from '../../utils/api';
+import { apiCall, taxApi } from '../../utils/api';
 import { usePreferences } from '../../contexts/PreferencesContext';
 import * as DocumentPicker from 'expo-document-picker';
 import api from '../../utils/api';
@@ -37,6 +37,7 @@ export const TaxTrackerScreen: React.FC = () => {
   const currentFY = (()=> { const now = new Date(); const y = now.getMonth()>=3? now.getFullYear(): now.getFullYear()-1; return `${y}-${(y+1).toString().slice(-2)}`; })();
   const [selectedFy, setSelectedFy] = useState(currentFY);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [summary, setSummary] = useState<TaxSummaryDto|null>(null);
   const [transactions, setTransactions] = useState<TaxTransactionDto[]>([]);
   const [categories, setCategories] = useState<TaxCategoryUsageDto[]>([]);
@@ -58,10 +59,10 @@ export const TaxTrackerScreen: React.FC = () => {
       setLoading(true); setError(null);
       const year = fyYear(selectedFy);
       const [summaryData, txData, checklistData, tipsData] = await Promise.all([
-        apiCall<TaxSummaryDto>('GET', `/analytics/taxes/summary?year=${year}`),
-        apiCall<TaxTransactionDto[]>('GET', `/analytics/taxes?year=${year}`),
-        apiCall<TaxDeductionChecklistItem[]>('GET', `/analytics/taxes/checklist`),
-        apiCall<TaxSavingTip[]>('GET', `/analytics/taxes/tips`)
+        taxApi.summary(year),
+        taxApi.list(year),
+        taxApi.getChecklist(),
+        taxApi.getTips()
       ]);
       setSummary(summaryData);
       setCategories(summaryData.categories||[]);
@@ -74,9 +75,14 @@ export const TaxTrackerScreen: React.FC = () => {
 
   useEffect(()=> { loadAll(); }, [loadAll]);
 
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadAll().finally(() => setRefreshing(false));
+  };
+
   const toggleDeductible = async (id:number) => {
     try {
-      const updated = await apiCall<TaxTransactionDto>('POST', `/analytics/taxes/${id}/toggle-deductible`, {});
+      const updated = await taxApi.toggleDeductible(id);
       setTransactions(prev => prev.map(t=> t.id===id? updated : t));
       loadAll();
     } catch(e:any){ Alert.alert('Error', e.message||'Toggle failed'); }
@@ -95,7 +101,11 @@ export const TaxTrackerScreen: React.FC = () => {
         name: file.name || `receipt-${id}.pdf`,
         type: file.mimeType || 'application/octet-stream'
       } as any);
-      await api.post(`/analytics/taxes/${id}/upload-receipt`, form, { headers: { 'Content-Type':'multipart/form-data' } });
+      await taxApi.uploadReceipt(id, {
+        uri: file.uri,
+        name: file.name || `receipt-${id}.pdf`,
+        type: file.mimeType || 'application/octet-stream'
+      });
       await loadAll();
     } catch(e:any){ Alert.alert('Upload Failed', e.message||'Could not upload receipt'); }
     finally { setUploadingId(null); }
@@ -113,7 +123,7 @@ export const TaxTrackerScreen: React.FC = () => {
   const viewReceipt = async (id:number) => {
     try {
       setUploadingId(id); // reuse spinner state
-      const response = await api.get(`/analytics/taxes/${id}/receipt`, { responseType:'arraybuffer' });
+      const response = await taxApi.downloadReceipt(id);
       const base64 = arrayBufferToBase64(response.data);
       const fileUri = FileSystem.cacheDirectory + `receipt-${id}.pdf`;
       await FileSystem.writeAsStringAsync(fileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
@@ -129,7 +139,7 @@ export const TaxTrackerScreen: React.FC = () => {
   // Rules CRUD
   const loadRules = useCallback(async ()=> {
     try {
-      const data = await apiCall<ClassificationRule[]>('GET', '/analytics/taxes/rules');
+      const data = await taxApi.listRules();
       setRules(data);
       setEditingRuleId(null); setEditingRule(null);
     } catch(e:any){ /* silent */ }
@@ -137,13 +147,14 @@ export const TaxTrackerScreen: React.FC = () => {
 
   const createRule = async () => {
     if(!newRule.matchValue) { Alert.alert('Validation','Enter match value'); return; }
-    try { await apiCall('POST','/analytics/taxes/rules', newRule); setNewRule({...newRule, matchValue:''}); loadRules(); }
+    try { await taxApi.createRule(newRule); setNewRule({...newRule, matchValue:''}); loadRules(); }
     catch(e:any){ Alert.alert('Error', e.message||'Create failed'); }
   };
   const startEditRule = (r:ClassificationRule) => { setEditingRuleId(r.id!); setEditingRule({...r}); };
   const cancelEditRule = () => { setEditingRuleId(null); setEditingRule(null); };
   const saveRule = async () => { if(!editingRule) return; try { await apiCall('PUT', `/analytics/taxes/rules/${editingRule.id}`, editingRule); cancelEditRule(); loadRules(); } catch(e:any){ Alert.alert('Error', e.message||'Update failed'); } };
-  const deleteRule = async (id:number) => { Alert.alert('Delete Rule','Are you sure?',[{text:'Cancel',style:'cancel'},{text:'Delete',style:'destructive', onPress: async()=>{ try{ await apiCall('DELETE', `/analytics/taxes/rules/${id}`); loadRules(); } catch{} }}]); };
+  const updateRule = async () => { if(!editingRule) return; try { await taxApi.updateRule(editingRule.id!, editingRule); cancelEditRule(); loadRules(); } catch(e:any){ Alert.alert('Error', e.message||'Update failed'); } };
+  const deleteRule = async (id:number) => { Alert.alert('Delete Rule','Are you sure?',[{text:'Cancel',style:'cancel'},{text:'Delete',style:'destructive', onPress: async()=>{ try{ await taxApi.deleteRule(id); loadRules(); } catch{} }}]); };
 
   const categoryIcon: Record<string,string> = { '80C':'💰','80D':'🏥','80G':'❤️','24(b)':'🏠','80E':'📚','80TTA':'🏦' };
 
@@ -154,7 +165,11 @@ export const TaxTrackerScreen: React.FC = () => {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{paddingBottom:40}}>
+    <ScrollView 
+      style={styles.container} 
+      contentContainerStyle={{paddingBottom:40}}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+    >
       <View style={styles.header}> 
         <Text style={styles.title}>Tax Benefit Tracker</Text>
         <Text style={styles.subtitle}>Optimize deductions & stay compliant</Text>

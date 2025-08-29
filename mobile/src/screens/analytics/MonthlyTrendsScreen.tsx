@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Dimensions,
   Platform,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
@@ -20,6 +21,7 @@ const { width } = Dimensions.get('window');
 export const MonthlyTrendsScreen: React.FC = () => {
   const { preferences } = usePreferences();
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [chartType, setChartType] = useState<'line' | 'bar'>('line');
   const [viewMode, setViewMode] = useState<'category' | 'bank' | 'previous'>('category');
 
@@ -59,6 +61,11 @@ export const MonthlyTrendsScreen: React.FC = () => {
 
   useEffect(()=>{ load(); }, [load]);
 
+  const onRefresh = () => {
+    setRefreshing(true);
+    load().finally(() => setRefreshing(false));
+  };
+
   if (loading) {
     return <LoadingSpinner />;
   }
@@ -68,7 +75,11 @@ export const MonthlyTrendsScreen: React.FC = () => {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+    <ScrollView 
+      style={styles.container} 
+      contentContainerStyle={styles.contentContainer}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+    >
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Monthly Spending Trends</Text>
         <Text style={styles.headerSubtitle}>Track and compare your spending patterns over time</Text>

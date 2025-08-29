@@ -11,6 +11,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { MonthlyTrendsScreen } from './analytics/MonthlyTrendsScreen';
 import { BudgetTrackingScreen } from './analytics/BudgetTrackingScreen';
+import SpendingAlertsScreen from './analytics/SpendingAlertsScreen';
+import { CashFlowForecastScreen } from './analytics/CashFlowForecastScreen';
+import GoalTrackingScreen from './analytics/GoalTrackingScreen';
 import TaxTrackerScreen from './analytics/TaxTrackerScreen';
 
 type AnalyticsView = 'overview' | 'trends' | 'budget' | 'alerts' | 'forecast' | 'goals' | 'tax';
@@ -88,8 +91,10 @@ export const AnalyticsScreen: React.FC = () => {
         {/* Render Selected View */}
         {currentView === 'trends' && <MonthlyTrendsScreen />}
   {currentView === 'budget' && <BudgetTrackingScreen />}
+        {currentView === 'alerts' && <SpendingAlertsScreen />}
+        {currentView === 'forecast' && <CashFlowForecastScreen />}
+        {currentView === 'goals' && <GoalTrackingScreen />}
   {currentView === 'tax' && <TaxTrackerScreen />}
-        {/* Add other screens as needed */}
       </View>
     );
   }

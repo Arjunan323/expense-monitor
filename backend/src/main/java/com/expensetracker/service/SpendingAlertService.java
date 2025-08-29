@@ -19,6 +19,7 @@ import java.time.YearMonth;
 @Service
 @Transactional
 public class SpendingAlertService {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(SpendingAlertService.class);
     private final SpendingAlertRepository repo; private final AuthenticationFacade auth;
     private final SpendingAlertSettingsRepository settingsRepo;
     private final SpendingAlertWhitelistRepository whitelistRepo;
@@ -333,7 +334,8 @@ public class SpendingAlertService {
                         if(a.getMetadata()!=null){
                             try { meta = objectMapper.readValue(a.getMetadata(), new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String,Object>>(){}); } catch(Exception ignored){}
                         }
-                        a.setSeverity(suggestSeverity(a.getType(), a.getAmount(), meta));
+                        // Use already loaded settings instead of relying on security context (scheduled jobs have no auth)
+                        a.setSeverity(suggestSeverity(a.getType(), a.getAmount(), meta, settings));
                     }
                     if(a.getTitle()==null) a.setTitle(titleFor(a.getType()));
                     if(a.getDescription()==null) a.setDescription(descriptionFor(a.getType(), a.getAmount(), a.getCategory(), a.getMerchant()));
@@ -341,7 +343,14 @@ public class SpendingAlertService {
                 }
                 newAlerts.addAll(produced);
             } catch(Exception ex){
-                // swallow rule exception to avoid aborting full recompute; could log
+                // Don't hide persistence/data access problems; rethrow so we see real cause instead of UnexpectedRollback
+                if(ex instanceof org.springframework.dao.DataAccessException ||
+                   ex instanceof jakarta.persistence.PersistenceException ||
+                   ex instanceof org.hibernate.HibernateException){
+                    log.error("Rule '{}' failed with persistence exception; aborting recompute", rule.key(), ex);
+                    throw ex;
+                }
+                log.warn("Rule '{}' execution failed (continuing): {}", rule.key(), ex.toString());
             }
         }
 
@@ -358,23 +367,33 @@ public class SpendingAlertService {
     // Filter out alerts that duplicate retained user-acted alerts (same signature)
     java.util.Set<String> retainedSigs = existingRetained.stream().map(a-> a.getType()+"|"+(a.getMerchant()==null?"":a.getMerchant())+"|"+(a.getCategory()==null?"":a.getCategory())+"|"+(a.getTxnId()==null? a.getTxnDate(): a.getTxnId())).collect(java.util.stream.Collectors.toSet());
     var finalFiltered = finalAlerts.stream().filter(a-> !retainedSigs.contains(a.getType()+"|"+(a.getMerchant()==null?"":a.getMerchant())+"|"+(a.getCategory()==null?"":a.getCategory())+"|"+(a.getTxnId()==null? a.getTxnDate(): a.getTxnId()))).toList();
-    repo.saveAll(finalFiltered);
+    try {
+        repo.saveAll(finalFiltered);
+    } catch(Exception e){
+        log.error("Failed saving {} alerts (user={}, month={})", finalFiltered.size(), u.getId(), ym, e);
+        throw e;
+    }
     finalFiltered.forEach(a->{
-        streamPublisher.publish("alert.new", toDto(a));
-        recordAudit(a, "created");
-        try { emailNotificationService.maybeSendSpendingAlert(a); } catch(Exception ignored) {}
+        try { streamPublisher.publish("alert.new", toDto(a)); } catch(Exception ex){ log.warn("Stream publish failed for alert {}: {}", a.getId(), ex.toString()); }
+        try { recordAudit(a, "created"); } catch(Exception ex){ log.warn("Audit record failed for alert temp (type={}, user={}): {}", a.getType(), u.getId(), ex.toString()); }
+        try { emailNotificationService.maybeSendSpendingAlert(a); } catch(Exception ex){ log.warn("Email notification failed for alert (type={}, user={}): {}", a.getType(), u.getId(), ex.toString()); }
     });
     long generated = finalFiltered.size();
     long duration = System.currentTimeMillis() - start;
     // persist generation stats
-    settings.setLastGeneratedAt(java.time.LocalDateTime.now());
-    settings.setLastGeneratedCount(generated);
-    settingsRepo.save(settings);
+    try {
+        settings.setLastGeneratedAt(java.time.LocalDateTime.now());
+        settings.setLastGeneratedCount(generated);
+        settingsRepo.save(settings);
+    } catch(Exception e){
+        log.error("Failed updating generation stats (user={}, month={})", u.getId(), ym, e);
+        throw e;
+    }
     return new SpendingAlertRecomputeResponse(generated, replaced, duration);
     }
 
-    private String suggestSeverity(String type, java.math.BigDecimal amt, java.util.Map<String,Object> meta){
-        SpendingAlertSettings settings = settingsRepo.findByUser(auth.currentUser()).orElse(null); // lightweight read
+    private String suggestSeverity(String type, java.math.BigDecimal amt, java.util.Map<String,Object> meta, SpendingAlertSettings settings){
+        // settings passed in by caller; avoids auth.currentUser() which fails in scheduled tasks
         if("large_transaction".equals(type)){
             if(settings!=null && settings.getCriticalLargeAbsolute()!=null && amt!=null && amt.compareTo(java.math.BigDecimal.valueOf(settings.getCriticalLargeAbsolute()))>=0) return "critical";
             if(meta!=null){

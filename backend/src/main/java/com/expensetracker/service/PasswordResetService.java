@@ -18,7 +18,7 @@ public class PasswordResetService {
     private final EmailTemplateService templateService;
     private final PasswordEncoder passwordEncoder;
     @Value("${app.mail.password-reset.ttl-seconds:1800}") private long ttl;
-    @Value("${app.mail.password-reset.base-url:http://localhost:5173}") private String baseUrl;
+    @Value("${app.mail.password-reset.base-url:http://localhost:3000}") private String baseUrl;
     public PasswordResetService(PasswordResetTokenRepository tokenRepo, UserRepository userRepo, EmailService emailService, PasswordEncoder passwordEncoder, EmailTemplateService templateService){
         this.tokenRepo=tokenRepo; this.userRepo=userRepo; this.emailService=emailService; this.passwordEncoder=passwordEncoder; this.templateService = templateService; }
     public void request(String email){

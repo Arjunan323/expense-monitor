@@ -433,7 +433,7 @@ export const BillingScreen: React.FC = () => {
             </TouchableOpacity>
           ))}
         </View>
-  {billingPeriod === 'YEARLY' && <Text style={styles.discountNote}>Yearly plans ≈ 2 months free</Text>}
+  {/* Removed deprecated discountNote text (duplicate of yearlyHighlight) */}
 
         {plans.map((plan) => (
           <View

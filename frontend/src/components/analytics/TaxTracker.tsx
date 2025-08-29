@@ -61,6 +61,16 @@ export const TaxTracker: React.FC = () => {
   const [showAIPanel, setShowAIPanel] = useState(false);
   const [showRulesPanel, setShowRulesPanel] = useState(false);
   const [showAddTransaction, setShowAddTransaction] = useState(false);
+  const [newTransaction, setNewTransaction] = useState<Partial<TaxTransactionDto>>({
+    note: '',
+    category: '',
+    amount: null,
+    paidDate: new Date().toISOString().slice(0,10),
+    deductible: true
+  });
+  const [creatingTx, setCreatingTx] = useState(false);
+  const [uploadTxId, setUploadTxId] = useState<number | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState<Partial<TaxTransactionDto>>({});
   
@@ -146,11 +156,14 @@ export const TaxTracker: React.FC = () => {
       }, 300);
       
       const result = await taxApi.classifyRange(classifyRange.start, classifyRange.end);
-      
       clearInterval(progressInterval);
       setClassifyProgress(100);
-      
-      toast.success(`Successfully classified ${result.created || 0} transactions`);
+      let createdCount = 0;
+      if (result && typeof result === 'object') {
+        if ('created' in result && typeof (result as any).created === 'number') createdCount = (result as any).created;
+        else if ('value' in result && typeof (result as any).value === 'number') createdCount = (result as any).value; // fallback if backend returns key/value summary
+      }
+      toast.success(`Successfully classified ${createdCount} transactions`);
       
       setTimeout(() => {
         setClassifyProgress(null);
@@ -230,6 +243,55 @@ export const TaxTracker: React.FC = () => {
     } catch (e: any) {
       toast.error('Failed to approve suggestions');
     }
+  };
+
+  const createTransaction = async () => {
+    if(!newTransaction.note?.trim()) { toast.error('Enter a note/description'); return; }
+    if(!newTransaction.category) { toast.error('Select a category'); return; }
+    if(!newTransaction.amount || newTransaction.amount <= 0) { toast.error('Enter a valid amount'); return; }
+    try {
+      setCreatingTx(true);
+      await taxApi.create({
+        note: newTransaction.note,
+        category: newTransaction.category,
+        amount: newTransaction.amount,
+        paidDate: newTransaction.paidDate,
+        deductible: newTransaction.deductible ?? true,
+        taxYear: selectedYear
+      });
+      toast.success('Transaction added');
+      setShowAddTransaction(false);
+      setNewTransaction({ note: '', category: '', amount: null, paidDate: new Date().toISOString().slice(0,10), deductible: true });
+      taxApi.invalidateCache();
+      loadData();
+    } catch(e:any){
+      toast.error('Failed to create transaction');
+    } finally { setCreatingTx(false); }
+  };
+
+  const handleUploadReceipt = async (file: File) => {
+    if(!uploadTxId) return;
+    try {
+      setUploadProgress(0);
+      const updated = await taxApi.uploadReceipt(uploadTxId, file, pct => setUploadProgress(pct));
+      setTransactions(prev => prev.map(t => t.id === updated.id ? updated : t));
+      toast.success('Receipt uploaded');
+      setUploadTxId(null); setUploadProgress(null);
+      taxApi.invalidateCache();
+      loadData();
+    } catch(e:any){
+      toast.error('Upload failed');
+      setUploadProgress(null);
+    }
+  };
+
+  const downloadReceipt = async (id:number) => {
+    try {
+      const blob = await taxApi.downloadReceipt(id);
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(()=> URL.revokeObjectURL(url), 10_000);
+    } catch(e:any){ toast.error('Failed to open receipt'); }
   };
 
   const rejectSuggestions = async () => {
@@ -562,7 +624,7 @@ export const TaxTracker: React.FC = () => {
                       
                       {!transaction.hasReceipt ? (
                         <button
-                          onClick={() => {/* Upload receipt logic */}}
+                          onClick={() => setUploadTxId(transaction.id)}
                           className="bg-brand-blue-100 hover:bg-brand-blue-200 text-brand-blue-700 px-4 py-2 rounded-2xl font-semibold text-sm transition-all duration-300 hover:scale-105 flex items-center space-x-2"
                         >
                           <Upload className="w-4 h-4" />
@@ -570,7 +632,7 @@ export const TaxTracker: React.FC = () => {
                         </button>
                       ) : (
                         <button
-                          onClick={() => {/* View receipt logic */}}
+                          onClick={() => downloadReceipt(transaction.id)}
                           className="bg-brand-green-100 hover:bg-brand-green-200 text-brand-green-700 px-4 py-2 rounded-2xl font-semibold text-sm transition-all duration-300 hover:scale-105 flex items-center space-x-2"
                         >
                           <Eye className="w-4 h-4" />
@@ -843,6 +905,130 @@ export const TaxTracker: React.FC = () => {
             )}
           </div>
         </div>
+      </Modal>
+
+      {/* Add Transaction Modal */}
+      <Modal open={showAddTransaction} onClose={() => !creatingTx && setShowAddTransaction(false)} title="➕ Add Tax Transaction" widthClass="max-w-lg">
+        <div className="space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="md:col-span-2">
+              <label className="block text-sm font-semibold text-brand-gray-700 mb-2">Description / Note</label>
+              <input
+                type="text"
+                value={newTransaction.note || ''}
+                onChange={(e)=> setNewTransaction(p=>({...p, note: e.target.value}))}
+                className="input-field"
+                placeholder="e.g. LIC premium"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-brand-gray-700 mb-2">Category</label>
+              <select
+                value={newTransaction.category || ''}
+                onChange={(e)=> setNewTransaction(p=>({...p, category: e.target.value}))}
+                className="input-field"
+              >
+                <option value="" disabled>Select...</option>
+                {categories.map(c => (
+                  <option key={c.code} value={c.code}>{c.code} - {c.description.split(' - ')[0]}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-brand-gray-700 mb-2">Amount</label>
+              <input
+                type="number"
+                value={newTransaction.amount ?? ''}
+                onChange={(e)=> setNewTransaction(p=>({...p, amount: e.target.value ? parseFloat(e.target.value) : null}))}
+                className="input-field"
+                min={0}
+                step="0.01"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-brand-gray-700 mb-2">Paid Date</label>
+              <input
+                type="date"
+                value={newTransaction.paidDate || ''}
+                onChange={(e)=> setNewTransaction(p=>({...p, paidDate: e.target.value}))}
+                className="input-field"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-brand-gray-700 mb-2">Deductible</label>
+              <select
+                value={newTransaction.deductible ? 'true':'false'}
+                onChange={(e)=> setNewTransaction(p=>({...p, deductible: e.target.value === 'true'}))}
+                className="input-field"
+              >
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex justify-end space-x-3">
+            <button onClick={()=> setShowAddTransaction(false)} disabled={creatingTx} className="btn-secondary">Cancel</button>
+            <button onClick={createTransaction} disabled={creatingTx} className="btn-primary">{creatingTx? 'Saving...' : 'Add Transaction'}</button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Settings Modal */}
+      <Modal open={showSettings} onClose={()=> setShowSettings(false)} title="⚙️ Tax Tracker Settings" widthClass="max-w-2xl">
+        <div className="space-y-6">
+          <div className="p-4 bg-brand-gray-50 rounded-2xl text-sm text-brand-gray-700 leading-relaxed">
+            Configure how tax deduction categories are displayed. Editing limits may require backend support; currently read-only.
+          </div>
+          <div className="space-y-3 max-h-80 overflow-auto pr-2">
+            {categories.map(c => (
+              <div key={c.code} className="flex items-center justify-between p-3 bg-white rounded-xl border border-brand-gray-200">
+                <div>
+                  <p className="font-semibold text-brand-gray-900">{c.code}</p>
+                  <p className="text-xs text-brand-gray-600">{c.description}</p>
+                </div>
+                <div className="text-right text-xs text-brand-gray-600">
+                  {c.annualLimit && <p>Limit: {formatCurrency(c.annualLimit, undefined, preferences)}</p>}
+                  <p>Used: {formatCurrency(c.used, undefined, preferences)}</p>
+                  <p className="font-semibold" style={{color: c.overLimit? '#EF4444' : c.nearLimit? '#F59E0B' : '#00B77D'}}>{c.percentUsed.toFixed(1)}%</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end">
+            <button onClick={()=> setShowSettings(false)} className="btn-primary">Close</button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Receipt Upload Modal */}
+      <Modal open={uploadTxId !== null} onClose={()=> uploadProgress===null && setUploadTxId(null)} title="📄 Upload Receipt" widthClass="max-w-md">
+        {uploadTxId && (
+          <div className="space-y-5">
+            <div className="p-4 bg-brand-gray-50 rounded-2xl text-sm text-brand-gray-700">
+              Select the receipt file for transaction #{uploadTxId}.
+            </div>
+            <div>
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                disabled={uploadProgress !== null}
+                onChange={(e)=> { const f = e.target.files?.[0]; if(f) handleUploadReceipt(f); }}
+                className="block w-full text-sm text-brand-gray-700 file:mr-4 file:px-4 file:py-2 file:rounded-full file:border-0 file:bg-brand-blue-100 file:text-brand-blue-700 file:font-semibold hover:file:bg-brand-blue-200"
+              />
+            </div>
+            {uploadProgress !== null && (
+              <div>
+                <div className="flex justify-between text-xs mb-1"><span>Uploading</span><span>{uploadProgress}%</span></div>
+                <div className="w-full h-2 bg-brand-gray-200 rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-blue transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                </div>
+              </div>
+            )}
+            <div className="flex justify-end space-x-3">
+              <button onClick={()=> setUploadTxId(null)} disabled={uploadProgress !== null} className="btn-secondary">Cancel</button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

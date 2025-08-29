@@ -152,4 +152,93 @@ export const fetchMonthlySpendingSeriesMobile = async (from: string, to: string,
   return apiCall<any>('GET', `/analytics/trends/spending/monthly-series?${params.toString()}`);
 };
 
+// Spending Alerts API
+export const spendingAlertsApi = {
+  list: async (params: { month?: string; type?: string; acknowledged?: string; page?: number; size?: number }) => {
+    const queryParams = new URLSearchParams();
+    if (params.month) queryParams.append('month', params.month);
+    if (params.type && params.type !== 'all') queryParams.append('type', params.type);
+    if (params.acknowledged) queryParams.append('acknowledged', params.acknowledged);
+    if (params.page !== undefined) queryParams.append('page', String(params.page));
+    if (params.size !== undefined) queryParams.append('size', String(params.size));
+    return apiCall<any>('GET', `/analytics/spending-alerts?${queryParams.toString()}`);
+  },
+  acknowledge: (id: number) => apiCall('POST', `/analytics/spending-alerts/${id}/acknowledge`, {}),
+  dismiss: (id: number) => apiCall('DELETE', `/analytics/spending-alerts/${id}`),
+  settings: () => apiCall<any>('GET', '/analytics/spending-alerts/settings'),
+  updateSettings: (settings: any) => apiCall('PUT', '/analytics/spending-alerts/settings', settings),
+  whitelist: () => apiCall<string[]>('GET', '/analytics/spending-alerts/whitelist'),
+  addWhitelist: (merchant: string) => apiCall('POST', '/analytics/spending-alerts/whitelist', { merchant }),
+  removeWhitelist: (merchant: string) => apiCall('DELETE', `/analytics/spending-alerts/whitelist/${encodeURIComponent(merchant)}`),
+  recommendations: (month?: string) => apiCall<any>('GET', `/analytics/spending-alerts/recommendations${month ? `?month=${month}` : ''}`),
+  recompute: (month?: string) => apiCall('POST', `/analytics/spending-alerts/recompute${month ? `?month=${month}` : ''}`, null)
+};
+
+// Goals API
+export const goalsApi = {
+  list: () => apiCall<any[]>('GET', '/analytics/goals'),
+  create: (payload: any) => apiCall<any>('POST', '/analytics/goals', payload),
+  update: (id: number, payload: any) => apiCall<any>('PUT', `/analytics/goals/${id}`, payload),
+  delete: (id: number) => apiCall('DELETE', `/analytics/goals/${id}`),
+  contribute: (id: number, amount: number, monthlyContribution?: number) => 
+    apiCall<any>('PATCH', `/analytics/goals/${id}/contribution`, { amount, monthlyContribution }),
+  stats: () => apiCall<any>('GET', '/analytics/goals/stats')
+};
+
+// Forecast API
+export const forecastApi = {
+  get: (months = 6) => apiCall<any>('GET', `/analytics/forecast?months=${months}`),
+  upcoming: {
+    list: (start?: string, end?: string) => {
+      const params = new URLSearchParams();
+      if (start) params.append('start', start);
+      if (end) params.append('end', end);
+      return apiCall<any[]>('GET', `/analytics/forecast/upcoming${params.toString() ? `?${params.toString()}` : ''}`);
+    },
+    create: (dto: any) => apiCall<any>('POST', '/analytics/forecast/upcoming', dto),
+    update: (id: number, dto: any) => apiCall<any>('PUT', `/analytics/forecast/upcoming/${id}`, dto),
+    delete: (id: number) => apiCall('DELETE', `/analytics/forecast/upcoming/${id}`)
+  }
+};
+
+// Budget API
+export const budgetsApi = {
+  summary: (month?: string) => {
+    const params = month ? `?month=${month}` : '';
+    return apiCall<any>('GET', `/analytics/budgets/summary${params}`);
+  },
+  list: () => apiCall<any[]>('GET', '/analytics/budgets'),
+  create: (payload: any) => apiCall<any>('POST', '/analytics/budgets', payload),
+  update: (id: number, payload: any) => apiCall<any>('PUT', `/analytics/budgets/${id}`, payload),
+  updateLimit: (id: number, monthlyBudget: number) => 
+    apiCall<any>('PATCH', `/analytics/budgets/${id}/limit`, { monthlyBudget }),
+  delete: (id: number) => apiCall('DELETE', `/analytics/budgets/${id}`)
+};
+
+// Tax API
+export const taxApi = {
+  summary: (year?: number) => {
+    const params = year ? `?year=${year}` : '';
+    return apiCall<any>('GET', `/analytics/taxes/summary${params}`);
+  },
+  list: (year?: number) => {
+    const params = year ? `?year=${year}` : '';
+    return apiCall<any[]>('GET', `/analytics/taxes${params}`);
+  },
+  getChecklist: () => apiCall<any[]>('GET', '/analytics/taxes/checklist'),
+  getTips: () => apiCall<any[]>('GET', '/analytics/taxes/tips'),
+  toggleDeductible: (id: number) => apiCall<any>('POST', `/analytics/taxes/${id}/toggle-deductible`, {}),
+  uploadReceipt: (id: number, file: any) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiCall<any>('POST', `/analytics/taxes/${id}/upload-receipt`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
+  downloadReceipt: (id: number) => apiCall('GET', `/analytics/taxes/${id}/receipt`, null, { responseType: 'arraybuffer' }),
+  listRules: () => apiCall<any[]>('GET', '/analytics/taxes/rules'),
+  createRule: (rule: any) => apiCall<any>('POST', '/analytics/taxes/rules', rule),
+  updateRule: (id: number, rule: any) => apiCall<any>('PUT', `/analytics/taxes/rules/${id}`, rule),
+  deleteRule: (id: number) => apiCall('DELETE', `/analytics/taxes/rules/${id}`)
+};
 export default api;

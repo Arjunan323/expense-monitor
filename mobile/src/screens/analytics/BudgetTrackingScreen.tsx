@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,39 +8,95 @@ import {
   TextInput,
   Modal,
   Platform,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { formatCurrency } from '../../utils/formatters';
 import { usePreferences } from '../../contexts/PreferencesContext';
+import { apiCall, budgetsApi } from '../../utils/api';
+import Toast from 'react-native-toast-message';
+import { Alert } from 'react-native';
 
-interface BudgetCategory {
-  id: string;
+interface BudgetCategoryUsageDto {
+  id: number;
   name: string;
-  budget: number;
+  monthlyBudget: number;
   spent: number;
   icon: string;
   color: string;
+  progressPercent: number;
+  over: boolean;
+  near: boolean;
+  remaining: number;
 }
+
+interface BudgetSummaryResponse {
+  month: string;
+  categories: BudgetCategoryUsageDto[];
+  totals: {
+    totalBudget: number;
+    totalSpent: number;
+    overBudgetCount: number;
+    overallProgressPercent: number;
+  };
+  history: {
+    thisMonthAdherence: number;
+    lastMonthAdherence: number;
+    avg6MonthsAdherence: number;
+  };
+}
+
 
 export const BudgetTrackingScreen: React.FC = () => {
   const { preferences } = usePreferences();
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [newCategory, setNewCategory] = useState({ name: '', budget: '', icon: '💰' });
 
-  const [budgets, setBudgets] = useState<BudgetCategory[]>([
-    { id: '1', name: 'Groceries', budget: 15000, spent: 12500, icon: '🛒', color: '#00B77D' },
-    { id: '2', name: 'Utilities', budget: 8000, spent: 9200, icon: '⚡', color: '#0077B6' },
-    { id: '3', name: 'Entertainment', budget: 5000, spent: 3800, icon: '🎬', color: '#FFD60A' },
-    { id: '4', name: 'Transport', budget: 6000, spent: 7500, icon: '🚗', color: '#8B5CF6' },
-  ]);
+  const [budgets, setBudgets] = useState<BudgetCategoryUsageDto[]>([]);
+  const [summary, setSummary] = useState<BudgetSummaryResponse | null>(null);
+  const [allCategories, setAllCategories] = useState<string[]>([]);
 
   useEffect(() => {
-    setTimeout(() => setLoading(false), 800);
+    loadData();
   }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [selectedMonth]);
+
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [categoriesData, summaryData] = await Promise.all([
+        apiCall<any[]>('GET', '/categories').catch(() => []),
+        budgetsApi.summary(selectedMonth)
+      ]);
+      
+      setAllCategories(categoriesData.map(c => c.name));
+      setSummary(summaryData);
+      setBudgets(summaryData.categories);
+    } catch (e: any) {
+      console.error('Failed to load budgets:', e);
+      Toast.show({ type: 'error', text1: 'Failed to load budget data' });
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [selectedMonth]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadData();
+  };
 
   const getProgressColor = (spent: number, budget: number) => {
     const percentage = (spent / budget) * 100;
@@ -53,19 +109,75 @@ export const BudgetTrackingScreen: React.FC = () => {
     return Math.min((spent / budget) * 100, 100);
   };
 
-  const totalBudget = budgets.reduce((sum, b) => sum + b.budget, 0);
-  const totalSpent = budgets.reduce((sum, b) => sum + b.spent, 0);
-  const overBudgetCount = budgets.filter(b => b.spent > b.budget).length;
+  const handleEditBudget = (id: string, currentBudget: number) => {
+    setEditingId(id);
+    setEditValue(currentBudget.toString());
+  };
+
+  const saveBudget = async (id: string) => {
+    const newBudget = parseFloat(editValue);
+    if (newBudget > 0) {
+      try {
+        await budgetsApi.updateLimit(Number(id), newBudget);
+        setBudgets(prev => prev.map(b => 
+          b.id === Number(id) ? { ...b, monthlyBudget: newBudget, budget: newBudget } : b
+        ));
+        loadData(); // Refresh summary
+        Toast.show({ type: 'success', text1: 'Budget updated' });
+      } catch (e: any) {
+        Toast.show({ type: 'error', text1: 'Failed to update budget' });
+      }
+    }
+    setEditingId(null);
+    setEditValue('');
+  };
+
+  const addNewCategory = async () => {
+    if (newCategory.name && newCategory.budget) {
+      try {
+        await budgetsApi.create({
+          name: newCategory.name,
+          monthlyBudget: parseFloat(newCategory.budget),
+          icon: newCategory.icon,
+          color: '#00B77D'
+        });
+        setNewCategory({ name: '', budget: '', icon: '💰' });
+        setShowAddModal(false);
+        loadData();
+        Toast.show({ type: 'success', text1: 'Budget category added' });
+      } catch (e: any) {
+        Toast.show({ type: 'error', text1: 'Failed to add category' });
+      }
+    }
+  };
+
+  const totalBudget = summary?.totals.totalBudget ?? budgets.reduce((sum, b) => sum + b.monthlyBudget, 0);
+  const totalSpent = summary?.totals.totalSpent ?? budgets.reduce((sum, b) => sum + b.spent, 0);
+  const overBudgetCount = summary?.totals.overBudgetCount ?? budgets.filter(b => b.spent > b.monthlyBudget).length;
 
   if (loading) {
     return <LoadingSpinner />;
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+    <ScrollView 
+      style={styles.container} 
+      contentContainerStyle={styles.contentContainer}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+    >
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Budget Tracking</Text>
+        <Text style={styles.headerTitle}>🎯 Budget Tracking</Text>
         <Text style={styles.headerSubtitle}>Set budgets by category and track your spending progress</Text>
+        
+        <View style={styles.monthSelector}>
+          <Text style={styles.monthLabel}>Month:</Text>
+          <TextInput
+            style={styles.monthInput}
+            value={selectedMonth}
+            onChangeText={setSelectedMonth}
+            placeholder="YYYY-MM"
+          />
+        </View>
       </View>
 
       {/* Summary Stats */}
@@ -115,8 +227,9 @@ export const BudgetTrackingScreen: React.FC = () => {
 
         <View style={styles.categoriesList}>
           {budgets.map(budget => {
-            const percentage = getProgressPercentage(budget.spent, budget.budget);
-            const isOverBudget = budget.spent > budget.budget;
+            const percentage = budget.progressPercent ?? getProgressPercentage(budget.spent, budget.monthlyBudget);
+            const isOverBudget = budget.over ?? (budget.spent > budget.monthlyBudget);
+            const isNearBudget = budget.near ?? (percentage >= 80 && !isOverBudget);
 
             return (
               <View key={budget.id} style={styles.budgetCard}>
@@ -128,16 +241,23 @@ export const BudgetTrackingScreen: React.FC = () => {
                     <View style={styles.budgetDetails}>
                       <Text style={styles.budgetName}>{budget.name}</Text>
                       <Text style={styles.budgetAmount}>
-                        {formatCurrency(budget.spent, preferences)} of {formatCurrency(budget.budget, preferences)}
+                        {formatCurrency(budget.spent, preferences)} of {formatCurrency(budget.monthlyBudget, preferences)}
                       </Text>
                     </View>
                   </View>
                   
-                  {isOverBudget && (
-                    <View style={styles.overBudgetBadge}>
-                      <Text style={styles.overBudgetText}>Over Budget</Text>
-                    </View>
-                  )}
+                  <View style={styles.badgeContainer}>
+                    {isOverBudget && (
+                      <View style={styles.overBudgetBadge}>
+                        <Text style={styles.overBudgetText}>Over Budget</Text>
+                      </View>
+                    )}
+                    {isNearBudget && (
+                      <View style={styles.nearBudgetBadge}>
+                        <Text style={styles.nearBudgetText}>Near Limit</Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
 
                 {/* Progress Bar */}
@@ -148,29 +268,50 @@ export const BudgetTrackingScreen: React.FC = () => {
                         styles.progressFill,
                         {
                           width: `${percentage}%`,
-                          backgroundColor: getProgressColor(budget.spent, budget.budget)
+                          backgroundColor: getProgressColor(budget.spent, budget.monthlyBudget)
                         }
                       ]}
                     />
                   </View>
-                  <Text style={[styles.progressText, { color: getProgressColor(budget.spent, budget.budget) }]}>
+                  <Text style={[styles.progressText, { color: getProgressColor(budget.spent, budget.monthlyBudget) }]}>
                     {percentage.toFixed(1)}%
                   </Text>
                 </View>
 
                 <View style={styles.budgetFooter}>
                   <Text style={styles.remainingText}>
-                    Remaining: {formatCurrency(Math.max(0, budget.budget - budget.spent), preferences)}
+                    Remaining: {formatCurrency(Math.max(0, budget.monthlyBudget - budget.spent), preferences)}
                   </Text>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setEditingId(budget.id);
-                      setEditValue(budget.budget.toString());
-                    }}
-                    style={styles.editButton}
-                  >
-                    <Ionicons name="create-outline" size={16} color="#0077B6" />
-                  </TouchableOpacity>
+                  {editingId === budget.id.toString() ? (
+                    <View style={styles.editContainer}>
+                      <TextInput
+                        style={styles.editInput}
+                        value={editValue}
+                        onChangeText={setEditValue}
+                        keyboardType="numeric"
+                        autoFocus
+                      />
+                      <TouchableOpacity
+                        onPress={() => saveBudget(budget.id.toString())}
+                        style={styles.saveButton}
+                      >
+                        <Ionicons name="checkmark" size={16} color="#00B77D" />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => setEditingId(null)}
+                        style={styles.cancelEditButton}
+                      >
+                        <Ionicons name="close" size={16} color="#6B7280" />
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      onPress={() => handleEditBudget(budget.id.toString(), budget.monthlyBudget)}
+                      style={styles.editButton}
+                    >
+                      <Ionicons name="create-outline" size={16} color="#0077B6" />
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
             );
@@ -197,12 +338,28 @@ export const BudgetTrackingScreen: React.FC = () => {
             <View style={styles.modalContent}>
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Category Name</Text>
-                <TextInput
-                  style={styles.input}
-                  value={newCategory.name}
-                  onChangeText={(text) => setNewCategory(prev => ({ ...prev, name: text }))}
-                  placeholder="e.g., Dining Out"
-                />
+                <View style={styles.categorySelector}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    {allCategories.map(category => (
+                      <TouchableOpacity
+                        key={category}
+                        onPress={() => setNewCategory(prev => ({ ...prev, name: category }))}
+                        style={[
+                          styles.categoryOption,
+                          newCategory.name === category && styles.categoryOptionSelected
+                        ]}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={[
+                          styles.categoryOptionText,
+                          newCategory.name === category && styles.categoryOptionTextSelected
+                        ]}>
+                          {category}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
               </View>
               
               <View style={styles.inputGroup}>
@@ -244,10 +401,8 @@ export const BudgetTrackingScreen: React.FC = () => {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.saveButton}
-                onPress={() => {
-                  // Add logic here
-                  setShowAddModal(false);
-                }}
+                onPress={addNewCategory}
+                disabled={!newCategory.name || !newCategory.budget}
               >
                 <Text style={styles.saveButtonText}>Add Category</Text>
               </TouchableOpacity>
@@ -255,6 +410,56 @@ export const BudgetTrackingScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Budget History */}
+      {summary && (
+        <View style={styles.historyCard}>
+          <Text style={styles.historyTitle}>Budget Adherence History</Text>
+          <View style={styles.historyGrid}>
+            <View style={styles.historyItem}>
+              <Text style={styles.historyLabel}>This Month</Text>
+              <Text style={[styles.historyValue, { color: '#0077B6' }]}>
+                {Math.round(summary.history.thisMonthAdherence)}%
+              </Text>
+            </View>
+            <View style={styles.historyItem}>
+              <Text style={styles.historyLabel}>Last Month</Text>
+              <Text style={[styles.historyValue, { color: '#00B77D' }]}>
+                {Math.round(summary.history.lastMonthAdherence)}%
+              </Text>
+            </View>
+            <View style={styles.historyItem}>
+              <Text style={styles.historyLabel}>6-Month Avg</Text>
+              <Text style={[styles.historyValue, { color: '#F59E0B' }]}>
+                {Math.round(summary.history.avg6MonthsAdherence)}%
+              </Text>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* Budget Tips */}
+      <View style={styles.tipsCard}>
+        <Text style={styles.tipsTitle}>💡 Budget Tips</Text>
+        <View style={styles.tipsList}>
+          <View style={styles.tipItem}>
+            <View style={styles.tipDot} />
+            <Text style={styles.tipText}>Set realistic budgets based on your 3-month average spending.</Text>
+          </View>
+          <View style={styles.tipItem}>
+            <View style={[styles.tipDot, { backgroundColor: '#0077B6' }]} />
+            <Text style={styles.tipText}>Review and adjust budgets monthly to stay on track.</Text>
+          </View>
+          <View style={styles.tipItem}>
+            <View style={[styles.tipDot, { backgroundColor: '#F59E0B' }]} />
+            <Text style={styles.tipText}>Use the 50/30/20 rule: 50% needs, 30% wants, 20% savings.</Text>
+          </View>
+          <View style={styles.tipItem}>
+            <View style={[styles.tipDot, { backgroundColor: '#00B77D' }]} />
+            <Text style={styles.tipText}>Track daily to avoid month-end budget surprises.</Text>
+          </View>
+        </View>
+      </View>
     </ScrollView>
   );
 };
@@ -286,6 +491,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#FFFFFF',
     opacity: 0.9,
+  },
+  monthSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+    gap: 8,
+  },
+  monthLabel: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontWeight: '500',
+  },
+  monthInput: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '500',
   },
   summaryGrid: {
     flexDirection: 'row',
@@ -412,6 +637,21 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#EF4444',
   },
+  badgeContainer: {
+    alignItems: 'flex-end',
+  },
+  nearBudgetBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 4,
+  },
+  nearBudgetText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#F59E0B',
+  },
   progressContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -444,6 +684,23 @@ const styles = StyleSheet.create({
   },
   editButton: {
     padding: 8,
+  },
+  editContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  editInput: {
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    fontSize: 14,
+    width: 80,
+  },
+  cancelEditButton: {
+    padding: 4,
   },
   modalOverlay: {
     flex: 1,
@@ -480,6 +737,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#374151',
+  },
+  categorySelector: {
+    marginTop: 8,
+  },
+  categoryOption: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    marginRight: 8,
+  },
+  categoryOptionSelected: {
+    backgroundColor: '#00B77D',
+  },
+  categoryOptionText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  categoryOptionTextSelected: {
+    color: '#FFFFFF',
   },
   input: {
     borderWidth: 1,
@@ -531,7 +809,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#6B7280',
   },
-  saveButton: {
+  saveButtonModal: {
     flex: 1,
     backgroundColor: '#00B77D',
     paddingVertical: 12,
@@ -543,4 +821,80 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
   },
+  historyCard: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 24,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  historyTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 16,
+  },
+  historyGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  historyItem: {
+    alignItems: 'center',
+  },
+  historyLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  historyValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  tipsCard: {
+    backgroundColor: '#F0FDF9',
+    borderWidth: 2,
+    borderColor: '#CCFBEF',
+    marginHorizontal: 24,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 24,
+  },
+  tipsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 16,
+  },
+  tipsList: {
+    gap: 12,
+  },
+  tipItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  tipDot: {
+    width: 8,
+    height: 8,
+    backgroundColor: '#00B77D',
+    borderRadius: 4,
+    marginTop: 6,
+  },
+  tipText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#374151',
+    lineHeight: 20,
+  },
+  saveButton: {
+    padding: 4,
+  },
 });
+
+export default BudgetTrackingScreen;

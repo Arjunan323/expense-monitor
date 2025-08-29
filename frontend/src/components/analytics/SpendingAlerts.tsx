@@ -717,6 +717,55 @@ export const SpendingAlerts: React.FC = () => {
                       className="input-field"
                     />
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-brand-gray-700 mb-2">Frequency Min Amount</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={settings.freqMinAmount}
+                      onChange={e => setSettings({...settings, freqMinAmount: parseFloat(e.target.value)})}
+                      className="input-field"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-brand-gray-700 mb-2">Category Spike Multiplier</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={settings.catSpikeMultiplier}
+                      onChange={e => setSettings({...settings, catSpikeMultiplier: parseFloat(e.target.value)})}
+                      className="input-field"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-brand-gray-700 mb-2">Category Spike Lookback (Months)</label>
+                    <input
+                      type="number"
+                      value={settings.catSpikeLookbackMonths}
+                      onChange={e => setSettings({...settings, catSpikeLookbackMonths: parseInt(e.target.value)})}
+                      className="input-field"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-brand-gray-700 mb-2">Category Spike Min Amount</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={settings.catSpikeMinAmount}
+                      onChange={e => setSettings({...settings, catSpikeMinAmount: parseFloat(e.target.value)})}
+                      className="input-field"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-brand-gray-700 mb-2">New Merchant Min Amount</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={settings.newMerchantMinAmount}
+                      onChange={e => setSettings({...settings, newMerchantMinAmount: parseFloat(e.target.value)})}
+                      className="input-field"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -741,6 +790,28 @@ export const SpendingAlerts: React.FC = () => {
                       type="number"
                       value={settings.criticalFrequencyCount ?? ''}
                       onChange={e => setSettings({...settings, criticalFrequencyCount: e.target.value ? parseInt(e.target.value) : undefined})}
+                      className="input-field"
+                      placeholder="Leave empty for default"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-brand-gray-700 mb-2">Critical Category Spike Multiplier</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={settings.criticalCategorySpikeMultiplier ?? ''}
+                      onChange={e => setSettings({...settings, criticalCategorySpikeMultiplier: e.target.value ? parseFloat(e.target.value) : undefined})}
+                      className="input-field"
+                      placeholder="Leave empty for default"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-brand-gray-700 mb-2">Critical New Merchant Absolute</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={settings.criticalNewMerchantAbsolute ?? ''}
+                      onChange={e => setSettings({...settings, criticalNewMerchantAbsolute: e.target.value ? parseFloat(e.target.value) : undefined})}
                       className="input-field"
                       placeholder="Leave empty for default"
                     />

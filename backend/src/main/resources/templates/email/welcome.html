@@ -1,12 +1,16 @@
 <div>
-  <h1>Welcome to CutTheSpend</h1>
-  <p>Hi <span th:text="${firstName}">there</span>, your email has been verified successfully.</p>
-  <p>You're all set to track spending, set goals, receive intelligent alerts, and optimize your cash flow.</p>
-  <p style="margin-top:24px;">Here are a few quick tips:</p>
-  <ol style="padding-left:16px;">
-    <li>Create your first goal to stay motivated.</li>
-    <li>Enable spending alerts for early anomaly detection.</li>
-    <li>Upload receipts to simplify tax season.</li>
-  </ol>
-  <p>Let's build better financial habits together.</p>
+  <h1 style="margin:0 0 12px;font-size:24px;font-weight:600;color:#111827;">Welcome to CutTheSpend 🎉</h1>
+  <p style="margin:0 0 16px;font-size:15px;">Hi <strong th:text="${firstName}">there</strong>, we're excited to have you on board.</p>
+  <p style="margin:0 0 16px;font-size:14px;color:#374151;">Your account is ready. Here’s how to make the most of it:</p>
+  <ul style="margin:0 0 20px;padding:0 0 0 18px;font-size:14px;line-height:1.5;color:#1f2937;">
+    <li><strong>Create a savings or payoff goal</strong> to stay motivated.</li>
+    <li><strong>Upload a recent statement</strong> to see instant categorization & analytics.</li>
+    <li><strong>Enable spending alerts</strong> to catch unusual activity early.</li>
+    <li><strong>Set budgets (if enabled)</strong> to keep discretionary spend in check.</li>
+  </ul>
+  <p style="margin:0 0 24px;font-size:14px;color:#374151;">Need help? Just reply—real humans (and some smart automation) are here. 💬</p>
+  <p style="margin:0 0 8px;">
+    <a th:href="${dashboardUrl}" class="btn" style="background:#2563eb;color:#fff !important;text-decoration:none;padding:12px 22px;border-radius:6px;font-weight:600;display:inline-block;">Go to Dashboard</a>
+  </p>
+  <p style="margin:24px 0 0;font-size:12px;color:#6b7280;">If the button doesn’t work, paste this link into your browser:<br /><span style="word-break:break-all;" th:text="${dashboardUrl}"></span></p>
 </div>
