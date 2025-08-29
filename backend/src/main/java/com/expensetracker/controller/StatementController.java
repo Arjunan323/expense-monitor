@@ -33,4 +33,10 @@ public class StatementController {
     public List<RawStatementDto> getStatements(@RequestHeader("Authorization") String authHeader) {
         return statementService.getStatements(authHeader);
     }
+
+    @GetMapping("/{id}/original")
+    @io.swagger.v3.oas.annotations.Operation(summary = "Download original statement PDF (redirect)")
+    public org.springframework.http.ResponseEntity<Void> downloadOriginal(@PathVariable("id") Long id, @RequestHeader("Authorization") String authHeader) {
+        return statementService.downloadOriginal(id);
+    }
 }

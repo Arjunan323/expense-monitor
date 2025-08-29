@@ -25,7 +25,8 @@ public class TaxService {
     private final TaxCategoryRepository categoryRepo;
     private final TaxClassificationIgnoreRepository ignoreRepo;
     private final AuthenticationFacade auth;
-    public TaxService(TaxTransactionRepository repo, TaxCategoryRepository categoryRepo, TaxClassificationIgnoreRepository ignoreRepo, AuthenticationFacade auth){this.repo=repo;this.categoryRepo=categoryRepo;this.ignoreRepo=ignoreRepo;this.auth=auth;}
+    private final com.expensetracker.storage.OciObjectStorageService ociStorage;
+    public TaxService(TaxTransactionRepository repo, TaxCategoryRepository categoryRepo, TaxClassificationIgnoreRepository ignoreRepo, AuthenticationFacade auth, com.expensetracker.storage.OciObjectStorageService ociStorage){this.repo=repo;this.categoryRepo=categoryRepo;this.ignoreRepo=ignoreRepo;this.auth=auth; this.ociStorage=ociStorage;}
 
     public List<TaxTransactionDto> list(Integer year){
         User u = auth.currentUser();
@@ -99,14 +100,21 @@ public class TaxService {
         User u = auth.currentUser();
         TaxTransaction t = repo.findById(id).filter(e->e.getUser().getId().equals(u.getId())).orElseThrow();
         try {
-            String baseDir = java.util.Optional.ofNullable(System.getProperty("tax.receipts.dir")).orElse("receipts");
-            java.nio.file.Path dir = java.nio.file.Paths.get(baseDir);
-            java.nio.file.Files.createDirectories(dir);
             String ext = org.springframework.util.StringUtils.getFilenameExtension(file.getOriginalFilename());
-            String filename = "tx-"+id + (ext!=null? "."+ext : "");
-            java.nio.file.Path dest = dir.resolve(filename);
-            file.transferTo(dest.toFile());
-            t.setReceiptKey(dest.toAbsolutePath().toString());
+            // Store receipts under receipts/{userId}/
+            String key = "receipts/"+u.getId()+"/tx-"+id + (ext!=null? "."+ext : "");
+            if(ociStorage!=null && ociStorage.isEnabled()){
+                byte[] bytes = file.getBytes();
+                String storedKey = ociStorage.putBytes(key, bytes, file.getContentType());
+                t.setReceiptKey("oci:"+storedKey);
+            } else {
+                String baseDir = java.util.Optional.ofNullable(System.getProperty("tax.receipts.dir")).orElse("receipts");
+                java.nio.file.Path dir = java.nio.file.Paths.get(baseDir, String.valueOf(u.getId()));
+                java.nio.file.Files.createDirectories(dir);
+                java.nio.file.Path dest = dir.resolve("tx-"+id + (ext!=null? "."+ext : ""));
+                file.transferTo(dest.toFile());
+                t.setReceiptKey(dest.toAbsolutePath().toString());
+            }
             t.setHasReceipt(Boolean.TRUE);
             return toDto(t);
         } catch(Exception ex){ throw new RuntimeException("Failed to store receipt", ex); }
@@ -117,14 +125,25 @@ public class TaxService {
         TaxTransaction t = repo.findById(id).filter(e->e.getUser().getId().equals(u.getId())).orElseThrow();
         if(t.getReceiptKey()==null) return org.springframework.http.ResponseEntity.notFound().build();
         try {
-            java.nio.file.Path path = java.nio.file.Paths.get(t.getReceiptKey());
-            if(!java.nio.file.Files.exists(path)) return org.springframework.http.ResponseEntity.notFound().build();
-            byte[] bytes = java.nio.file.Files.readAllBytes(path);
-            String ct = java.nio.file.Files.probeContentType(path);
-            return org.springframework.http.ResponseEntity.ok()
-                    .header("Content-Type", ct!=null? ct: "application/octet-stream")
-                    .header("Content-Disposition", "inline; filename=\""+path.getFileName()+"\"")
-                    .body(bytes);
+            String rk = t.getReceiptKey();
+            if(rk.startsWith("oci:")){
+                String key = rk.substring(4);
+                // Generate short-lived pre-auth URL (5 min default)
+                String url = ociStorage.generateReadUrl(key, 5);
+                return org.springframework.http.ResponseEntity.status(302)
+                        .header("Location", url)
+                        .build();
+            } else {
+                java.nio.file.Path path = java.nio.file.Paths.get(rk);
+                if(!java.nio.file.Files.exists(path)) return org.springframework.http.ResponseEntity.notFound().build();
+                byte[] bytes = java.nio.file.Files.readAllBytes(path);
+                String ct = java.nio.file.Files.probeContentType(path);
+                String filename = path.getFileName().toString();
+                return org.springframework.http.ResponseEntity.ok()
+                        .header("Content-Type", ct!=null? ct: "application/octet-stream")
+                        .header("Content-Disposition", "inline; filename=\""+filename+"\"")
+                        .body(bytes);
+            }
         } catch(Exception ex){ throw new RuntimeException("Failed to read receipt", ex); }
     }
 

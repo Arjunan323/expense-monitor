@@ -47,6 +47,7 @@ public class StatementService {
     private final com.expensetracker.service.statement.AsyncStatementProcessor asyncProcessor;
     private final StatementJobRepository statementJobRepository;
     private final com.expensetracker.service.statement.AwsPipelineLauncher awsPipelineLauncher;
+    private final com.expensetracker.storage.OciObjectStorageService ociStorageService;
     @Value("${app.statements.async.enabled:false}")
     private boolean asyncEnabled;
     @Value("${extraction.mode:local_python}")
@@ -55,7 +56,7 @@ public class StatementService {
     private final UsagePolicyFactory usagePolicyFactory;
 
     @Autowired
-    public StatementService(RawStatementRepository rawStatementRepository, TransactionRepository transactionRepository, UserRepository userRepository, com.expensetracker.repository.BankRepository bankRepository, com.expensetracker.repository.CategoryRepository categoryRepository, AuthenticationFacade authenticationFacade, UsagePolicyFactory usagePolicyFactory, PdfPageCounter pdfPageCounter, TempFileService tempFileService, ExtractionRunner extractionRunner, RawStatementPersister rawStatementPersister, TransactionParser transactionParser, BankCategoryUpserter bankCategoryUpserter, com.expensetracker.service.statement.AsyncStatementProcessor asyncProcessor, StatementJobRepository statementJobRepository, com.expensetracker.service.statement.AwsPipelineLauncher awsPipelineLauncher) {
+    public StatementService(RawStatementRepository rawStatementRepository, TransactionRepository transactionRepository, UserRepository userRepository, com.expensetracker.repository.BankRepository bankRepository, com.expensetracker.repository.CategoryRepository categoryRepository, AuthenticationFacade authenticationFacade, UsagePolicyFactory usagePolicyFactory, PdfPageCounter pdfPageCounter, TempFileService tempFileService, ExtractionRunner extractionRunner, RawStatementPersister rawStatementPersister, TransactionParser transactionParser, BankCategoryUpserter bankCategoryUpserter, com.expensetracker.service.statement.AsyncStatementProcessor asyncProcessor, StatementJobRepository statementJobRepository, com.expensetracker.service.statement.AwsPipelineLauncher awsPipelineLauncher, com.expensetracker.storage.OciObjectStorageService ociStorageService) {
         this.rawStatementRepository = rawStatementRepository;
         this.transactionRepository = transactionRepository;
         this.authenticationFacade = authenticationFacade;
@@ -69,6 +70,7 @@ public class StatementService {
         this.asyncProcessor = asyncProcessor;
         this.statementJobRepository = statementJobRepository;
     this.awsPipelineLauncher = awsPipelineLauncher;
+    this.ociStorageService = ociStorageService;
     }
 
     // Backwards compatible existing signature – delegates with no password
@@ -149,7 +151,17 @@ public class StatementService {
             if (output == null) {
                     throw new IllegalStateException(AppConstants.ERROR_EXTRACTION_FAILED);
             }
-            RawStatement rawStatement = rawStatementPersister.persist(user, file.getOriginalFilename(), output, numPages);
+            String storageKey = null;
+            if(ociStorageService != null && ociStorageService.isEnabled()) {
+                try {
+                    String key = "statements/" + user.getId() + "/" + java.util.UUID.randomUUID() + ".pdf";
+                    storageKey = ociStorageService.putBytes(key, file.getBytes(), file.getContentType());
+                    storageKey = "oci:" + storageKey; // prefix to indicate OCI storage
+                } catch(Exception ex) {
+                    // Non-fatal: continue without stored original PDF
+                }
+            }
+            RawStatement rawStatement = rawStatementPersister.persist(user, file.getOriginalFilename(), output, numPages, storageKey);
             List<Transaction> transactions = transactionParser.parse(output, user, rawStatement.getBankName());
             transactionRepository.saveAll(transactions);
             bankCategoryUpserter.upsert(user, transactions);
@@ -215,6 +227,27 @@ public class StatementService {
             ));
         }
         return dtos;
+    }
+
+    /**
+     * Download (redirect) original statement PDF if stored in OCI. Returns 404 if not present or not stored.
+     */
+    public org.springframework.http.ResponseEntity<Void> downloadOriginal(Long statementId) {
+        User user = authenticationFacade.currentUser();
+        RawStatement rs = rawStatementRepository.findById(statementId).orElse(null);
+        if (rs == null || rs.getUser() == null || !rs.getUser().getId().equals(user.getId())) {
+            return org.springframework.http.ResponseEntity.notFound().build();
+        }
+        String storageKey = rs.getStorageKey();
+        if (storageKey == null || !storageKey.startsWith("oci:")) {
+            return org.springframework.http.ResponseEntity.notFound().build();
+        }
+        if (ociStorageService == null || !ociStorageService.isEnabled()) {
+            return org.springframework.http.ResponseEntity.status(410).build(); // Gone – key recorded but service disabled
+        }
+        String key = storageKey.substring(4); // remove oci:
+        String url = ociStorageService.generateReadUrl(key, 5);
+        return org.springframework.http.ResponseEntity.status(302).header("Location", url).build();
     }
 
     // getUserFromAuth removed; AuthenticationFacade handles user resolution

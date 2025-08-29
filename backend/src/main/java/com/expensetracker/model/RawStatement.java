@@ -14,6 +14,8 @@ public class RawStatement {
     @Column(columnDefinition = "TEXT")
     private String rawJson;
     private String bankName;
+    // Optional: object storage key for original uploaded statement PDF when stored in OCI
+    private String storageKey;
 
     private Integer pageCount; // Number of pages in the statement
 
@@ -37,4 +39,6 @@ public class RawStatement {
 
     public Integer getPageCount() { return pageCount; }
     public void setPageCount(Integer pageCount) { this.pageCount = pageCount; }
+    public String getStorageKey() { return storageKey; }
+    public void setStorageKey(String storageKey) { this.storageKey = storageKey; }
 }
