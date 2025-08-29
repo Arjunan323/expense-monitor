@@ -18,6 +18,7 @@
     <properties>
         <java.version>17</java.version>
         <aws.sdk.version>2.32.24</aws.sdk.version>
+    <spring-cloud-oci.version>1.3.0</spring-cloud-oci.version>
     </properties>
     <dependencies>
         <dependency>
@@ -48,6 +49,16 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <!-- Thymeleaf for email templating -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-thymeleaf</artifactId>
+        </dependency>
+        <!-- Email support -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
         <!-- AOP for cross-cutting concerns like request/response logging -->
         <dependency>
@@ -166,6 +177,13 @@
                 <artifactId>sfn</artifactId>
                 <version>${aws.sdk.version}</version>
             </dependency>
+        <!-- Oracle Cloud Infrastructure Object Storage (for receipt / file storage) -->
+        <!-- Spring Cloud Oracle Storage starter provides Object Storage integration & auto-config -->
+        <dependency>
+            <groupId>com.oracle.cloud.spring</groupId>
+            <artifactId>spring-cloud-oci-starter-storage</artifactId>
+            <version>${spring-cloud-oci.version}</version>
+        </dependency>
     </dependencies>
     <build>
         <plugins>
@@ -173,6 +191,62 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
+            <plugin>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-maven-plugin</artifactId>
+                <version>11.11.1</version>
+                <configuration>
+                    <!-- Use -Dflyway.url= -Dflyway.user= -Dflyway.password= when invoking -->
+                    <url>jdbc:oracle:thin:@localhost:1521/XEPDB1</url>
+                    <user>cutthespend</user>
+                    <password>admin</password>
+                    <locations>
+                        <location>classpath:db/migration/oracle</location>
+                    </locations>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
+    <profiles>
+        <profile>
+            <id>flyway-repair</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.flywaydb</groupId>
+                        <artifactId>flyway-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>flyway-repair-exec</id>
+                                <phase>validate</phase>
+                                <goals>
+                                    <goal>repair</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>flyway-migrate</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.flywaydb</groupId>
+                        <artifactId>flyway-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>flyway-migrate-exec</id>
+                                <phase>validate</phase>
+                                <goals>
+                                    <goal>migrate</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

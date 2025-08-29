@@ -1,0 +1,32 @@
+<div>
+  <h1 style="margin:0 0 12px;font-size:22px;font-weight:600;color:#111827;" th:text="${title}">Spending Alert</h1>
+  <p style="margin:0 0 20px;font-size:14px;color:#374151;" th:text="${description}">An unusual spending pattern was detected.</p>
+  <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;margin:0 0 20px;">
+    <tbody>
+      <tr>
+        <td style="padding:6px 0;font-size:13px;color:#6b7280;width:120px;">Category</td>
+        <td style="padding:6px 0;font-size:14px;font-weight:600;color:#111827;" th:text="${category}">General</td>
+      </tr>
+      <tr th:if="${merchant}">
+        <td style="padding:6px 0;font-size:13px;color:#6b7280;">Merchant</td>
+        <td style="padding:6px 0;font-size:14px;font-weight:600;color:#111827;" th:text="${merchant}"></td>
+      </tr>
+      <tr>
+        <td style="padding:6px 0;font-size:13px;color:#6b7280;">Amount</td>
+        <td style="padding:6px 0;font-size:14px;font-weight:600;color:#111827;" th:text="${amount}"></td>
+      </tr>
+      <tr>
+        <td style="padding:6px 0;font-size:13px;color:#6b7280;">Date</td>
+        <td style="padding:6px 0;font-size:14px;font-weight:600;color:#111827;" th:text="${date}"></td>
+      </tr>
+      <tr>
+        <td style="padding:6px 0;font-size:13px;color:#6b7280;">Severity</td>
+        <td style="padding:6px 0;font-size:14px;font-weight:600;" th:text="${severity}"></td>
+      </tr>
+    </tbody>
+  </table>
+  <p style="margin:0 0 16px;font-size:13px;color:#6b7280;">You can adjust alert thresholds or mute categories from your dashboard.</p>
+  <p style="margin:0;">
+    <a th:href="${dashboardUrl}" class="btn" style="background:#2563eb;color:#fff !important;text-decoration:none;padding:10px 20px;border-radius:6px;font-weight:600;display:inline-block;font-size:14px;">View Dashboard</a>
+  </p>
+</div>

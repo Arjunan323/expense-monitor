@@ -15,10 +15,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { useAuth } from '../contexts/AuthContext';
 import { apiCall } from '../utils/api';
+import { useNavigation } from '@react-navigation/native';
 import { usePreferences } from '../contexts/PreferencesContext';
 
 export const SettingsScreen: React.FC = () => {
   const { user, logout } = useAuth();
+  const navigation = useNavigation<any>();
   const { preferences, setPreferences } = usePreferences();
   const [profile, setProfile] = useState({
     firstName: '',
@@ -215,6 +217,11 @@ export const SettingsScreen: React.FC = () => {
           </View>
           <Text style={styles.sectionTitle}>Account</Text>
         </View>
+        <TouchableOpacity style={styles.actionButton} onPress={()=> navigation.navigate('NotificationPrefs')}>
+          <Ionicons name="notifications-outline" size={20} color="#6b7280" />
+          <Text style={styles.actionButtonText}>Notification Preferences</Text>
+          <Ionicons name="chevron-forward" size={16} color="#9ca3af" />
+        </TouchableOpacity>
         <TouchableOpacity style={styles.actionButton} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={20} color="#6b7280" />
           <Text style={styles.actionButtonText}>Sign Out</Text>

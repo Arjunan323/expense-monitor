@@ -16,6 +16,8 @@ import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 
 const { width } = Dimensions.get('window');
 
+import { useNavigation } from '@react-navigation/native';
+
 export const AuthScreen: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
@@ -28,6 +30,7 @@ export const AuthScreen: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { login, register } = useAuth();
+  const navigation = useNavigation<any>();
 
   const handleSubmit = async () => {
     if (!formData.email || !formData.password) {
@@ -193,18 +196,18 @@ export const AuthScreen: React.FC = () => {
               <View style={styles.buttonGlow} />
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.switchButton}
-              onPress={() => setIsLogin(!isLogin)}
-              activeOpacity={0.7}
-            >
+            <TouchableOpacity style={styles.switchButton} onPress={() => setIsLogin(!isLogin)} activeOpacity={0.7}>
               <Text style={styles.switchButtonText}>
-                {isLogin 
-                  ? "Don't have an account? Sign up 🎉" 
-                  : 'Already have an account? Sign in 💫'
-                }
+                {isLogin ? "Don't have an account? Sign up 🎉" : 'Already have an account? Sign in 💫'}
               </Text>
             </TouchableOpacity>
+            {isLogin && (
+              <View style={styles.authLinksRow}>
+                <TouchableOpacity onPress={()=> navigation.navigate('ForgotPassword')}>
+                  <Text style={styles.linkText}>Forgot password?</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </View>
       </ScrollView>
@@ -455,4 +458,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
+  authLinksRow: {
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  linkText: {
+    color: '#2563EB',
+    fontSize: 14,
+    fontWeight: '600'
+  }
 });

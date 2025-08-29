@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, X, Check, Building2 } from 'lucide-react';
 
 interface Option {
@@ -15,6 +16,7 @@ interface MultiSelectProps {
   className?: string;
   title: string;
   desc: string;
+  deferCommit?: boolean; // if true, only call onChange when user clicks Done
 }
 
 export const MultiSelect: React.FC<MultiSelectProps> = ({
@@ -24,59 +26,100 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
   placeholder = 'Select options',
   className = '',
   title,
-  desc
+  desc,
+  deferCommit = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  // Track when we programmatically closed so the underlying toggle button doesn't immediately re-open via click-through
+  const lastClosedRef = useRef<number>(0);
+  // temp selection when deferring commits
+  const [tempSelected, setTempSelected] = useState<string[]>(selected);
+
+  // Sync temp with committed when selection changes externally and dropdown closed
+  useEffect(()=>{ if(!isOpen) setTempSelected(selected); }, [selected, isOpen]);
+
+  const closeDropdown = () => {
+    if (!isOpen) return;
+    lastClosedRef.current = Date.now();
+    setIsClosing(true);
+    setIsOpen(false);
+    // allow any stray click/pointerup events to finish before re-enabling
+    setTimeout(() => setIsClosing(false), 250);
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
+      const target = event.target as Node;
+      if (containerRef.current?.contains(target)) return; // click on trigger region
+      if (popupRef.current?.contains(target)) return; // click inside popup -> ignore
+      // otherwise close
+      if (isOpen) setIsOpen(false);
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const working = deferCommit ? tempSelected : selected;
+
   const toggleOption = (value: string) => {
-    if (selected.includes(value)) {
-      onChange(selected.filter(item => item !== value));
+    if(deferCommit){
+      setTempSelected(prev => prev.includes(value) ? prev.filter(v=>v!==value) : [...prev, value]);
     } else {
-      onChange([...selected, value]);
+      if (selected.includes(value)) {
+        onChange(selected.filter(item => item !== value));
+      } else {
+        onChange([...selected, value]);
+      }
     }
   };
 
   const removeOption = (value: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    onChange(selected.filter(item => item !== value));
+    if(deferCommit){
+      setTempSelected(prev => prev.filter(v=>v!==value));
+    } else {
+      onChange(selected.filter(item => item !== value));
+    }
   };
 
   const clearAll = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onChange([]);
+    if(deferCommit){ setTempSelected([]); } else { onChange([]); }
   };
 
   const selectAll = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onChange(options.map(opt => opt.value));
+    const all = options.map(opt => opt.value);
+    if(deferCommit){ setTempSelected(all); } else { onChange(all); }
   };
 
   const getDisplayText = () => {
-    if (selected.length === 0) return placeholder;
-    if (selected.length === options.length) return 'All Banks';
-    if (selected.length === 1) {
-      const option = options.find(opt => opt.value === selected[0]);
-      return option?.label || selected[0];
+    const base = selected; // show committed selection in collapsed state
+    if (base.length === 0) return placeholder;
+    if (base.length === options.length) return 'All Banks';
+    if (base.length === 1) {
+      const option = options.find(opt => opt.value === base[0]);
+      return option?.label || base[0];
     }
-    return `${selected.length} selected`;
+    return `${base.length} selected`;
   };
 
   return (
-    <div ref={containerRef} className={`relative ${className}`}>
+  <div ref={containerRef} className={`relative ${className}`} style={isClosing ? { pointerEvents: 'none' } : undefined}>
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={(e) => {
+          // If we just closed within 300ms (e.g. clicking Done), ignore the bubbled click
+      if (isClosing || Date.now() - lastClosedRef.current < 300) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
+          setIsOpen(o => !o);
+        }}
         className="w-full flex items-center justify-between px-4 py-3 bg-white border-2 border-brand-gray-200 rounded-2xl hover:border-brand-green-400 focus:outline-none focus:ring-4 focus:ring-brand-green-200 focus:border-brand-green-400 transition-all duration-300 group"
       >
         <div className="flex items-center space-x-3 flex-1 min-w-0">
@@ -88,9 +131,9 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
               {getDisplayText()}
             </div>
             <div className="text-xs text-brand-gray-500">
-              {selected.length === 0 ? 'No banks selected' : 
-               selected.length === options.length ? 'All banks' :
-               `${selected.length} of ${options.length} banks`}
+              {working.length === 0 ? 'No banks selected' : 
+               working.length === options.length ? 'All banks' :
+               `${working.length} of ${options.length} banks`}
             </div>
           </div>
           {selected.length > 0 && (
@@ -106,7 +149,7 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
       </button>
 
       {/* Selected Banks Pills */}
-      {selected.length > 0 && selected.length < options.length && (
+  {selected.length > 0 && selected.length < options.length && (
         <div className="flex flex-wrap gap-2 mt-3">
           {selected.slice(0, 3).map(value => {
             const option = options.find(opt => opt.value === value);
@@ -134,16 +177,29 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
         </div>
       )}
 
-      {isOpen && (
-        <>
-          {/* Backdrop */}
-          <div 
-            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40"
-            onClick={() => setIsOpen(false)}
-          />
-          
-          {/* Dropdown */}
-          <div className="absolute top-full left-0 right-0 mt-2 bg-white border-2 border-brand-gray-200 rounded-3xl shadow-funky-lg z-50 max-h-80 overflow-hidden animate-slide-up">
+    {isOpen && createPortal(
+      (() => {
+        const rect = containerRef.current?.getBoundingClientRect();
+        const width = rect?.width || 320;
+        const gap = 8;
+        const desiredLeft = rect?.left || 0;
+        const maxLeft = window.innerWidth - width - 16;
+        const style: React.CSSProperties = {
+          top: (rect?.bottom || 0) + gap,
+          left: Math.min(desiredLeft, maxLeft),
+          width,
+          position: 'fixed'
+        };
+        return (
+      <>
+        {/* Backdrop */}
+        <div 
+          className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[998]" 
+          onClick={() => closeDropdown()} 
+        />
+        {/* Popup positioned relative to trigger */}
+    <div ref={popupRef} className="z-[999]" style={style}>
+      <div className="bg-white border-2 border-brand-gray-200 rounded-3xl shadow-funky-lg max-h-[480px] overflow-hidden animate-slide-up w-max">
             {/* Header */}
             <div className="p-4 border-b border-brand-gray-100 bg-brand-gray-50">
               <div className="flex items-center justify-between">
@@ -176,7 +232,7 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
                   <p className="text-sm">No banks available</p>
                 </div>
               ) : (
-                options.map(option => (
+    options.map(option => (
                   <button
                     key={option.value}
                     onClick={() => toggleOption(option.value)}
@@ -184,11 +240,11 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
                   >
                     <div className="flex items-center space-x-3">
                       <div className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-all duration-200 ${
-                        selected.includes(option.value)
+      working.includes(option.value)
                           ? 'bg-brand-green-500 border-brand-green-500'
                           : 'border-brand-gray-300 group-hover:border-brand-green-400'
                       }`}>
-                        {selected.includes(option.value) && (
+      {working.includes(option.value) && (
                           <Check className="w-3 h-3 text-white" />
                         )}
                       </div>
@@ -205,13 +261,13 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
             </div>
 
             {/* Footer */}
-            <div className="p-4 border-t border-brand-gray-100 bg-brand-gray-50">
+            <div className="p-4 border-t border-brand-gray-100 bg-brand-gray-50 rounded-b-3xl">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-brand-gray-600">
-                  {selected.length} of {options.length} banks selected
+                  {working.length} of {options.length} banks selected
                 </span>
                 <button
-                  onClick={() => setIsOpen(false)}
+                  onClick={(e) => { e.stopPropagation(); if(deferCommit){ onChange(working); } closeDropdown(); }}
                   className="bg-gradient-green text-white px-4 py-2 rounded-xl font-semibold text-sm shadow-glow-green hover:scale-105 active:scale-95 transition-all duration-300"
                 >
                   Done
@@ -219,8 +275,10 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
               </div>
             </div>
           </div>
-        </>
-      )}
+        </div>
+      </>);
+      })(), document.body)
+      }
     </div>
   );
 };

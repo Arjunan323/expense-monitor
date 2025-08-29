@@ -1,0 +1,2 @@
+ALTER TABLE spending_alerts ADD COLUMN IF NOT EXISTS txn_id BIGINT;
+ALTER TABLE spending_alerts ADD COLUMN IF NOT EXISTS metadata TEXT;

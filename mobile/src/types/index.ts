@@ -151,3 +151,159 @@ export interface ErrorResponse {
   code: string;
   details?: string[];
 }
+
+// Spending Alerts Types
+export interface SpendingAlertDto {
+  id: number;
+  type: 'large_transaction' | 'new_merchant' | 'frequency' | 'category_spike' | string;
+  severity: 'moderate' | 'critical' | string;
+  title: string;
+  description?: string;
+  amount?: number;
+  merchant?: string;
+  category?: string;
+  date?: string;
+  reason?: string;
+  acknowledged: boolean;
+  acknowledgedAt?: string | null;
+  dismissed: boolean;
+  dismissedAt?: string | null;
+  createdAt: string;
+  txnId?: number | null;
+  metadata?: string | null;
+}
+
+export interface SpendingAlertSummaryDto {
+  criticalOpen: number;
+  moderateOpen: number;
+  acknowledged: number;
+  total: number;
+  generated?: number | null;
+  lastGeneratedAt?: string | null;
+}
+
+// Goals Types
+export interface GoalDto {
+  id: number;
+  title: string;
+  description?: string;
+  targetAmount: number;
+  currentAmount: number;
+  targetDate: string;
+  category: string;
+  icon?: string;
+  color?: string;
+  monthlyContribution?: number;
+}
+
+export interface GoalStatsDto {
+  totalGoals: number;
+  activeGoals: number;
+  completedGoals: number;
+  totalSaved: number;
+  monthlyTarget: number;
+  averageProgressPercent: number;
+}
+
+// Forecast Types
+export interface ForecastResponse {
+  actuals: { month: string; projectedNet: number }[];
+  projections: { month: string; projectedNet: number }[];
+  method: string;
+  summary: {
+    averageNet: number;
+    lastMonthNet: number;
+    projectedNextMonth: number;
+    projectedPeriodTotal: number;
+    historyMonths: number;
+    futureMonths: number;
+  };
+}
+
+export interface UpcomingApiDto {
+  id: number;
+  description: string;
+  amount: number;
+  dueDate: string;
+  category?: string;
+  status: string;
+  recurring: boolean;
+  flowType?: 'INCOME' | 'EXPENSE';
+}
+
+// Budget Types
+export interface BudgetCategoryUsageDto {
+  id: number;
+  name: string;
+  monthlyBudget: number;
+  spent: number;
+  icon: string;
+  color: string;
+  progressPercent: number;
+  over: boolean;
+  near: boolean;
+  remaining: number;
+}
+
+export interface BudgetSummaryResponse {
+  month: string;
+  categories: BudgetCategoryUsageDto[];
+  totals: {
+    totalBudget: number;
+    totalSpent: number;
+    overBudgetCount: number;
+    overallProgressPercent: number;
+  };
+  history: {
+    thisMonthAdherence: number;
+    lastMonthAdherence: number;
+    avg6MonthsAdherence: number;
+  };
+}
+
+// Tax Types
+export interface TaxTransactionDto {
+  id: number;
+  taxYear: number | null;
+  category: string | null;
+  amount: number | null;
+  paidDate: string | null;
+  note: string | null;
+  deductible: boolean | null;
+  hasReceipt: boolean | null;
+  classificationStatus?: string | null;
+}
+
+export interface TaxCategoryUsageDto {
+  code: string;
+  description: string;
+  annualLimit: number | null;
+  used: number;
+  remaining: number;
+  percentUsed: number;
+  overLimit: boolean;
+  nearLimit: boolean;
+}
+
+export interface TaxSummaryDto {
+  year: number | null;
+  totalDeductible: number;
+  estimatedTaxSavings: number;
+  missingReceipts: number;
+  categories: TaxCategoryUsageDto[];
+}
+
+export interface TaxDeductionChecklistItem {
+  id: number;
+  item: string;
+  category?: string;
+  checked?: boolean;
+  amount?: string;
+}
+
+export interface TaxSavingTip {
+  id: number;
+  title: string;
+  message: string;
+  icon?: string;
+}

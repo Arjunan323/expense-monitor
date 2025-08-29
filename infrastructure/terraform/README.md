@@ -1,4 +1,4 @@
-# Expense Monitor Extraction Pipeline (Terraform Skeleton)
+# CutTheSpend Extraction Pipeline (Terraform Skeleton)
 
 This Terraform module provisions the AWS resources for the statement extraction pipeline:
 

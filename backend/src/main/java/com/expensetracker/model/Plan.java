@@ -3,8 +3,8 @@ package com.expensetracker.model;
 import jakarta.persistence.*;
 
 @Entity
-@Table(name = "plans", 
-uniqueConstraints = @UniqueConstraint(columnNames = {"planType", "region"})
+@Table(name = "plans",
+uniqueConstraints = @UniqueConstraint(columnNames = {"plan_type", "region", "billing_period"})
 )
 public class Plan {
     @Id
@@ -12,7 +12,7 @@ public class Plan {
     private Long id;
 
 
-    @Column(nullable = false)
+    @Column(name = "plan_type", nullable = false)
     private String planType; // FREE, PRO, PREMIUM
 
     @Column(nullable = false)
@@ -20,6 +20,9 @@ public class Plan {
 
     @Column(nullable = false)
     private String currency; // e.g. INR, USD, EUR
+
+    @Column(name = "billing_period", nullable = false, length = 16)
+    private String billingPeriod = "MONTHLY"; // MONTHLY | YEARLY
 
     private int amount; // in paise (INR)
     private int statementsPerMonth;
@@ -46,4 +49,6 @@ public class Plan {
     public void setFeatures(String features) { this.features = features; }
     public Integer getCombinedBank() { return combinedBank; }
     public void setCombinedBank(Integer combinedBank) { this.combinedBank = combinedBank; }
+    public String getBillingPeriod() { return billingPeriod; }
+    public void setBillingPeriod(String billingPeriod) { this.billingPeriod = billingPeriod; }
 }

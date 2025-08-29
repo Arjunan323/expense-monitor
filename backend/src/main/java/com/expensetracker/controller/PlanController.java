@@ -13,9 +13,11 @@ public class PlanController {
     private PlanRepository planRepository;
 
     @GetMapping
-    public List<Plan> getPlans(@RequestParam(value = "region", required = false) String region) {
-        if (region == null || region.isEmpty()) {
-            region = "IN"; // Default region
+    public List<Plan> getPlans(@RequestParam(value = "region", required = false) String region,
+                               @RequestParam(value = "billingPeriod", required = false) String billingPeriod) {
+        if (region == null || region.isEmpty()) region = "IN";
+        if (billingPeriod != null && !billingPeriod.isBlank()) {
+            return planRepository.findByRegionAndBillingPeriod(region, billingPeriod.toUpperCase());
         }
         return planRepository.findByRegion(region);
     }

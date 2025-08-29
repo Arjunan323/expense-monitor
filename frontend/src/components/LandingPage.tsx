@@ -24,7 +24,9 @@ import {
   Sparkles,
   Heart,
   DollarSign,
-  TrendingDown
+  TrendingDown,
+  Crown,
+  Check
 } from 'lucide-react';
 import { AboutUsSection } from './AboutUs';
 import { FAQSection } from './FAQ';
@@ -34,6 +36,23 @@ import { PrivacyPolicySection } from './PrivacyPolicy';
 import { TermsSection } from './TermsOfService';
 import { Modal } from './ui/Modal';
 import BrandLogo from './ui/BrandLogo';
+
+interface Plan {
+  id: string;
+  planType: string;
+  name: string;
+  price: number;
+  currency: string;
+  period: string;
+  description: string;
+  statementsLimit: string;
+  pagesPerStatement: string;
+  features: string[];
+  popular?: boolean;
+  buttonText: string;
+  buttonVariant: 'secondary' | 'primary' | 'premium';
+  combinedBank?: number;
+}
 
 export const LandingPage: React.FC = () => {
   const navigate = useNavigate();
@@ -45,14 +64,38 @@ export const LandingPage: React.FC = () => {
   const [contactForm, setContactForm] = useState({ name: '', email: '', message: '' });
   const [contactSubmitting, setContactSubmitting] = useState(false);
   const [contactSent, setContactSent] = useState(false);
-  const [plans, setPlans] = useState<any[]>([]);
+  const [plans, setPlans] = useState<Plan[]>([]);
   const [plansLoading, setPlansLoading] = useState(false);
   const [plansError, setPlansError] = useState<string | null>(null);
+  
+  // Enhanced subscription toggle
+  const [billingPeriod, setBillingPeriod] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
+  const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
+  const [showPlanComparison, setShowPlanComparison] = useState(false);
 
-  const handleEmailSubmit = (e: React.FormEvent) => {
+  const [emailStatus, setEmailStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [emailError, setEmailError] = useState<string | null>(null);
+
+  const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Email submitted:', email);
-    setEmail('');
+    if(!email) return;
+    try {
+      setEmailStatus('loading');
+      setEmailError(null);
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/public/newsletter-subscriptions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, source: 'landing_page' })
+      });
+      if(!res.ok) throw new Error('Subscription failed');
+      setEmailStatus('success');
+      setEmail('');
+      setTimeout(()=> setEmailStatus('idle'), 4000);
+    } catch(err:any){
+      setEmailStatus('error');
+      setEmailError(err.message || 'Failed');
+      setTimeout(()=> setEmailStatus('idle'), 5000);
+    }
   };
 
   useEffect(() => {
@@ -60,25 +103,133 @@ export const LandingPage: React.FC = () => {
       try {
         setPlansLoading(true);
         setPlansError(null);
-        let region = '';
+        let region = 'IN';
         if (navigator.language && navigator.language.includes('-')) {
           region = navigator.language.split('-')[1].toUpperCase();
         }
-        if (!region) region = 'IN';
-        const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/public/plans?region=${region}`);
+        const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+        const res = await fetch(`${apiBase}/public/plans?region=${region}&billingPeriod=${billingPeriod}`);
         if (!res.ok) throw new Error('Failed to load plans');
         const data = await res.json();
+        
+        const planLabels: Record<string, Partial<Plan>> = {
+          FREE: {
+            name: 'Free Plan',
+            description: 'Perfect for getting started',
+            buttonText: 'Get Started Free',
+            buttonVariant: 'secondary',
+          },
+          PRO: {
+            name: 'Pro Plan',
+            description: 'For power users and small businesses',
+            buttonText: 'Start Pro Trial',
+            buttonVariant: 'primary',
+            popular: true,
+          },
+          PREMIUM: {
+            name: 'Premium Plan',
+            description: 'For heavy users and enterprises',
+            buttonText: 'Go Premium',
+            buttonVariant: 'premium',
+          },
+        };
+
+        const mapped: Plan[] = data.map((variant: any) => {
+          const label = planLabels[variant.planType] || {};
+          return {
+            id: variant.planType,
+            planType: variant.planType,
+            ...label,
+            price: variant.amount / 100,
+            currency: variant.currency === 'INR' ? 'INR' : variant.currency === 'USD' ? 'USD' : variant.currency,
+            period: billingPeriod === 'YEARLY' ? 'year' : 'month',
+            statementsLimit: variant.statementsPerMonth === -1 ? 'Unlimited' : String(variant.statementsPerMonth),
+            pagesPerStatement: variant.pagesPerStatement === -1 ? 'Unlimited' : String(variant.pagesPerStatement),
+            features: (variant.features || '').split(',').map((f: string) => f.trim()).filter(Boolean),
+            combinedBank: variant.combinedBank || (variant.planType === 'FREE' ? 2 : variant.planType === 'PRO' ? 3 : 5)
+          } as Plan;
+        });
+
         const rank: Record<string, number> = { FREE: 0, PRO: 1, PREMIUM: 2 };
-        data.sort((a: any, b: any) => (rank[a.planType] ?? 99) - (rank[b.planType] ?? 99));
-        setPlans(data);
+        mapped.sort((a, b) => (rank[a.planType] ?? 99) - (rank[b.planType] ?? 99));
+        setPlans(mapped);
       } catch (e: any) {
         setPlansError(e.message || 'Unable to load plans');
+        // Fallback plans
+        setPlans([
+          {
+            id: 'FREE',
+            planType: 'FREE',
+            name: 'Free Plan',
+            price: 0,
+            currency: 'INR',
+            period: 'forever',
+            description: 'Perfect for getting started',
+            statementsLimit: '3',
+            pagesPerStatement: '10',
+            features: ['AI Parsing', 'Basic Dashboard', 'Email Support'],
+            buttonText: 'Get Started Free',
+            buttonVariant: 'secondary',
+            combinedBank: 2
+          },
+          {
+            id: 'PRO',
+            planType: 'PRO',
+            name: 'Pro Plan',
+            price: 199,
+            currency: 'INR',
+            period: billingPeriod === 'YEARLY' ? 'year' : 'month',
+            description: 'For power users and small businesses',
+            statementsLimit: '5',
+            pagesPerStatement: '50',
+            features: ['AI Parsing', 'Advanced Analytics', 'Budget Tracking', 'Priority Support'],
+            popular: true,
+            buttonText: 'Start Pro Trial',
+            buttonVariant: 'primary',
+            combinedBank: 3
+          },
+          {
+            id: 'PREMIUM',
+            planType: 'PREMIUM',
+            name: 'Premium Plan',
+            price: 499,
+            currency: 'INR',
+            period: billingPeriod === 'YEARLY' ? 'year' : 'month',
+            description: 'For heavy users and enterprises',
+            statementsLimit: 'Unlimited',
+            pagesPerStatement: '100',
+            features: ['Everything in Pro', 'Forecasting', 'Goals', 'Tax Categorization', 'Early Access'],
+            buttonText: 'Go Premium',
+            buttonVariant: 'premium',
+            combinedBank: 5
+          }
+        ]);
       } finally {
         setPlansLoading(false);
       }
     };
     fetchPlans();
-  }, []);
+  }, [billingPeriod]);
+
+  const currencySymbol = (code: string) => {
+    switch (code) {
+      case 'INR': return '₹';
+      case 'USD': return '$';
+      case 'EUR': return '€';
+      default: return code;
+    }
+  };
+
+  const handlePlanSelect = (planId: string) => {
+    setSelectedPlan(planId);
+    if (planId === 'FREE') {
+      navigate('/login');
+    } else {
+      // Store selected plan and billing period for checkout
+      localStorage.setItem('selectedPlan', JSON.stringify({ planId, billingPeriod }));
+      navigate('/login');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-white">
@@ -87,9 +238,8 @@ export const LandingPage: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-18">
             <div className="logo-container pt-4">
-              <div className="">
-                <BrandLogo className="w-8 h-10" size={40} />
-                <Scissors className="w-6 h-6 text-white hidden" />
+              <div className="logo-icon">
+                <BrandLogo className="w-8 h-8" size={32} />
               </div>
               <div>
                 <span className="logo-text">CutTheSpend</span>
@@ -295,63 +445,391 @@ export const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* User Experience Preview */}
-      <section className="py-20 bg-gradient-to-br from-brand-gray-50 to-white">
+      {/* How It Works */}
+      <section id="how-it-works" className="py-20 bg-gradient-to-br from-brand-green-50 to-secondary-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <div className="inline-flex items-center bg-gradient-funky text-white px-4 py-2 rounded-full text-sm font-semibold mb-6 animate-bounce-gentle">
-              <Heart className="w-4 h-4 mr-2" />
-              Easy to Use
+              <Play className="w-4 h-4 mr-2" />
+              How It Works
             </div>
             <h2 className="section-title">
-              Get started in minutes
+              Three simple steps to financial freedom
             </h2>
             <p className="section-subtitle">
-              Our intuitive interface makes expense tracking fun and effortless. See how easy it is to start saving.
+              Start cutting expenses and saving money in just minutes
             </p>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            <div className="relative">
-              <img
-                src="https://images.pexels.com/photos/265087/pexels-photo-265087.jpeg?auto=compress&cs=tinysrgb&w=800"
-                alt="Dashboard Interface"
-                className="rounded-3xl shadow-funky-lg transform hover:scale-105 transition-transform duration-500"
-              />
-              {/* Floating UI Elements */}
-              <div className="absolute -top-4 -right-4 bg-gradient-green text-white p-3 rounded-2xl shadow-glow-green animate-float">
-                <span className="font-mono font-bold">₹2,450</span>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="text-center group">
+              <div className="w-24 h-24 bg-gradient-green rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-glow-green group-hover:animate-bounce-gentle">
+                <Users className="w-12 h-12 text-white" />
               </div>
-              <div className="absolute -bottom-4 -left-4 bg-gradient-yellow text-brand-gray-900 p-3 rounded-2xl shadow-glow-yellow animate-float" style={{ animationDelay: '1s' }}>
-                <span className="font-mono font-bold">Saved!</span>
+              <h3 className="text-xl font-heading font-bold text-brand-gray-900 mb-3">1. Create Your Account</h3>
+              <p className="text-brand-gray-600">
+                Sign up for free in seconds. No credit card required to start your savings journey.
+              </p>
+            </div>
+
+            <div className="text-center group">
+              <div className="w-24 h-24 bg-gradient-blue rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-glow-blue group-hover:animate-bounce-gentle">
+                <Upload className="w-12 h-12 text-white" />
+              </div>
+              <h3 className="text-xl font-heading font-bold text-brand-gray-900 mb-3">2. Upload Bank Statements</h3>
+              <p className="text-brand-gray-600">
+                Upload PDF statements from any bank. Our AI extracts and categorizes everything automatically.
+              </p>
+            </div>
+
+            <div className="text-center group">
+              <div className="w-24 h-24 bg-gradient-yellow rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-glow-yellow group-hover:animate-bounce-gentle">
+                <Scissors className="w-12 h-12 text-brand-gray-900" />
+              </div>
+              <h3 className="text-xl font-heading font-bold text-brand-gray-900 mb-3">3. Cut & Save</h3>
+              <p className="text-brand-gray-600">
+                Get insights, cut unnecessary expenses, and watch your savings grow month after month.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Enhanced Pricing Plans */}
+      <section id="pricing" className="py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <div className="inline-flex items-center bg-gradient-funky text-white px-4 py-2 rounded-full text-sm font-semibold mb-6 animate-bounce-gentle">
+              <DollarSign className="w-4 h-4 mr-2" />
+              Simple Pricing
+            </div>
+            <h2 className="section-title">
+              Choose your savings plan
+            </h2>
+            <p className="section-subtitle">
+              Start free and upgrade as you save more. All plans include our core expense cutting features.
+            </p>
+          </div>
+
+          {/* Enhanced Billing Period Toggle */}
+          <div className="flex justify-center mb-10">
+            <div className="relative inline-flex rounded-3xl border-2 border-brand-gray-200 overflow-hidden shadow-funky bg-white p-2">
+              <div className="absolute inset-0 bg-gradient-funky opacity-10 rounded-3xl"></div>
+              {(['MONTHLY','YEARLY'] as const).map(p => (
+                <button
+                  key={p}
+                  onClick={() => setBillingPeriod(p)}
+                  className={`relative z-10 px-8 py-4 text-sm font-bold rounded-2xl transition-all duration-300 ${
+                    p === billingPeriod 
+                      ? 'bg-gradient-green text-white shadow-glow-green transform scale-105' 
+                      : 'text-brand-gray-600 hover:text-brand-green-600 hover:bg-brand-green-50 hover:scale-102'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2">
+                    <span className="text-lg">{p === 'MONTHLY' ? '📅' : '🎯'}</span>
+                    <span>{p === 'MONTHLY' ? 'Monthly' : 'Yearly'}</span>
+                  </div>
+                  {p === 'YEARLY' && (
+                    <div className="absolute -top-2 -right-2 bg-accent-500 text-brand-gray-900 text-xs px-2 py-1 rounded-full font-bold animate-pulse">
+                      Save 17% 🎉
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Savings Highlight for Yearly */}
+          {billingPeriod === 'YEARLY' && (
+            <div className="text-center mb-8 animate-fade-in">
+              <div className="inline-flex items-center bg-gradient-to-r from-accent-100 to-brand-green-100 border border-accent-300 text-accent-800 px-6 py-3 rounded-full text-sm font-bold shadow-glow-yellow">
+                <Sparkles className="w-4 h-4 mr-2 animate-wiggle" />
+                <span>🎉 Yearly plans include 2 months FREE! That's like getting 17% off! 💰</span>
               </div>
             </div>
-            <div className="space-y-8">
-              <div className="flex items-start space-x-4">
-                <div className="w-12 h-12 bg-gradient-green rounded-2xl flex items-center justify-center flex-shrink-0 shadow-glow-green">
-                  <span className="text-white font-bold text-lg">1</span>
+          )}
+
+          {/* Feature Comparison Toggle */}
+          <div className="text-center mb-8">
+            <button
+              onClick={() => setShowPlanComparison(!showPlanComparison)}
+              className="btn-secondary flex items-center space-x-2 mx-auto"
+            >
+              <BarChart3 className="w-4 h-4" />
+              <span>{showPlanComparison ? 'Hide' : 'Show'} Feature Comparison</span>
+            </button>
+          </div>
+
+          {/* Feature Comparison Table */}
+          {showPlanComparison && (
+            <div className="mb-12 animate-slide-up">
+              <div className="card-funky overflow-hidden">
+                <div className="bg-gradient-funky text-white p-6 text-center">
+                  <h3 className="text-2xl font-heading font-bold mb-2">📊 Feature Comparison</h3>
+                  <p className="text-white/90">See what's included in each plan</p>
                 </div>
-                <div>
-                  <h3 className="text-xl font-heading font-bold text-brand-gray-900 mb-2">Upload Your Statements</h3>
-                  <p className="text-brand-gray-600">Simply drag and drop your PDF bank statements. Our AI will extract and categorize everything automatically.</p>
+                <div className="p-6">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-brand-gray-200">
+                          <th className="text-left py-4 px-4 font-semibold text-brand-gray-900">Features</th>
+                          <th className="text-center py-4 px-4 font-semibold text-brand-gray-900">Free</th>
+                          <th className="text-center py-4 px-4 font-semibold text-brand-green-600">Pro</th>
+                          <th className="text-center py-4 px-4 font-semibold text-purple-600">Premium</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[
+                          { feature: '🤖 AI Parsing & Categorization', free: true, pro: true, premium: true },
+                        { feature: '📊 Basic Dashboard (3mo)', free: true, pro: true, premium: false },
+                        { feature: '📈 Advanced Analytics (12mo)', free: false, pro: true, premium: true },
+                        { feature: '🎯 Budget Tracking & Alerts', free: false, pro: true, premium: true },
+                        { feature: '📉 Spending Trends', free: true, pro: true, premium: true },
+                        { feature: '🔮 Cash Flow Forecasting', free: false, pro: false, premium: true },
+                        { feature: '🏆 Goal Tracking', free: false, pro: false, premium: true },
+                        { feature: '📋 Tax Categorization', free: false, pro: false, premium: true },
+                        { feature: '⚡ Priority Support', free: false, pro: true, premium: true },
+                        { feature: '🚀 Early Access Features', free: false, pro: false, premium: true },
+                        ].map((row, index) => (
+                          <tr key={index} className="border-b border-brand-gray-100 hover:bg-brand-gray-50 transition-colors duration-200">
+                            <td className="py-4 px-4 font-medium text-brand-gray-900">{row.feature}</td>
+                            <td className="text-center py-4 px-4">
+                              {row.free ? (
+                                <CheckCircle className="w-5 h-5 text-brand-green-500 mx-auto" />
+                              ) : (
+                                <X className="w-5 h-5 text-brand-gray-300 mx-auto" />
+                              )}
+                            </td>
+                            <td className="text-center py-4 px-4">
+                              {row.pro ? (
+                                <CheckCircle className="w-5 h-5 text-brand-green-500 mx-auto" />
+                              ) : (
+                                <X className="w-5 h-5 text-brand-gray-300 mx-auto" />
+                              )}
+                            </td>
+                            <td className="text-center py-4 px-4">
+                              {row.premium ? (
+                                <CheckCircle className="w-5 h-5 text-purple-500 mx-auto" />
+                              ) : (
+                                <X className="w-5 h-5 text-brand-gray-300 mx-auto" />
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
-              <div className="flex items-start space-x-4">
-                <div className="w-12 h-12 bg-gradient-blue rounded-2xl flex items-center justify-center flex-shrink-0 shadow-glow-blue">
-                  <span className="text-white font-bold text-lg">2</span>
-                </div>
-                <div>
-                  <h3 className="text-xl font-heading font-bold text-brand-gray-900 mb-2">Discover Spending Patterns</h3>
-                  <p className="text-brand-gray-600">Watch as transactions are automatically sorted and analyzed to reveal where your money really goes.</p>
-                </div>
+            </div>
+          )}
+
+          {/* Plans Grid */}
+
+          {billingPeriod === 'YEARLY' && (
+            <div className="text-center mb-8">
+              <div className="inline-flex items-center bg-accent-100 text-accent-800 px-4 py-2 rounded-full text-sm font-semibold">
+                <Sparkles className="w-4 h-4 mr-2" />
+                Yearly plans include 2 months free (10× monthly price)
               </div>
-              <div className="flex items-start space-x-4">
-                <div className="w-12 h-12 bg-gradient-yellow rounded-2xl flex items-center justify-center flex-shrink-0 shadow-glow-yellow">
-                  <span className="text-brand-gray-900 font-bold text-lg">3</span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {plansLoading && (
+              <div className="col-span-3 text-center py-12">
+                <div className="w-12 h-12 bg-brand-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <div className="animate-spin w-6 h-6 border-2 border-brand-green-500 border-t-transparent rounded-full"></div>
                 </div>
-                <div>
-                  <h3 className="text-xl font-heading font-bold text-brand-gray-900 mb-2">Start Saving More</h3>
-                  <p className="text-brand-gray-600">Get personalized recommendations and track your progress as you cut unnecessary expenses.</p>
+                <p className="text-brand-gray-500">Loading plans...</p>
+              </div>
+            )}
+            
+            {plansError && (
+              <div className="col-span-3 text-center py-12">
+                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <X className="w-6 h-6 text-red-500" />
+                </div>
+                <p className="text-red-600 text-sm">{plansError}</p>
+              </div>
+            )}
+            
+            {!plansLoading && !plansError && plans.map(plan => (
+              <div
+                key={plan.id}
+                className={`relative card-funky p-8 flex flex-col transition-all duration-300 hover:scale-105 ${
+                  plan.popular 
+                    ? 'border-brand-green-400 ring-4 ring-brand-green-200 shadow-glow-green' 
+                    : selectedPlan === plan.id
+                    ? 'border-accent-400 ring-4 ring-accent-200 shadow-glow-yellow'
+                    : 'border-brand-gray-200 hover:border-brand-green-300 hover:shadow-funky-lg'
+                }`}
+              >
+                {/* Savings Badge for Yearly */}
+                {billingPeriod === 'YEARLY' && plan.planType !== 'FREE' && (
+                  <div className="absolute -top-3 -right-3 bg-gradient-to-r from-accent-400 to-accent-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-glow-yellow animate-pulse">
+                    2 Months FREE! 🎁
+                  </div>
+                )}
+
+                {plan.popular && (
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-green text-white text-sm font-bold px-4 py-2 rounded-full shadow-glow-green animate-bounce-gentle">
+                    <Star className="w-4 h-4 mr-1 inline" />
+                    Most Popular
+                  </div>
+                )}
+
+                <div className="text-center mb-6">
+                  <div className="w-16 h-16 bg-gradient-funky rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-glow-green">
+                    {plan.planType === 'FREE' && <Zap className="w-8 h-8 text-white" />}
+                    {plan.planType === 'PRO' && <Target className="w-8 h-8 text-white" />}
+                    {plan.planType === 'PREMIUM' && <Crown className="w-8 h-8 text-white" />}
+                  </div>
+                  <h3 className="text-2xl font-heading font-bold text-brand-gray-900 mb-2">{plan.name}</h3>
+                  <p className="text-brand-gray-600">{plan.description}</p>
+                </div>
+
+                <div className="text-center mb-6">
+                  <div className="flex items-end justify-center mb-2">
+                    <span className="text-2xl font-bold text-brand-gray-600">{currencySymbol(plan.currency)}</span>
+                    <span className="text-5xl font-heading font-bold text-brand-gray-900 ml-1">{plan.price}</span>
+                    <span className="text-brand-gray-500 ml-2 mb-2">/{plan.period}</span>
+                  </div>
+                  <div className="space-y-2">
+                    {billingPeriod === 'YEARLY' && plan.planType !== 'FREE' && (
+                      <div className="inline-flex items-center bg-gradient-to-r from-accent-100 to-brand-green-100 text-accent-800 px-4 py-2 rounded-full text-sm font-bold border border-accent-200">
+                        <Sparkles className="w-4 h-4 mr-2 animate-wiggle" />
+                        <span>2 months FREE included! 🎉</span>
+                      </div>
+                    )}
+                    {plan.planType === 'FREE' && (
+                      <div className="inline-flex items-center bg-brand-green-100 text-brand-green-800 px-4 py-2 rounded-full text-sm font-bold">
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        <span>Forever Free 💚</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Plan Limits */}
+                <div className="space-y-3 mb-6">
+                  <div className="flex items-center justify-between p-3 bg-brand-gray-50 rounded-2xl">
+                    <div className="flex items-center space-x-2">
+                      <Upload className="w-4 h-4 text-brand-gray-500" />
+                      <span className="text-sm font-medium text-brand-gray-700">Statements/month</span>
+                    </div>
+                    <span className="text-sm font-bold text-brand-gray-900">{plan.statementsLimit}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-brand-gray-50 rounded-2xl">
+                    <div className="flex items-center space-x-2">
+                      <BarChart3 className="w-4 h-4 text-brand-gray-500" />
+                      <span className="text-sm font-medium text-brand-gray-700">Pages per statement</span>
+                    </div>
+                    <span className="text-sm font-bold text-brand-gray-900">up to {plan.pagesPerStatement}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-brand-gray-50 rounded-2xl">
+                    <div className="flex items-center space-x-2">
+                      <Shield className="w-4 h-4 text-brand-gray-500" />
+                      <span className="text-sm font-medium text-brand-gray-700">Bank accounts</span>
+                    </div>
+                    <span className="text-sm font-bold text-brand-gray-900">up to {plan.combinedBank}</span>
+                  </div>
+                </div>
+
+                {/* Features List */}
+                <div className="mb-8 flex-1">
+                  <ul className="space-y-3">
+                    {plan.features.map((feature, index) => (
+                      <li key={index} className="flex items-start space-x-3">
+                        <div className="w-5 h-5 bg-gradient-green rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <Check className="w-3 h-3 text-white" />
+                        </div>
+                        <span className="text-sm text-brand-gray-700 leading-relaxed">{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* Action Button */}
+                <button
+                  onClick={() => handlePlanSelect(plan.id)}
+                  className={`w-full py-4 px-6 rounded-2xl font-bold text-lg transition-all duration-300 flex items-center justify-center space-x-2 ${
+                    plan.buttonVariant === 'primary'
+                      ? 'bg-gradient-green text-white shadow-glow-green hover:scale-105 active:scale-95'
+                      : plan.buttonVariant === 'premium'
+                      ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-glow-blue hover:scale-105 active:scale-95'
+                      : 'bg-brand-gray-100 text-brand-gray-700 hover:bg-brand-gray-200'
+                  }`}
+                >
+                  {plan.planType === 'PREMIUM' && <Crown className="w-5 h-5" />}
+                  {plan.planType === 'PRO' && <Target className="w-5 h-5" />}
+                  {plan.planType === 'FREE' && <Sparkles className="w-5 h-5" />}
+                  <span>{plan.buttonText}</span>
+                  <ArrowRight className="w-5 h-5" />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {/* Plan Comparison Table */}
+          <div className="mt-16">
+            <div className="card-funky overflow-hidden">
+              <div className="bg-gradient-funky text-white p-6 text-center">
+                <h3 className="text-2xl font-heading font-bold mb-2">📊 Feature Comparison</h3>
+                <p className="text-white/90">See what's included in each plan</p>
+              </div>
+              <div className="p-6">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-brand-gray-200">
+                        <th className="text-left py-4 px-4 font-semibold text-brand-gray-900">Features</th>
+                        <th className="text-center py-4 px-4 font-semibold text-brand-gray-900">Free</th>
+                        <th className="text-center py-4 px-4 font-semibold text-brand-green-600">Pro</th>
+                        <th className="text-center py-4 px-4 font-semibold text-purple-600">Premium</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[
+                        { feature: '🤖 AI Parsing & Categorization', free: true, pro: true, premium: true },
+                        { feature: '📊 Basic Dashboard (3mo)', free: true, pro: false, premium: false },
+                        { feature: '📈 Advanced Analytics (12mo)', free: false, pro: true, premium: true },
+                        { feature: '🎯 Budget Tracking & Alerts', free: false, pro: true, premium: true },
+                        { feature: '📉 Spending Trends', free: true, pro: true, premium: true },
+                        { feature: '🔮 Cash Flow Forecasting', free: false, pro: false, premium: true },
+                        { feature: '🏆 Goal Tracking', free: false, pro: false, premium: true },
+                        { feature: '📋 Tax Categorization', free: false, pro: false, premium: true },
+                        { feature: '⚡ Priority Support', free: false, pro: true, premium: true },
+                        { feature: '🚀 Early Access Features', free: false, pro: false, premium: true },
+                      ].map((row, index) => (
+                        <tr key={index} className="border-b border-brand-gray-100 hover:bg-brand-gray-50">
+                          <td className="py-4 px-4 font-medium text-brand-gray-900">{row.feature}</td>
+                          <td className="text-center py-4 px-4">
+                            {row.free ? (
+                              <CheckCircle className="w-5 h-5 text-brand-green-500 mx-auto" />
+                            ) : (
+                              <X className="w-5 h-5 text-brand-gray-300 mx-auto" />
+                            )}
+                          </td>
+                          <td className="text-center py-4 px-4">
+                            {row.pro ? (
+                              <CheckCircle className="w-5 h-5 text-brand-green-500 mx-auto" />
+                            ) : (
+                              <X className="w-5 h-5 text-brand-gray-300 mx-auto" />
+                            )}
+                          </td>
+                          <td className="text-center py-4 px-4">
+                            {row.premium ? (
+                              <CheckCircle className="w-5 h-5 text-purple-500 mx-auto" />
+                            ) : (
+                              <X className="w-5 h-5 text-brand-gray-300 mx-auto" />
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
@@ -360,7 +838,7 @@ export const LandingPage: React.FC = () => {
       </section>
 
       {/* Testimonials */}
-      <section className="py-20 bg-white">
+      <section className="py-20 bg-gradient-to-br from-brand-gray-50 to-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <div className="inline-flex items-center bg-gradient-funky text-white px-4 py-2 rounded-full text-sm font-semibold mb-6 animate-bounce-gentle">
@@ -445,117 +923,6 @@ export const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* How It Works */}
-      <section id="how-it-works" className="py-20 bg-gradient-to-br from-brand-green-50 to-secondary-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <div className="inline-flex items-center bg-gradient-funky text-white px-4 py-2 rounded-full text-sm font-semibold mb-6 animate-bounce-gentle">
-              <Play className="w-4 h-4 mr-2" />
-              How It Works
-            </div>
-            <h2 className="section-title">
-              Three simple steps to financial freedom
-            </h2>
-            <p className="section-subtitle">
-              Start cutting expenses and saving money in just minutes
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="text-center group">
-              <div className="w-24 h-24 bg-gradient-green rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-glow-green group-hover:animate-bounce-gentle">
-                <Users className="w-12 h-12 text-white" />
-              </div>
-              <h3 className="text-xl font-heading font-bold text-brand-gray-900 mb-3">1. Create Your Account</h3>
-              <p className="text-brand-gray-600">
-                Sign up for free in seconds. No credit card required to start your savings journey.
-              </p>
-            </div>
-
-            <div className="text-center group">
-              <div className="w-24 h-24 bg-gradient-blue rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-glow-blue group-hover:animate-bounce-gentle">
-                <Upload className="w-12 h-12 text-white" />
-              </div>
-              <h3 className="text-xl font-heading font-bold text-brand-gray-900 mb-3">2. Upload Bank Statements</h3>
-              <p className="text-brand-gray-600">
-                Upload PDF statements from any bank. Our AI extracts and categorizes everything automatically.
-              </p>
-            </div>
-
-            <div className="text-center group">
-              <div className="w-24 h-24 bg-gradient-yellow rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-glow-yellow group-hover:animate-bounce-gentle">
-                <Scissors className="w-12 h-12 text-brand-gray-900" />
-              </div>
-              <h3 className="text-xl font-heading font-bold text-brand-gray-900 mb-3">3. Cut & Save</h3>
-              <p className="text-brand-gray-600">
-                Get insights, cut unnecessary expenses, and watch your savings grow month after month.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Pricing Plans */}
-      <section id="pricing" className="py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <div className="inline-flex items-center bg-gradient-funky text-white px-4 py-2 rounded-full text-sm font-semibold mb-6 animate-bounce-gentle">
-              <DollarSign className="w-4 h-4 mr-2" />
-              Simple Pricing
-            </div>
-            <h2 className="section-title">
-              Choose your savings plan
-            </h2>
-            <p className="section-subtitle">
-              Start free and upgrade as you save more. All plans include our core expense cutting features.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {plansLoading && <div className="col-span-3 text-center text-gray-500">Loading plans...</div>}
-            {plansError && <div className="col-span-3 text-center text-red-600 text-sm">{plansError}</div>}
-            {!plansLoading && !plansError && plans.map(p => {
-              const price = (p.amount / 100).toFixed(0);
-              const statements = p.statementsPerMonth === -1 ? 'Unlimited' : p.statementsPerMonth;
-              const pages = p.pagesPerStatement === -1 ? 'Unlimited' : p.pagesPerStatement;
-              const featureList = (p.features || '').split(',').map((f: string) => f.trim()).filter(Boolean);
-              const popular = p.planType === 'PRO';
-              return (
-                <div key={p.id} className={`relative card-funky p-6 flex flex-col ${popular ? 'border-primary-400 ring-2 ring-primary-300' : ''}`}>
-                  {popular && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary-600 text-white text-xs font-semibold px-3 py-1 rounded-full shadow">Most Popular</div>
-                  )}
-                  <div className="mb-4 text-center">
-                    <h3 className="text-xl font-bold text-gray-900 mb-2">{p.planType.charAt(0) + p.planType.slice(1).toLowerCase()} Plan</h3>
-                    <p className="text-gray-600 text-sm">{p.planType === 'FREE' ? 'Ideal to get started' : p.planType === 'PRO' ? 'For power users' : 'For heavy / business users'}</p>
-                  </div>
-                  <div className="flex items-end justify-center mb-6">
-                    <span className="text-4xl font-extrabold text-gray-900">{p.currency === 'INR' ? '₹' : p.currency === 'USD' ? '$' : p.currency}</span>
-                    <span className="text-5xl font-extrabold text-gray-900 ml-1">{price}</span>
-                    <span className="text-gray-500 ml-2 mb-2">/month</span>
-                  </div>
-                  <ul className="space-y-2 mb-6 flex-1">
-                    <li className="text-sm text-gray-700">{statements} statements / month</li>
-                    <li className="text-sm text-gray-700">{pages} pages / statement</li>
-                    <li className="text-sm text-gray-700">Combine up to {p.combinedBank ?? (p.planType === 'FREE' ? 2 : p.planType === 'PRO' ? 3 : 5)} bank accounts</li>
-                    {featureList.map((f: string, idx: number) => (
-                      <li key={idx} className="text-sm text-gray-600 flex items-start"><span className="text-primary-500 mr-2">✔</span>{f}</li>
-                    ))}
-                  </ul>
-                  <button
-                    type="button"
-                    onClick={() => navigate('/login')}
-                    className={`w-full py-3 rounded-lg font-semibold transition ${p.planType === 'FREE' ? 'bg-gray-100 text-gray-700' : popular ? 'bg-primary-600 text-white hover:bg-primary-700' : 'bg-secondary-600 text-white hover:bg-secondary-700'}`}
-                  >
-                    {p.planType === 'FREE' ? 'Get Started Free' : 'Get Started'}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
       {/* Email Subscription */}
       <section className="py-20 bg-gradient-funky relative overflow-hidden">
         {/* Background Decorations */}
@@ -589,13 +956,16 @@ export const LandingPage: React.FC = () => {
               </div>
               <button
                 type="submit"
-                className="bg-white text-brand-green-600 font-bold py-4 px-8 rounded-2xl hover:bg-brand-gray-50 transition-all duration-300 flex items-center justify-center space-x-2 hover:scale-105 active:scale-95"
+                disabled={emailStatus==='loading'}
+                className={`bg-white text-brand-green-600 font-bold py-4 px-8 rounded-2xl transition-all duration-300 flex items-center justify-center space-x-2 hover:scale-105 active:scale-95 ${emailStatus==='loading' ? 'opacity-70 cursor-not-allowed' : 'hover:bg-brand-gray-50'}`}
               >
-                <Sparkles className="w-5 h-5" />
-                <span>Subscribe</span>
+                <Sparkles className={`w-5 h-5 ${emailStatus==='loading' ? 'animate-spin' : ''}`} />
+                <span>{emailStatus==='loading' ? 'Subscribing...' : emailStatus==='success' ? 'Subscribed!' : 'Subscribe'}</span>
               </button>
             </div>
           </form>
+          {emailStatus==='error' && <p className="text-red-200 text-sm mt-2">{emailError}</p>}
+          {emailStatus==='success' && <p className="text-emerald-200 text-sm mt-2">You are subscribed.</p>}
           <p className="text-white/70 text-sm mt-4">
             Join 10,000+ users saving money with our tips • Unsubscribe anytime
           </p>
@@ -660,9 +1030,8 @@ export const LandingPage: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div className="col-span-1 md:col-span-2">
               <div className="logo-container mb-6">
-                <div className="">
-                  <BrandLogo className="w-8 h-10" size={40} />
-                  <Scissors className="w-6 h-6 text-white hidden" />
+                <div className="logo-icon">
+                  <BrandLogo className="w-8 h-8" size={32} />
                 </div>
                 <div>
                   <span className="text-2xl font-heading font-bold text-white">CutTheSpend</span>

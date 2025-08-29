@@ -1,0 +1,9 @@
+<div>
+  <h1 style="margin:0 0 12px;font-size:22px;font-weight:600;color:#111827;">Milestone Unlocked 🏅</h1>
+  <p style="margin:0 0 12px;font-size:14px;color:#374151;">Your goal <strong th:text="${goalName}"></strong> just crossed <strong th:text="${milestonePercent}"></strong>% progress.</p>
+  <p style="margin:0 0 16px;font-size:14px;color:#374151;">Current: <strong th:text="${currentAmount}"></strong> / <strong th:text="${targetAmount}"></strong></p>
+  <p style="margin:0 0 20px;font-size:14px;color:#374151;">Fantastic work—stay consistent and you’ll reach the finish line.</p>
+  <p style="margin:0;">
+    <a th:href="${dashboardUrl}" class="btn" style="background:#2563eb;color:#fff !important;text-decoration:none;padding:10px 20px;border-radius:6px;font-weight:600;display:inline-block;font-size:14px;">View Goal</a>
+  </p>
+</div>

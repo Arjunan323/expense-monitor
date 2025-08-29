@@ -18,12 +18,17 @@ public class RawStatementPersister {
     }
 
     public RawStatement persist(User user, String filename, String rawJson, int pageCount) {
+        return persist(user, filename, rawJson, pageCount, null);
+    }
+
+    public RawStatement persist(User user, String filename, String rawJson, int pageCount, String storageKey) {
         RawStatement rawStatement = new RawStatement();
         rawStatement.setUploadDate(LocalDateTime.now());
         rawStatement.setFilename(filename);
         rawStatement.setRawJson(rawJson);
         rawStatement.setUser(user);
         rawStatement.setPageCount(pageCount);
+        if(storageKey!=null) rawStatement.setStorageKey(storageKey);
         String bankName = null;
         try {
             JSONArray arr = new JSONArray(rawJson);

@@ -32,6 +32,7 @@ export const Auth: React.FC = () => {
         await login(formData.email, formData.password);
       } else {
         await register(formData.email, formData.password, formData.firstName, formData.lastName);
+        setRegisteredEmail(formData.email);
       }
     } catch (error) {
       // Error handling is done in the auth context
@@ -47,6 +48,7 @@ export const Auth: React.FC = () => {
     }));
   };
 
+  const [registeredEmail, setRegisteredEmail] = useState<string | null>(null);
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-green-50 via-white to-secondary-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
       {/* Background Decorations */}
@@ -76,6 +78,12 @@ export const Auth: React.FC = () => {
         </div>
 
         <div className="card-funky">
+          {registeredEmail && !isLogin && (
+            <div className="mb-4 p-3 rounded bg-blue-50 border border-blue-200 text-sm text-blue-700">
+              We've sent a verification email to <strong>{registeredEmail}</strong>. Please verify your email to unlock all features.
+              <div className="mt-2 text-xs">Didn't receive it? Check spam or try again after a minute.</div>
+            </div>
+          )}
           <form className="space-y-6" onSubmit={handleSubmit}>
             {!isLogin && (
               <div className="grid grid-cols-2 gap-4">
@@ -188,7 +196,7 @@ export const Auth: React.FC = () => {
               </button>
             </div>
 
-            <div className="text-center">
+            <div className="text-center flex flex-col space-y-2">
               <button
                 type="button"
                 className="text-sm text-secondary-600 hover:text-secondary-500 font-semibold transition-colors duration-200"
@@ -199,6 +207,9 @@ export const Auth: React.FC = () => {
                   : 'Already have an account? Sign in 💫'
                 }
               </button>
+              {isLogin && (
+                <a href="/forgot-password" className="text-xs text-brand-gray-500 hover:text-brand-gray-700 underline">Forgot password?</a>
+              )}
             </div>
           </form>
         </div>

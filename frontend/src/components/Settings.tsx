@@ -13,6 +13,7 @@ import { LoadingSpinner } from './ui/LoadingSpinner';
 import { useAuth } from '../contexts/AuthContext';
 
 import { apiCall } from '../utils/api';
+import { NotificationPreferences } from './settings/NotificationPreferences';
 import toast from 'react-hot-toast';
 import { usePreferences } from '../contexts/PreferencesContext';
 
@@ -191,6 +192,11 @@ export const Settings: React.FC = () => {
             <span>{loading ? 'Updating...' : 'Update Profile & Preferences'}</span>
           </button>
         </form>
+      </div>
+
+      {/* Notification Preferences */}
+      <div className="card">
+        <NotificationPreferences />
       </div>
 
       {/* Support & Feedback */}

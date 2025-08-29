@@ -1,0 +1,10 @@
+<div>
+    <h1 style="margin:0 0 12px;font-size:22px;font-weight:600;color:#111827;">Verify Your Email ✅</h1>
+    <p style="margin:0 0 12px;font-size:14px;color:#374151;">Hi <strong th:text="${firstName}">there</strong>, one quick step left to activate your account.</p>
+    <p style="margin:0 0 20px;font-size:14px;">Click below to confirm it’s really you and unlock full features.</p>
+    <p style="margin:0 24px 24px; text-align:center;">
+        <a th:href="${verificationLink}" class="btn" style="background:#2563eb;color:#fff !important;text-decoration:none;padding:12px 26px;border-radius:8px;font-weight:600;display:inline-block;">Verify Email</a>
+    </p>
+    <p style="margin:0 0 8px;font-size:12px;color:#6b7280;">Link expires in <strong th:text="${ttlMinutes}"></strong> minutes.</p>
+    <p style="margin:8px 0 0;font-size:12px;color:#6b7280;">If the button doesn’t work, copy & paste:<br /><span style="word-break:break-all;" th:text="${verificationLink}"></span></p>
+</div>
