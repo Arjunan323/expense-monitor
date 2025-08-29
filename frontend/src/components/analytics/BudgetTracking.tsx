@@ -112,7 +112,10 @@ export const BudgetTracking: React.FC = () => {
         <div>
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
             <div>
-              <h1 className="text-4xl font-heading font-bold gradient-text mb-3">🎯 Budget Tracking</h1>
+              <h1 className="text-4xl font-heading font-bold mb-3 flex items-center gap-3">
+                <span className="select-none leading-none">🎯</span>
+                <span className="gradient-text">Budget Tracking</span>
+              </h1>
               <p className="text-brand-gray-600 text-lg">Set budgets by category and track your spending progress</p>
             </div>
             <div className="flex items-center space-x-3">

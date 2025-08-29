@@ -277,7 +277,10 @@ export const SpendingAlerts: React.FC = () => {
       {/* Header */}
       <div className="space-y-6">
         <div>
-          <h1 className="text-4xl font-heading font-bold gradient-text mb-3">🚨 Spending Alerts</h1>
+          <h1 className="text-4xl font-heading font-bold mb-3 flex items-center gap-3">
+            <span className="select-none leading-none">🚨</span>
+            <span className="gradient-text">Spending Alerts</span>
+          </h1>
           <p className="text-brand-gray-600 text-lg">Monitor unusual spending patterns and get notified of anomalies</p>
         </div>
 

@@ -151,7 +151,10 @@ export const GoalTracking: React.FC = () => {
       {/* Header */}
       <div className="space-y-6">
         <div>
-          <h1 className="text-4xl font-heading font-bold gradient-text mb-3">Goal Tracking</h1>
+          <h1 className="text-4xl font-heading font-bold mb-3 flex items-center gap-3">
+            <span className="select-none leading-none">🏆</span>
+            <span className="gradient-text">Goal Tracking</span>
+          </h1>
           <p className="text-brand-gray-600 text-lg">Track your savings goals and debt reduction progress</p>
         </div>
 

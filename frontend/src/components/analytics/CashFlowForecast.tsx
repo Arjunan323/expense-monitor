@@ -114,7 +114,10 @@ export const CashFlowForecast: React.FC = () => {
       {/* Header */}
       <div className="space-y-6">
         <div>
-          <h1 className="text-4xl font-heading font-bold gradient-text mb-3">Cash Flow Forecast</h1>
+          <h1 className="text-4xl font-heading font-bold mb-3 flex items-center gap-3">
+            <span className="select-none leading-none">🔮</span>
+            <span className="gradient-text">Cash Flow Forecast</span>
+          </h1>
           <p className="text-brand-gray-600 text-lg">Predict your future financial position and plan ahead</p>
         </div>
 

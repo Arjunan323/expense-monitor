@@ -325,7 +325,10 @@ export const TaxTracker: React.FC = () => {
       <div className="space-y-6">
         <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-heading font-bold gradient-text mb-3">📊 Tax Benefit Tracker</h1>
+            <h1 className="text-4xl font-heading font-bold mb-3 flex items-center gap-3">
+              <span className="select-none leading-none">📊</span>
+              <span className="gradient-text">Tax Benefit Tracker</span>
+            </h1>
             <p className="text-brand-gray-600 text-lg">Maximize your tax savings with smart categorization and AI-powered insights</p>
           </div>
           

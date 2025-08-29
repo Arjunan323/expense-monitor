@@ -105,7 +105,7 @@ public class PaymentService {
             }
         }
         if (orderId == null) {
-            return ResponseEntity.badRequest().body("No order_id");
+            return ResponseEntity.ok().body("No order_id");
         }
         final String finalOrderId = orderId;
         final String finalPaymentId = paymentId;
@@ -154,6 +154,6 @@ public class PaymentService {
                 return ResponseEntity.ok("Payment failed recorded");
             }
         }
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body("Event ignored");
+        return ResponseEntity.status(HttpStatus.OK).body("Event ignored");
     }
 }
