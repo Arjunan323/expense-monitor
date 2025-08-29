@@ -6,12 +6,31 @@ import Toast from 'react-native-toast-message';
 
 export const VerifyEmailScreen: React.FC<{ route: any; navigation: any }> = ({ route, navigation }) => {
   const token = route?.params?.token as string | undefined;
-  const [status,setStatus]=useState<'checking'|'ok'|'fail'>('checking');
-  const { user } = useAuth();
-  useEffect(()=>{ (async()=>{ if(!token){ setStatus('fail'); return;} const ok = await verifyEmailToken(token); setStatus(ok? 'ok':'fail'); Toast.show({ type: ok? 'success':'error', text1: ok? 'Email verified':'Verification failed'}); if(ok) setTimeout(()=> navigation.replace('Dashboard'), 1200); })(); },[token]);
+  useEffect(() => {
+    async function checkEmailVerification() {
+      if (!token) {
+        setStatus('fail');
+        return;
+      }
+      const ok = await verifyEmailToken(token);
+      setStatus(ok ? 'ok' : 'fail');
+      Toast.show({
+        type: ok ? 'success' : 'error',
+        text1: ok ? 'Email verified' : 'Verification failed'
+      });
+      if (ok) {
+        setTimeout(() => navigation.replace('Dashboard'), 1200);
+      }
+    }
+    checkEmailVerification();
+  }, [token]);
   if(status==='checking') return <View style={styles.center}><ActivityIndicator size="large" color="#00B77D" /><Text style={styles.msg}>Verifying...</Text></View>;
   if(status==='ok') return <View style={styles.center}><Text style={styles.success}>Email verified!</Text></View>;
-  return <View style={styles.center}><Text style={styles.fail}>Link invalid or expired.</Text>{user?.email && <TouchableOpacity style={styles.resendBtn} onPress={()=>{ resendVerification(user.email!).then(()=> Toast.show({ type:'success', text1:'Verification email resent'})); }}><Text style={styles.resendText}>Resend verification</Text></TouchableOpacity>}</View>;
+  return <View style={styles.center}><Text style={styles.fail}>Link invalid or expired.</Text>{user?.email && <TouchableOpacity style={styles.resendBtn} onPress={()=>{ resendVerification(user.email!)
+    .then(()=> Toast.show({ type:'success', text1:'Verification email resent'}))
+    .catch((err) => {
+      Toast.show({ type: 'error', text1: 'Failed to resend verification email', text2: err?.message || 'Please try again later.' });
+    }); }}><Text style={styles.resendText}>Resend verification</Text></TouchableOpacity>}</View>;
 };
 
 const styles = StyleSheet.create({
