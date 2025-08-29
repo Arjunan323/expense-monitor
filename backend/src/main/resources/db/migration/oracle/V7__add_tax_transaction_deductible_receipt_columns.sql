@@ -28,9 +28,15 @@ BEGIN
 END;
 /
 
--- Backfill defaults (idempotent style)
-UPDATE tax_transactions SET deductible = 1 WHERE deductible IS NULL;
-UPDATE tax_transactions SET has_receipt = 0 WHERE has_receipt IS NULL;
+-- Disable parallel DML for this session (correct syntax) to avoid ORA-12838 in environments
+-- where the table or system has parallel DML enabled.
+ALTER SESSION DISABLE PARALLEL DML;
+
+-- Backfill defaults (single statement prevents a second DML triggering ORA-12838)
+UPDATE /*+ noparallel(tax_transactions) */ tax_transactions
+  SET deductible  = NVL(deductible, 1),
+      has_receipt = NVL(has_receipt, 0)
+WHERE deductible IS NULL OR has_receipt IS NULL;
 
 -- Optional: create index to speed queries filtering on (user_id, tax_year, deductible)
 DECLARE
