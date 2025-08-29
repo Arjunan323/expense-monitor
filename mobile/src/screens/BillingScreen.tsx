@@ -190,8 +190,6 @@ export const BillingScreen: React.FC = () => {
   const rank: Record<string, number> = { FREE: 0, PRO: 1, PREMIUM: 2 };
   mapped = mapped.sort((a,b)=> (rank[a.id] ?? 99) - (rank[b.id] ?? 99));
       if (mapped.length) {
-        const rank: Record<string, number> = { FREE: 0, PRO: 1, PREMIUM: 2 };
-        mapped.sort((a,b)=> (rank[a.id] ?? 99) - (rank[b.id] ?? 99));
         setPlans(mapped);
       } else {
         setPlans(FALLBACK_PLANS); // fallback without altering for preference
@@ -426,13 +424,6 @@ export const BillingScreen: React.FC = () => {
             <Text style={styles.yearlyHighlightText}>🎉 Yearly plans = 2 months FREE! 💰</Text>
           </View>
         )}
-        <View style={styles.toggleWrapper}>
-          {(['MONTHLY','YEARLY'] as const).map(p => (
-            <TouchableOpacity key={p} style={[styles.toggleOption, p===billingPeriod && styles.toggleOptionActive]} onPress={() => setBillingPeriod(p)}>
-              <Text style={[styles.toggleText, p===billingPeriod && styles.toggleTextActive]}>{p==='MONTHLY'?'Monthly':'Yearly'}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
   {/* Removed deprecated discountNote text (duplicate of yearlyHighlight) */}
 
         {plans.map((plan) => (
