@@ -82,16 +82,23 @@ export const Billing: React.FC = () => {
   const [plans, setPlans] = useState<UiPlan[]>([]);
   const [billingPeriod, setBillingPeriod] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
   const [showPlanComparison, setShowPlanComparison] = useState(false);
-  // Region simplified: only IN or US, default IN
-  const [manualRegion, setManualRegion] = useState<string>(localStorage.getItem('billingRegion') || 'IN');
-  const effectiveRegion = manualRegion === 'IN' ? 'IN' : 'US';
-
-  // No auto-detect now per requirement. (All non-IN treated as US handled when user changes selector.)
-
-  // Persist manual region
+  // Region auto-detected in background (India => IN else US). Default US until detected.
+  const [region, setRegion] = useState<'IN' | 'US'>('US');
   useEffect(() => {
-    if (manualRegion) localStorage.setItem('billingRegion', manualRegion); else localStorage.removeItem('billingRegion');
-  }, [manualRegion]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('https://ipapi.co/json/');
+        if (!res.ok) throw new Error('geo failed');
+        const data = await res.json();
+        const code = (data?.country_code || data?.country || '').toString().toUpperCase();
+        if (!cancelled) setRegion(code === 'IN' ? 'IN' : 'US');
+      } catch {
+        // fallback already US
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const fetchUsageStats = async () => {
     try {
@@ -117,12 +124,11 @@ export const Billing: React.FC = () => {
   };
 
   useEffect(() => { fetchUsageStats(); }, []);
-  useEffect(() => { fetchPlans(); }, [billingPeriod, effectiveRegion]);
+  useEffect(() => { fetchPlans(); }, [billingPeriod, region]);
 
   const fetchPlans = async () => {
     try {
-      const region = effectiveRegion;
-      const data = await apiCall<ApiPlan[]>('GET', `/plans?region=${region}&billingPeriod=${billingPeriod}`);
+  const data = await apiCall<ApiPlan[]>('GET', `/plans?region=${region}&billingPeriod=${billingPeriod}`);
       const normalizeCurrency = (c: string) => c === '₹' || c === 'INR' ? 'INR' : c === '$' || c === 'USD' ? 'USD' : c;
       const merged: UiPlan[] = data.map(variant => {
         const label = PLAN_LABELS[variant.planType] || {} as any;
@@ -202,14 +208,7 @@ export const Billing: React.FC = () => {
               <button key={p} onClick={() => setBillingPeriod(p)} className={`px-4 py-2 text-sm font-medium transition-colors ${p===billingPeriod? 'bg-primary-600 text-white':'bg-white text-gray-600 hover:bg-gray-100'}`}>{p === 'MONTHLY' ? 'Monthly' : 'Yearly'}</button>
             ))}
           </div>
-          <div className="flex flex-col sm:flex-row items-center gap-2">
-            <label htmlFor="billing-region" className="text-sm font-semibold text-brand-gray-700">Region:</label>
-            <select id="billing-region" value={manualRegion} onChange={e=> setManualRegion(e.target.value === 'IN' ? 'IN' : 'US')} className="rounded-xl border-2 border-brand-gray-200 px-3 py-2 bg-white text-sm font-medium">
-              <option value="IN">India (IN)</option>
-              <option value="US">United States (US)</option>
-            </select>
-          </div>
-          <div className="text-xs text-brand-gray-500">Showing prices for region: <span className="font-semibold">{effectiveRegion}</span></div>
+          <div className="text-xs text-brand-gray-500">Showing prices for region: <span className="font-semibold">{region}</span> (auto-detected)</div>
           {billingPeriod === 'YEARLY' && <div className="text-xs text-green-600">Yearly plans ≈ 2 months free (10× monthly price)</div>}
         </div>
       </div>
@@ -259,14 +258,7 @@ export const Billing: React.FC = () => {
                 </button>
               ))}
             </div>
-            <div className="flex flex-col sm:flex-row items-center gap-2">
-              <label htmlFor="plans-region" className="text-sm font-semibold text-brand-gray-700">Region:</label>
-               <select id="plans-region" value={manualRegion} onChange={e=> setManualRegion(e.target.value === 'IN' ? 'IN' : 'US')} className="rounded-xl border-2 border-brand-gray-200 px-3 py-2 bg-white text-sm font-medium">
-                 <option value="IN">India (IN)</option>
-                 <option value="US">United States (US)</option>
-               </select>
-            </div>
-            <div className="text-xs text-brand-gray-500">Region: <span className="font-semibold">{effectiveRegion}</span></div>
+            <div className="text-xs text-brand-gray-500">Region: <span className="font-semibold">{region}</span> (auto-detected)</div>
           </div>
           {billingPeriod === 'YEARLY' && (<div className="mt-6 animate-fade-in"><div className="inline-flex items-center bg-gradient-to-r from-accent-100 to-brand-green-100 border border-accent-300 text-accent-800 px-6 py-3 rounded-full text-sm font-bold shadow-glow-yellow"><Sparkles className="w-4 h-4 mr-2 animate-wiggle" /><span>🎉 Yearly plans = 2 months FREE! Save 17% instantly! 💰</span></div></div>)}
           <div className="mt-8 flex justify-center"><button onClick={() => setShowPlanComparison(!showPlanComparison)} className="btn-secondary flex items-center space-x-2 shadow-funky hover:shadow-funky-lg"><BarChart3 className="w-4 h-4" /><span>{showPlanComparison ? 'Hide' : 'Show'} Feature Comparison</span></button></div>

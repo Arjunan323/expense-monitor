@@ -72,14 +72,21 @@ export const LandingPage: React.FC = () => {
   const [billingPeriod, setBillingPeriod] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [showPlanComparison, setShowPlanComparison] = useState(false);
-  // Region simplified: only IN or US (default IN). Any non-IN treated as US.
-  const [manualRegion, setManualRegion] = useState<string>(localStorage.getItem('selectedRegion') || 'IN');
-  const effectiveRegion = manualRegion === 'IN' ? 'IN' : 'US';
-
-  // (Auto-detect removed per requirement.)
-
-  // Persist region
-  useEffect(() => { localStorage.setItem('selectedRegion', manualRegion); }, [manualRegion]);
+  // Region auto-detected silently (India => IN else US). Default US until resolved.
+  const [region, setRegion] = useState<'IN' | 'US'>('US');
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('https://ipapi.co/json/');
+        if (!res.ok) throw new Error('geo failed');
+        const data = await res.json();
+        const code = (data?.country_code || data?.country || '').toString().toUpperCase();
+        if (!cancelled) setRegion(code === 'IN' ? 'IN' : 'US');
+      } catch { /* fallback remains US */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const [emailStatus, setEmailStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [emailError, setEmailError] = useState<string | null>(null);
@@ -112,7 +119,7 @@ export const LandingPage: React.FC = () => {
         setPlansLoading(true);
         setPlansError(null);
         const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
-        const res = await fetch(`${apiBase}/public/plans?region=${effectiveRegion}&billingPeriod=${billingPeriod}`);
+  const res = await fetch(`${apiBase}/public/plans?region=${region}&billingPeriod=${billingPeriod}`);
         if (!res.ok) throw new Error('Failed to load plans');
         const data = await res.json();
         
@@ -213,7 +220,7 @@ export const LandingPage: React.FC = () => {
       }
     };
     fetchPlans();
-  }, [billingPeriod, effectiveRegion]);
+  }, [billingPeriod, region]);
 
   const currencySymbol = (code: string) => {
     switch (code) {
@@ -227,7 +234,7 @@ export const LandingPage: React.FC = () => {
   const handlePlanSelect = (planId: string) => {
     setSelectedPlan(planId);
     // Persist selection with region context
-    localStorage.setItem('selectedPlan', JSON.stringify({ planId, billingPeriod, region: effectiveRegion }));
+  localStorage.setItem('selectedPlan', JSON.stringify({ planId, billingPeriod, region }));
     if (planId === 'FREE') {
       navigate('/login');
     } else {
@@ -541,19 +548,7 @@ export const LandingPage: React.FC = () => {
                 </button>
               ))}
             </div>
-            <div className="flex flex-col sm:flex-row items-center gap-3">
-              <label className="font-bold text-brand-gray-700" htmlFor="region-select">Region:</label>
-              <select
-                id="region-select"
-                value={manualRegion}
-                onChange={(e) => setManualRegion(e.target.value === 'IN' ? 'IN' : 'US')}
-                className="rounded-2xl border-2 border-brand-gray-200 px-4 py-2 font-semibold text-brand-gray-700 bg-white shadow-funky"
-              >
-                <option value="IN">India (IN)</option>
-                <option value="US">United States (US)</option>
-              </select>
-            </div>
-            <p className="text-xs text-brand-gray-500">Showing prices for region: <span className="font-semibold">{effectiveRegion}</span></p>
+            <p className="text-xs text-brand-gray-500">Showing prices for region: <span className="font-semibold">{region}</span> (auto-detected)</p>
           </div>
 
           {/* Savings Highlight for Yearly */}
