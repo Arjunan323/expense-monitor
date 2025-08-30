@@ -82,31 +82,11 @@ export const Billing: React.FC = () => {
   const [plans, setPlans] = useState<UiPlan[]>([]);
   const [billingPeriod, setBillingPeriod] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
   const [showPlanComparison, setShowPlanComparison] = useState(false);
-  // Region selection
-  const [autoRegion, setAutoRegion] = useState('IN');
-  const [manualRegion, setManualRegion] = useState(localStorage.getItem('billingRegion') || '');
-  const effectiveRegion = (manualRegion || autoRegion || 'IN').toUpperCase();
+  // Region simplified: only IN or US, default IN
+  const [manualRegion, setManualRegion] = useState<string>(localStorage.getItem('billingRegion') || 'IN');
+  const effectiveRegion = manualRegion === 'IN' ? 'IN' : 'US';
 
-  // Auto-detect region
-  useEffect(() => {
-    let cancelled = false;
-    if (manualRegion) return; // user override
-    (async () => {
-      const timeout = (ms: number) => new Promise((_, r) => setTimeout(() => r(new Error('timeout')), ms));
-      const fetchWithTimeout = (url: string, ms = 3000) => Promise.race([fetch(url), timeout(ms)]) as Promise<Response>;
-      for (const url of ['https://ipapi.co/json/', 'https://ipwho.is/']) {
-        try {
-          const resp = await fetchWithTimeout(url, 3000);
-          if (resp.ok) {
-            const data: any = await resp.json();
-            const c = (data?.country || data?.country_code || data?.countryCode || '').toUpperCase();
-            if (c && /[A-Z]{2}/.test(c)) { if (!cancelled) setAutoRegion(c); break; }
-          }
-        } catch {}
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [manualRegion]);
+  // No auto-detect now per requirement. (All non-IN treated as US handled when user changes selector.)
 
   // Persist manual region
   useEffect(() => {
@@ -224,11 +204,10 @@ export const Billing: React.FC = () => {
           </div>
           <div className="flex flex-col sm:flex-row items-center gap-2">
             <label htmlFor="billing-region" className="text-sm font-semibold text-brand-gray-700">Region:</label>
-            <select id="billing-region" value={manualRegion} onChange={e=> setManualRegion(e.target.value)} className="rounded-xl border-2 border-brand-gray-200 px-3 py-2 bg-white text-sm font-medium">
-              <option value="">Auto ({autoRegion || 'IN'})</option>
-              <option value="IN">India</option><option value="US">United States</option><option value="GB">United Kingdom</option><option value="CA">Canada</option><option value="AU">Australia</option><option value="SG">Singapore</option><option value="AE">UAE</option><option value="DE">Germany</option><option value="FR">France</option><option value="JP">Japan</option><option value="ZA">South Africa</option><option value="BR">Brazil</option><option value="Other">Other</option>
+            <select id="billing-region" value={manualRegion} onChange={e=> setManualRegion(e.target.value === 'IN' ? 'IN' : 'US')} className="rounded-xl border-2 border-brand-gray-200 px-3 py-2 bg-white text-sm font-medium">
+              <option value="IN">India (IN)</option>
+              <option value="US">United States (US)</option>
             </select>
-            {manualRegion && <button type="button" onClick={()=> setManualRegion('')} className="text-xs font-semibold text-brand-gray-500 hover:text-brand-green-600 underline">Reset</button>}
           </div>
           <div className="text-xs text-brand-gray-500">Showing prices for region: <span className="font-semibold">{effectiveRegion}</span></div>
           {billingPeriod === 'YEARLY' && <div className="text-xs text-green-600">Yearly plans ≈ 2 months free (10× monthly price)</div>}
@@ -282,10 +261,10 @@ export const Billing: React.FC = () => {
             </div>
             <div className="flex flex-col sm:flex-row items-center gap-2">
               <label htmlFor="plans-region" className="text-sm font-semibold text-brand-gray-700">Region:</label>
-              <select id="plans-region" value={manualRegion} onChange={e=> setManualRegion(e.target.value)} className="rounded-xl border-2 border-brand-gray-200 px-3 py-2 bg-white text-sm font-medium">
-                <option value="">Auto ({autoRegion || 'IN'})</option><option value="IN">India</option><option value="US">United States</option><option value="GB">United Kingdom</option><option value="CA">Canada</option><option value="AU">Australia</option><option value="SG">Singapore</option><option value="AE">UAE</option><option value="DE">Germany</option><option value="FR">France</option><option value="JP">Japan</option><option value="ZA">South Africa</option><option value="BR">Brazil</option><option value="Other">Other</option>
-              </select>
-              {manualRegion && <button type="button" onClick={()=> setManualRegion('')} className="text-xs font-semibold text-brand-gray-500 hover:text-brand-green-600 underline">Reset</button>}
+               <select id="plans-region" value={manualRegion} onChange={e=> setManualRegion(e.target.value === 'IN' ? 'IN' : 'US')} className="rounded-xl border-2 border-brand-gray-200 px-3 py-2 bg-white text-sm font-medium">
+                 <option value="IN">India (IN)</option>
+                 <option value="US">United States (US)</option>
+               </select>
             </div>
             <div className="text-xs text-brand-gray-500">Region: <span className="font-semibold">{effectiveRegion}</span></div>
           </div>

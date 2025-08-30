@@ -72,52 +72,14 @@ export const LandingPage: React.FC = () => {
   const [billingPeriod, setBillingPeriod] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [showPlanComparison, setShowPlanComparison] = useState(false);
-  // Region handling
-  const [autoRegion, setAutoRegion] = useState<string>('IN');
-  const [manualRegion, setManualRegion] = useState<string>(localStorage.getItem('selectedRegion') || '');
-  const effectiveRegion = (manualRegion || autoRegion || 'IN').toUpperCase();
+  // Region simplified: only IN or US (default IN). Any non-IN treated as US.
+  const [manualRegion, setManualRegion] = useState<string>(localStorage.getItem('selectedRegion') || 'IN');
+  const effectiveRegion = manualRegion === 'IN' ? 'IN' : 'US';
 
-  // Detect region via IP (runs once unless user hasn't chosen manual region yet)
-  useEffect(() => {
-    let cancelled = false;
-    const detect = async () => {
-      if (manualRegion) return; // user override present
-      try {
-        const timeout = (ms: number) => new Promise((_, r) => setTimeout(() => r(new Error('timeout')), ms));
-        const fetchWithTimeout = (url: string, ms = 3500) => Promise.race([fetch(url), timeout(ms)]) as Promise<Response>;
-        // Try primary (ipapi.co) then fallback (ipwho.is)
-        const attempts = [
-          'https://ipapi.co/json/',
-          'https://ipwho.is/'
-        ];
-        for (const url of attempts) {
-          try {
-            const resp = await fetchWithTimeout(url, 3000);
-            if (resp && resp.ok) {
-              const data: any = await resp.json();
-              const country = (data?.country || data?.country_code || data?.countryCode || '').toUpperCase();
-              if (country && /[A-Z]{2}/.test(country)) {
-                if (!cancelled) setAutoRegion(country);
-                break;
-              }
-            }
-          } catch {/* ignore individual attempt */}
-        }
-      } catch {/* swallow */}
-    };
-    detect();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // (Auto-detect removed per requirement.)
 
-  // Persist manual region override
-  useEffect(() => {
-    if (manualRegion) {
-      localStorage.setItem('selectedRegion', manualRegion);
-    } else {
-      localStorage.removeItem('selectedRegion');
-    }
-  }, [manualRegion]);
+  // Persist region
+  useEffect(() => { localStorage.setItem('selectedRegion', manualRegion); }, [manualRegion]);
 
   const [emailStatus, setEmailStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [emailError, setEmailError] = useState<string | null>(null);
@@ -584,33 +546,12 @@ export const LandingPage: React.FC = () => {
               <select
                 id="region-select"
                 value={manualRegion}
-                onChange={(e) => setManualRegion(e.target.value)}
+                onChange={(e) => setManualRegion(e.target.value === 'IN' ? 'IN' : 'US')}
                 className="rounded-2xl border-2 border-brand-gray-200 px-4 py-2 font-semibold text-brand-gray-700 bg-white shadow-funky"
               >
-                <option value="">Auto ({autoRegion || 'IN'})</option>
-                <option value="IN">India</option>
-                <option value="US">United States</option>
-                <option value="GB">United Kingdom</option>
-                <option value="CA">Canada</option>
-                <option value="AU">Australia</option>
-                <option value="SG">Singapore</option>
-                <option value="AE">UAE</option>
-                <option value="DE">Germany</option>
-                <option value="FR">France</option>
-                <option value="JP">Japan</option>
-                <option value="ZA">South Africa</option>
-                <option value="BR">Brazil</option>
-                <option value="Other">Other</option>
+                <option value="IN">India (IN)</option>
+                <option value="US">United States (US)</option>
               </select>
-              {manualRegion && (
-                <button
-                  type="button"
-                  onClick={() => setManualRegion('')}
-                  className="text-xs font-semibold text-brand-gray-500 hover:text-brand-green-600 underline"
-                >
-                  Reset
-                </button>
-              )}
             </div>
             <p className="text-xs text-brand-gray-500">Showing prices for region: <span className="font-semibold">{effectiveRegion}</span></p>
           </div>
