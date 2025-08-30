@@ -72,6 +72,52 @@ export const LandingPage: React.FC = () => {
   const [billingPeriod, setBillingPeriod] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [showPlanComparison, setShowPlanComparison] = useState(false);
+  // Region handling
+  const [autoRegion, setAutoRegion] = useState<string>('IN');
+  const [manualRegion, setManualRegion] = useState<string>(localStorage.getItem('selectedRegion') || '');
+  const effectiveRegion = (manualRegion || autoRegion || 'IN').toUpperCase();
+
+  // Detect region via IP (runs once unless user hasn't chosen manual region yet)
+  useEffect(() => {
+    let cancelled = false;
+    const detect = async () => {
+      if (manualRegion) return; // user override present
+      try {
+        const timeout = (ms: number) => new Promise((_, r) => setTimeout(() => r(new Error('timeout')), ms));
+        const fetchWithTimeout = (url: string, ms = 3500) => Promise.race([fetch(url), timeout(ms)]) as Promise<Response>;
+        // Try primary (ipapi.co) then fallback (ipwho.is)
+        const attempts = [
+          'https://ipapi.co/json/',
+          'https://ipwho.is/'
+        ];
+        for (const url of attempts) {
+          try {
+            const resp = await fetchWithTimeout(url, 3000);
+            if (resp && resp.ok) {
+              const data: any = await resp.json();
+              const country = (data?.country || data?.country_code || data?.countryCode || '').toUpperCase();
+              if (country && /[A-Z]{2}/.test(country)) {
+                if (!cancelled) setAutoRegion(country);
+                break;
+              }
+            }
+          } catch {/* ignore individual attempt */}
+        }
+      } catch {/* swallow */}
+    };
+    detect();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist manual region override
+  useEffect(() => {
+    if (manualRegion) {
+      localStorage.setItem('selectedRegion', manualRegion);
+    } else {
+      localStorage.removeItem('selectedRegion');
+    }
+  }, [manualRegion]);
 
   const [emailStatus, setEmailStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [emailError, setEmailError] = useState<string | null>(null);
@@ -103,12 +149,8 @@ export const LandingPage: React.FC = () => {
       try {
         setPlansLoading(true);
         setPlansError(null);
-        let region = 'IN';
-        if (navigator.language && navigator.language.includes('-')) {
-          region = navigator.language.split('-')[1].toUpperCase();
-        }
         const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
-        const res = await fetch(`${apiBase}/public/plans?region=${region}&billingPeriod=${billingPeriod}`);
+        const res = await fetch(`${apiBase}/public/plans?region=${effectiveRegion}&billingPeriod=${billingPeriod}`);
         if (!res.ok) throw new Error('Failed to load plans');
         const data = await res.json();
         
@@ -209,7 +251,7 @@ export const LandingPage: React.FC = () => {
       }
     };
     fetchPlans();
-  }, [billingPeriod]);
+  }, [billingPeriod, effectiveRegion]);
 
   const currencySymbol = (code: string) => {
     switch (code) {
@@ -222,12 +264,12 @@ export const LandingPage: React.FC = () => {
 
   const handlePlanSelect = (planId: string) => {
     setSelectedPlan(planId);
+    // Persist selection with region context
+    localStorage.setItem('selectedPlan', JSON.stringify({ planId, billingPeriod, region: effectiveRegion }));
     if (planId === 'FREE') {
       navigate('/login');
     } else {
-      // Store selected plan and billing period for checkout
-      localStorage.setItem('selectedPlan', JSON.stringify({ planId, billingPeriod }));
-      navigate('/login');
+      navigate('/login'); // or '/checkout' if implemented later
     }
   };
 
@@ -511,8 +553,8 @@ export const LandingPage: React.FC = () => {
             </p>
           </div>
 
-          {/* Enhanced Billing Period Toggle */}
-          <div className="flex justify-center mb-10">
+          {/* Enhanced Billing Period Toggle + Region Selector */}
+          <div className="flex flex-col items-center gap-6 mb-10">
             <div className="relative inline-flex rounded-3xl border-2 border-brand-gray-200 overflow-hidden shadow-funky bg-white p-2">
               <div className="absolute inset-0 bg-gradient-funky opacity-10 rounded-3xl"></div>
               {(['MONTHLY','YEARLY'] as const).map(p => (
@@ -537,6 +579,40 @@ export const LandingPage: React.FC = () => {
                 </button>
               ))}
             </div>
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <label className="font-bold text-brand-gray-700" htmlFor="region-select">Region:</label>
+              <select
+                id="region-select"
+                value={manualRegion}
+                onChange={(e) => setManualRegion(e.target.value)}
+                className="rounded-2xl border-2 border-brand-gray-200 px-4 py-2 font-semibold text-brand-gray-700 bg-white shadow-funky"
+              >
+                <option value="">Auto ({autoRegion || 'IN'})</option>
+                <option value="IN">India</option>
+                <option value="US">United States</option>
+                <option value="GB">United Kingdom</option>
+                <option value="CA">Canada</option>
+                <option value="AU">Australia</option>
+                <option value="SG">Singapore</option>
+                <option value="AE">UAE</option>
+                <option value="DE">Germany</option>
+                <option value="FR">France</option>
+                <option value="JP">Japan</option>
+                <option value="ZA">South Africa</option>
+                <option value="BR">Brazil</option>
+                <option value="Other">Other</option>
+              </select>
+              {manualRegion && (
+                <button
+                  type="button"
+                  onClick={() => setManualRegion('')}
+                  className="text-xs font-semibold text-brand-gray-500 hover:text-brand-green-600 underline"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-brand-gray-500">Showing prices for region: <span className="font-semibold">{effectiveRegion}</span></p>
           </div>
 
           {/* Savings Highlight for Yearly */}
