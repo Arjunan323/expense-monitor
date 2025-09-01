@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -95,7 +95,18 @@ export const SpendingAlertsScreen: React.FC = () => {
   const [newMutedCategory, setNewMutedCategory] = useState('');
   const [muteUntil, setMuteUntil] = useState('');
 
-  const month = new Date().toISOString().slice(0, 7);
+  // Selected month for viewing alerts (YYYY-MM)
+  const [month, setMonth] = useState<string>(() => new Date().toISOString().slice(0,7));
+
+  const monthOptions = useMemo(() => {
+    const arr: { value: string; label: string }[] = [];
+    const now = new Date();
+    for(let i=0;i<12;i++){
+      const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+      arr.push({ value: d.toISOString().slice(0,7), label: d.toLocaleString(undefined, { month: 'short', year: 'numeric' }) });
+    }
+    return arr;
+  }, []);
 
   const fetchData = useCallback(async () => {
     try {
@@ -308,6 +319,37 @@ export const SpendingAlertsScreen: React.FC = () => {
           </Text>
           <Text style={styles.summarySubtext}>Generated</Text>
         </View>
+      </View>
+
+      {/* Month Selector */}
+      <View style={styles.monthSelectorWrapper}>
+        <View style={styles.monthSelector}>
+          <TouchableOpacity
+            onPress={() => {
+              const idx = monthOptions.findIndex(m => m.value === month);
+              if (idx > 0) setMonth(monthOptions[idx-1].value);
+            }}
+            disabled={monthOptions.findIndex(m => m.value === month) === 0}
+            style={[styles.monthNavButton, monthOptions.findIndex(m => m.value === month) === 0 && styles.monthNavButtonDisabled]}
+          >
+            <Ionicons name="chevron-back" size={18} color="#1F2937" />
+          </TouchableOpacity>
+          <Text style={styles.monthLabel}>{monthOptions.find(m => m.value === month)?.label || month}</Text>
+          <TouchableOpacity
+            onPress={() => {
+              const idx = monthOptions.findIndex(m => m.value === month);
+              if (idx < monthOptions.length - 1) setMonth(monthOptions[idx+1].value);
+            }}
+            disabled={monthOptions.findIndex(m => m.value === month) === monthOptions.length - 1}
+            style={[styles.monthNavButton, monthOptions.findIndex(m => m.value === month) === monthOptions.length - 1 && styles.monthNavButtonDisabled]}
+          >
+            <Ionicons name="chevron-forward" size={18} color="#1F2937" />
+          </TouchableOpacity>
+        </View>
+        <TouchableOpacity onPress={fetchData} style={styles.monthRefresh} activeOpacity={0.8}>
+          <Ionicons name="refresh" size={16} color="#0077B6" />
+          <Text style={styles.monthRefreshText}>Load</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Filter Controls */}
@@ -843,6 +885,57 @@ const styles = StyleSheet.create({
   filterSection: {
     paddingHorizontal: 24,
     marginBottom: 24,
+  },
+  monthSelectorWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    marginBottom: 16,
+    gap: 12,
+  },
+  monthSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 16,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  monthNavButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F3F4F6',
+  },
+  monthNavButtonDisabled: {
+    opacity: 0.4,
+  },
+  monthLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+    minWidth: 90,
+    textAlign: 'center',
+  },
+  monthRefresh: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  monthRefreshText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0077B6',
   },
   filterTitle: {
     fontSize: 16,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { AlertTriangle, Bell, CheckCircle, X, Eye, TrendingUp, CreditCard, MapPin, BarChart3, EyeOff, Settings, Filter, RefreshCcw, Plus, Trash2, Calendar, Info } from 'lucide-react';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { Modal } from '../ui/Modal';
@@ -39,7 +39,21 @@ export const SpendingAlerts: React.FC = () => {
   const [live, setLive] = useState<boolean>(false);
   const [eventSource, setEventSource] = useState<EventSource | null>(null);
   
-  const month = new Date().toISOString().slice(0,7);
+  // Month selection (YYYY-MM) for viewing historic alerts
+  const [month, setMonth] = useState<string>(() => new Date().toISOString().slice(0,7));
+
+  // Generate past N months including current
+  const monthOptions = useMemo(() => {
+    const opts: { value: string; label: string }[] = [];
+    const now = new Date();
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const value = d.toISOString().slice(0,7);
+      const label = d.toLocaleString(undefined, { month: 'short', year: 'numeric' });
+      opts.push({ value, label });
+    }
+    return opts;
+  }, []);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -368,7 +382,21 @@ export const SpendingAlerts: React.FC = () => {
           </div>
           
           {/* Control Buttons */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Month Selector */}
+            <label className="flex items-center gap-2 text-sm text-brand-gray-600 bg-white border border-brand-gray-200 rounded-xl px-3 py-2">
+              <Calendar className="w-4 h-4 text-brand-gray-500" />
+              <span className="hidden sm:inline">Month:</span>
+              <select
+                value={month}
+                onChange={(e) => { setMonth(e.target.value); setPage(0); }}
+                className="bg-transparent focus:outline-none text-brand-gray-800"
+              >
+                {monthOptions.map(m => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+            </label>
             <button
               onClick={() => setShowAcknowledged(!showAcknowledged)}
               className="flex items-center space-x-2 text-sm text-brand-gray-600 hover:text-brand-green-600 transition-colors duration-300 px-3 py-2 rounded-xl hover:bg-brand-green-50"
@@ -651,7 +679,7 @@ export const SpendingAlerts: React.FC = () => {
               className="w-full bg-gradient-green text-white px-4 py-3 rounded-2xl font-semibold text-sm shadow-glow-green hover:scale-105 transition-all duration-300 flex items-center justify-center space-x-2"
             >
               <RefreshCcw className="w-4 h-4" />
-              <span>Recompute This Month</span>
+              <span>Recompute {monthOptions.find(mo => mo.value === month)?.label || 'Selected Month'}</span>
             </button>
             
             <button
